@@ -1,12 +1,9 @@
 <script setup>
 
-let name = prompt('Coloca tu nombre: ');
-
 </script>
 
 <template>
     <h1> <span>List-EA </span> </h1>
-    <h3> Bienvenido {{ name }}</h3>
 
 </template>
 

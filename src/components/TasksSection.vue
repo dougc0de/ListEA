@@ -34,7 +34,7 @@ function removeTodo(id) {
 <template>
 
 <div class="antesala">
-    <p>Escribe abajo tus tareas:</p>
+    <p>Coloca las tareas o planes que completarás y luego marcarlas cuando esten terminadas.</p>
 </div>
 
 <section class="tasksSection">

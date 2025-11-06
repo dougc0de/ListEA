@@ -21,10 +21,11 @@ function onSubmit () {
         Nueva tarea
     </label>
     <input
+        class="planes"
         id="todo-input" 
         type="text" 
         v-model="title"
-        placeholder="Agrega tarea..."
+        placeholder="¿Que planes hacer?"
         autocomplete="off">
     <button class="botonAgregar" type="submit">
         Agregar
@@ -36,9 +37,16 @@ function onSubmit () {
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+
 }
 
 .botonAgregar {
     margin: 10px ;
+}
+
+.planes {
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px gray solid;
 }
 </style>
