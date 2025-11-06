@@ -26,19 +26,19 @@ function onSubmit () {
         v-model="title"
         placeholder="Agrega tarea..."
         autocomplete="off">
-    <button type="submit">
+    <button class="botonAgregar" type="submit">
         Agregar
     </button>
 </form>
 </template>
 
-<style>
+<style scoped>
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 
-button {
+.botonAgregar {
     margin: 10px ;
 }
 </style>
