@@ -8,8 +8,6 @@ let name = prompt('Coloca tu nombre: ');
     <h1> <span>List-EA </span> </h1>
     <h3> Bienvenido {{ name }}</h3>
 
-    <p>List-EA es una aplicacion web que te permite 
-        ingresar tareas y marcarlas <br>como hechas cuando termines</p>
 </template>
 
 <style scoped> 

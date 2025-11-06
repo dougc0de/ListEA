@@ -49,7 +49,6 @@ function removeTodo(id) {
       />
     </div>
   
-  <p v-if="todos.length === 0" class="empty">No hay tareas. ¡Agrega una! 🌱</p>
 
 </section>
 
