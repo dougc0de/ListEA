@@ -1,4 +1,5 @@
 <script setup>
+import FooterPage from './components/FooterPage.vue';
 import TasksSection from './components/TasksSection.vue';
 import WebMenu from './components/WebMenu.vue';
 import WelcomeComponent from './components/WelcomeComponent.vue';
@@ -10,6 +11,7 @@ import WelcomeComponent from './components/WelcomeComponent.vue';
   <WebMenu />
   <WelcomeComponent />
   <TasksSection />
+  <FooterPage />
 </template>
 
 <style scoped>

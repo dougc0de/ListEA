@@ -49,6 +49,7 @@ function removeTodo(id) {
       />
     </div>
   
+    <div class="divisor"></div>
 
 </section>
 
@@ -82,4 +83,8 @@ function removeTodo(id) {
 .listScroll::-webkit-scrollbar-thumb{ background:#d3d3d3; border-radius:8px; }
 
 .empty{ text-align:center; opacity:.75; }
+
+.antesala {
+  padding: 0 20px;
+}
 </style>

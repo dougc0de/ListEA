@@ -16,6 +16,8 @@ function onSubmit () {
 </script>
 
 <template>
+
+ <div class="divisor"></div>   
 <form @submit.prevent="onSubmit">
     <label for="todo-input" class="sr-only">
         Nueva tarea
@@ -40,13 +42,18 @@ function onSubmit () {
 
 }
 
-.botonAgregar {
-    margin: 10px ;
+.divisor {
+    margin: 2px;
 }
 
 .planes {
-    padding: 10px;
+    padding: 12px;
     border-radius: 10px;
     border: 1px gray solid;
+    margin: 0 10px;
+}
+
+.botonAgregar {
+    background-color: rgb(224, 224, 224);
 }
 </style>

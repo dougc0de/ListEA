@@ -19,7 +19,6 @@ const cerrarMenu = () => {
 <div class="logo">
     <img src="../assets/logo.png" alt="">
 </div>
-</div>
 <button 
     class="hamburger" :class=" {'active': menuAbierto }"
     @click="toggleMenu"
@@ -27,6 +26,8 @@ const cerrarMenu = () => {
     <span class="line"></span>
     <span class="line"></span>
 </button>
+</div>
+
 <!-- 
 <nav class="nav-Menu" id="navMenu">
     <button ref="#">Sobre Nosotos</button>
@@ -48,6 +49,9 @@ const cerrarMenu = () => {
         display: flex;
         align-items: center;
         background-color: rgb(252, 239, 239);
+        width: 100%;
+        height: 85px;
+        
 
     }
     
@@ -65,8 +69,10 @@ const cerrarMenu = () => {
     }
 
     .logo{
-        width: 200px;
-        height: 130px;
+        width: 150px;
+        height: 100px;
+        margin: 0 30px;
+        margin-top: 5px;
     }
     .logo img {
         width: 100%;

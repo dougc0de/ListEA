@@ -16,8 +16,7 @@ function removeFunction () {
 </script>
 
 <template>
-    <div
-    class="divisor"></div>
+    <div class="divisor"></div>
     <div class="todo-item">
     <input 
         type="checkbox" 
@@ -45,7 +44,7 @@ function removeFunction () {
   border: 1px solid rgb(255, 140, 0);
   border-radius: 10px;
   background: #fff;
-  margin: 10px;
+
 }
 .done { text-decoration: line-through; opacity: .75; }
 .delete {
@@ -54,7 +53,5 @@ function removeFunction () {
   font-size: 16px;
 }
 
-.divisor{
-    padding: 2px;
-}
+
 </style>
