@@ -18,21 +18,25 @@ function onSubmit () {
 <template>
 
  <div class="divisor"></div>   
+<div class="inputButtonPlans">
 <form @submit.prevent="onSubmit">
     <label for="todo-input" class="sr-only">
         Nueva tarea
     </label>
-    <input
+    <textarea
         class="planes"
         id="todo-input" 
         type="text" 
         v-model="title"
         placeholder="¿Que planes hacer?"
-        autocomplete="off">
+        autocomplete="off"></textarea>
+    <div class="buttonAdd"> 
     <button class="botonAgregar" type="submit">
         Agregar
     </button>
+    </div>
 </form>
+</div>
 </template>
 
 <style scoped>
@@ -47,13 +51,25 @@ function onSubmit () {
 }
 
 .planes {
-    padding: 12px;
+    padding: 45px 30px;
     border-radius: 10px;
     border: 1px gray solid;
-    margin: 0 10px;
+    margin: 0 20px;
+    width: 40vw;
 }
 
 .botonAgregar {
     background-color: rgb(224, 224, 224);
 }
+
+.inputButtonPlans {
+    margin: 10px 10px 0px;
+
+
+}
+
+.buttonAdd{
+    margin: 5px;
+}
+
 </style>
