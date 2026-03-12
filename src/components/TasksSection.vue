@@ -414,6 +414,7 @@ onBeforeUnmount(() => {
     </div>
 
     <AddTask
+      v-if="resolvedView !== 'settings'"
       :is-premium="isPremium"
       :templates="premiumTemplates"
       @add="addTodo"
