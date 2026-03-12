@@ -370,9 +370,9 @@ onBeforeUnmount(() => {
     <div class="heroCard">
       <div class="heroCopy">
         <p class="eyebrow">{{ isPremium ? 'Premium workspace' : 'Privado, local y mantenible' }}</p>
-        <h2>Tu lista se guarda en este dispositivo y no depende de la nube.</h2>
+        <h2>Basado en modalidad Local-first no dependes de la nube.</h2>
         <p class="heroText">
-          Crea tareas, editalas, agrega snippets, programa recordatorios y separa lo pendiente de lo completado.
+          Crea tareas, editalas, agrega snippets y mucho mas.
         </p>
       </div>
 

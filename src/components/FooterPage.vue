@@ -1,6 +1,6 @@
 <template>
   <footer class="footerpage">
-    <p>© 2026 DA Enterprise LLC. Datos guardados localmente en este dispositivo.</p>
+    <p>© 2026 DA. Enterprise, LLC. Datos guardados localmente en este dispositivo.</p>
   </footer>
 </template>
 

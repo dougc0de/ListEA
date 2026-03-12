@@ -20,7 +20,7 @@ const cerrarMenu = () => {
           <img src="../assets/logo.png" alt="Logo de List-EA">
         </div>
         <div class="brandCopy">
-          <strong>List-EA</strong>
+          <strong>ListEA</strong>
           <span>Todo local-first</span>
         </div>
       </div>

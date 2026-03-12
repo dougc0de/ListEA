@@ -3,7 +3,7 @@
     <p class="kicker">Lista privada para telefono y escritorio</p>
     <h1><span>List-EA</span></h1>
     <p class="summary">
-      Organiza pendientes sin nube, con una base simple para crecer hacia notificaciones locales nativas y publicacion movil.
+      Organiza tus pendientes sin nube y con privacidad.
     </p>
   </section>
 </template>
