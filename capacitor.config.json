@@ -1,0 +1,12 @@
+{
+  "appId": "com.daenterprise.listea",
+  "appName": "ListEA",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#ffb347"
+    }
+  }
+}

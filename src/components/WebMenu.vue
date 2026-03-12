@@ -1,119 +1,157 @@
 <script setup>
-import { ref } from 'vue'
+import { ref } from 'vue';
 
-// Estado reactivo del menú
-const menuAbierto = ref(false)
+const menuAbierto = ref(false);
 
-// Métodos
 const toggleMenu = () => {
-  menuAbierto.value = !menuAbierto.value
-}
+  menuAbierto.value = !menuAbierto.value;
+};
 
 const cerrarMenu = () => {
-  menuAbierto.value = false
-}
+  menuAbierto.value = false;
+};
 </script>
 
 <template>
-<div class="menu">
-<div class="logo">
-    <img src="../assets/logo.png" alt="">
-</div>
-<button 
-    class="hamburger" :class=" {'active': menuAbierto }"
-    @click="toggleMenu"
->
-    <span class="line"></span>
-    <span class="line"></span>
-</button>
-</div>
+  <header class="menu">
+    <div class="menuInner">
+      <div class="brand">
+        <div class="logo">
+          <img src="../assets/logo.png" alt="Logo de List-EA">
+        </div>
+        <div class="brandCopy">
+          <strong>List-EA</strong>
+          <span>Todo local-first</span>
+        </div>
+      </div>
 
-<!-- 
-<nav class="nav-Menu" id="navMenu">
-    <button ref="#">Sobre Nosotos</button>
-    <button ref="#">Contactanos</button>
-    <button ref="#">Upgrade</button>
-</nav> -->
+      <button
+        class="hamburger"
+        :class="{ active: menuAbierto }"
+        @click="toggleMenu"
+        aria-label="Abrir menu"
+        type="button"
+      >
+        <span class="line"></span>
+        <span class="line"></span>
+        <span class="line"></span>
+      </button>
+    </div>
 
-<div 
-    v-if="menuAbierto" 
-    class="overlay" 
-    @click="cerrarMenu"
-  ></div>
+    <nav class="navMenu" :class="{ active: menuAbierto }">
+      <button type="button" @click="cerrarMenu">Privacidad local</button>
+      <button type="button" @click="cerrarMenu">Recordatorios</button>
+      <button type="button" @click="cerrarMenu">Responsive ready</button>
+    </nav>
 
-
+    <div
+      v-if="menuAbierto"
+      class="overlay"
+      @click="cerrarMenu"
+    ></div>
+  </header>
 </template>
 
 <style scoped>
-    .menu{
-        display: flex;
-        align-items: center;
-        background-color: rgb(252, 239, 239);
-        width: 100%;
-        height: 85px;
-        
+.menu {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(14px);
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--line);
+}
 
-    }
-    
-    nav {
-        display: flex;
-        flex-direction: row;
-        gap: 1rem;
+.menuInner {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  min-height: 82px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-    }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 
-    nav button {
-        background-color: orange;
-        color: white;
-        padding: 1rem 0.5rem;
-    }
+.brandCopy {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
 
-    .logo{
-        width: 150px;
-        height: 100px;
-        margin: 0 30px;
-        margin-top: 5px;
-    }
-    .logo img {
-        width: 100%;
-        height: 100%;
-    }
+.brandCopy strong {
+  color: var(--text-main);
+}
 
- .hamburger {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: #333;
+.brandCopy span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(29, 42, 56, 0.1);
+}
+
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  background: var(--text-main);
   border: none;
-  padding: 10px;
-  cursor: pointer;
-  z-index: 1000;
-  border-radius: 5px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  z-index: 22;
 }
 
 .line {
   display: block;
-  width: 25px;
-  height: 3px;
+  width: 22px;
+  height: 2px;
   background: white;
-  margin: 5px 0;
+  margin: 0 auto;
   transition: all 0.3s ease;
 }
 
-.nav-menu {
+.navMenu {
   position: fixed;
   top: 0;
-  right: -300px;
-  width: 300px;
+  right: -320px;
+  width: min(320px, calc(100vw - 24px));
   height: 100vh;
-  background: #333;
+  padding: 108px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--text-main);
   transition: right 0.3s ease;
-  z-index: 999;
-  padding: 80px 20px 20px;
+  z-index: 21;
 }
 
-.nav-menu.active {
+.navMenu.active {
   right: 0;
+}
+
+.navMenu button {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
 }
 
 .hamburger.active .line:nth-child(1) {
@@ -125,40 +163,29 @@ const cerrarMenu = () => {
 }
 
 .hamburger.active .line:nth-child(3) {
-  transform: rotate(-45deg) translate(7px, -6px);
+  transform: rotate(-45deg) translate(5px, -5px);
 }
 
 .overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 998;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.36);
+  z-index: 19;
 }
 
-/* Estilos del menú */
-.nav-menu ul {
-  list-style: none;
-}
+@media (max-width: 640px) {
+  .menuInner {
+    width: min(100% - 20px, 1120px);
+    min-height: 74px;
+  }
 
-.nav-menu li {
-  margin-bottom: 15px;
-}
+  .brandCopy span {
+    display: none;
+  }
 
-.nav-menu a {
-  color: white;
-  text-decoration: none;
-  font-size: 18px;
-  display: block;
-  padding: 10px;
-  border-radius: 5px;
-  transition: background 0.3s ease;
+  .logo {
+    width: 52px;
+    height: 52px;
+  }
 }
-
-.nav-menu a:hover {
-  background: #555;
-}
-
 </style>
