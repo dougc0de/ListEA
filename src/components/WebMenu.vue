@@ -1,7 +1,17 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { DrawerGestureController, NavigationCatalog } from '../domain/navigation';
+
+const props = defineProps({
+  currentView: { type: String, default: 'home' },
+  currentPlanId: { type: String, default: 'free' },
+});
+const emit = defineEmits(['navigate']);
 
 const menuAbierto = ref(false);
+const navigationCatalog = new NavigationCatalog();
+const drawerGesture = new DrawerGestureController();
+const menuViews = computed(() => navigationCatalog.getMenuViews(props.currentPlanId));
 
 const toggleMenu = () => {
   menuAbierto.value = !menuAbierto.value;
@@ -10,6 +20,27 @@ const toggleMenu = () => {
 const cerrarMenu = () => {
   menuAbierto.value = false;
 };
+
+function navigateTo(view) {
+  if (view.disabled) return;
+  emit('navigate', view.id);
+  cerrarMenu();
+}
+
+function goHome() {
+  emit('navigate', 'home');
+  cerrarMenu();
+}
+
+function onSwipeStart(event) {
+  drawerGesture.begin(event.changedTouches[0].clientX, window.innerWidth);
+}
+
+function onSwipeEnd(event) {
+  if (drawerGesture.shouldOpen(event.changedTouches[0].clientX)) {
+    menuAbierto.value = true;
+  }
+}
 </script>
 
 <template>
@@ -39,15 +70,39 @@ const cerrarMenu = () => {
     </div>
 
     <nav class="navMenu" :class="{ active: menuAbierto }">
-      <button type="button" @click="cerrarMenu">Privacidad local</button>
-      <button type="button" @click="cerrarMenu">Recordatorios</button>
-      <button type="button" @click="cerrarMenu">Responsive ready</button>
+      <button
+        type="button"
+        class="menuPrimary"
+        :class="{ active: props.currentView === 'home' }"
+        @click="goHome"
+      >
+        Inicio
+      </button>
+
+      <button
+        v-for="view in menuViews"
+        :key="view.id"
+        type="button"
+        class="menuPrimary"
+        :class="{ active: props.currentView === view.id, disabled: view.disabled }"
+        :disabled="view.disabled"
+        @click="navigateTo(view)"
+      >
+        <span>{{ view.label }}</span>
+        <small v-if="view.disabled">Premium</small>
+      </button>
     </nav>
 
     <div
       v-if="menuAbierto"
       class="overlay"
       @click="cerrarMenu"
+    ></div>
+
+    <div
+      class="swipeZone"
+      @touchstart.passive="onSwipeStart"
+      @touchend.passive="onSwipeEnd"
     ></div>
   </header>
 </template>
@@ -111,7 +166,7 @@ const cerrarMenu = () => {
   flex-direction: column;
   justify-content: center;
   gap: 5px;
-  background: var(--text-main);
+  background: var(--menu-trigger-bg);
   border: none;
   width: 48px;
   height: 48px;
@@ -123,7 +178,7 @@ const cerrarMenu = () => {
   display: block;
   width: 22px;
   height: 2px;
-  background: white;
+  background: var(--menu-trigger-line);
   margin: 0 auto;
   transition: all 0.3s ease;
 }
@@ -131,27 +186,45 @@ const cerrarMenu = () => {
 .navMenu {
   position: fixed;
   top: 0;
-  right: -320px;
-  width: min(320px, calc(100vw - 24px));
+  right: 0;
+  width: min(380px, calc(100vw - 18px));
   height: 100vh;
   padding: 108px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--text-main);
-  transition: right 0.3s ease;
+  background: var(--menu-panel-bg);
+  color: var(--menu-panel-text);
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
   z-index: 21;
 }
 
 .navMenu.active {
-  right: 0;
+  transform: translateX(0);
 }
 
-.navMenu button {
+.menuPrimary {
   width: 100%;
   text-align: left;
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
+  background: var(--menu-item-bg);
+  color: var(--menu-panel-text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 58px;
+}
+
+.menuPrimary.active {
+  background: var(--menu-item-active);
+}
+
+.menuPrimary.disabled {
+  opacity: 0.54;
+}
+
+.menuPrimary small {
+  color: var(--menu-panel-muted);
 }
 
 .hamburger.active .line:nth-child(1) {
@@ -171,6 +244,16 @@ const cerrarMenu = () => {
   inset: 0;
   background: rgba(0, 0, 0, 0.36);
   z-index: 19;
+}
+
+.swipeZone {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 100vh;
+  z-index: 18;
+  pointer-events: auto;
 }
 
 @media (max-width: 640px) {

@@ -19,6 +19,13 @@
   --hero-shadow: 0 18px 48px rgba(88, 66, 40, 0.08);
   --nav-bg: rgba(255, 248, 239, 0.92);
   --ads-bg: linear-gradient(135deg, #17212b 0%, #243647 100%);
+  --menu-panel-bg: #20364d;
+  --menu-panel-text: #f9fbff;
+  --menu-panel-muted: rgba(249, 251, 255, 0.76);
+  --menu-item-bg: rgba(255, 255, 255, 0.08);
+  --menu-item-active: rgba(255, 255, 255, 0.18);
+  --menu-trigger-bg: #20364d;
+  --menu-trigger-line: #ffffff;
 }
 
 * {

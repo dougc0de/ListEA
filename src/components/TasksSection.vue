@@ -11,13 +11,20 @@ import {
 } from '../services/reminders';
 import { BackupService, FocusSession, TemplateLibrary } from '../domain/premium';
 import { FEATURE_KEYS, FeatureAccessController, PlanRegistry } from '../domain/plans';
+import { NavigationCatalog } from '../domain/navigation';
 import { TaskBoardBuilder, TaskFactory } from '../domain/tasks';
 import { ThemeCatalog } from '../domain/themes';
+
+const props = defineProps({
+  currentView: { type: String, default: 'home' },
+});
+const emit = defineEmits(['navigate', 'plan-change']);
 
 const STORAGE_KEY = 'listea-local-state-v3';
 
 const planRegistry = new PlanRegistry();
 const featureAccess = new FeatureAccessController(planRegistry);
+const navigationCatalog = new NavigationCatalog();
 const taskFactory = new TaskFactory();
 const taskBoardBuilder = new TaskBoardBuilder();
 const themeCatalog = new ThemeCatalog();
@@ -35,7 +42,6 @@ const defaultSettings = {
 const todos = ref([]);
 const settings = ref({ ...defaultSettings });
 const activeTab = ref('pending');
-const activePremiumView = ref('list');
 const premiumThemesOpen = ref(false);
 const searchQuery = ref('');
 const mounted = ref(false);
@@ -273,6 +279,7 @@ function updateFocusClock() {
 function setPlan(planId) {
   settings.value.planId = planId;
   premiumThemesOpen.value = planId === 'premium';
+  emit('plan-change', planId);
 
   if (!isPremium.value && themeCatalog.getPalette(settings.value.themeId).tier === 'premium') {
     setTheme('light');
@@ -332,6 +339,7 @@ const agendaGroups = computed(() => {
 });
 
 const boardColumns = computed(() => taskBoardBuilder.build(pendingTodos.value));
+const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView, settings.value.planId));
 const focusFormatted = computed(() => {
   const totalSeconds = Math.ceil(focusRemainingMs.value / 1000);
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
@@ -348,6 +356,23 @@ watch(
     await syncReminders();
   },
   { deep: true },
+);
+
+watch(
+  () => settings.value.planId,
+  planId => {
+    emit('plan-change', planId);
+  },
+  { immediate: true },
+);
+
+watch(
+  resolvedView,
+  nextView => {
+    if (nextView !== props.currentView) {
+      emit('navigate', nextView);
+    }
+  },
 );
 
 onMounted(async () => {
@@ -395,34 +420,7 @@ onBeforeUnmount(() => {
       @apply-template="applyTemplate"
     />
 
-    <div v-if="isPremium" class="premiumCommandBar">
-      <div class="premiumViews">
-        <button
-          class="tabButton"
-          :class="{ active: activePremiumView === 'list' }"
-          type="button"
-          @click="activePremiumView = 'list'"
-        >
-          Lista
-        </button>
-        <button
-          class="tabButton"
-          :class="{ active: activePremiumView === 'agenda' }"
-          type="button"
-          @click="activePremiumView = 'agenda'"
-        >
-          Agenda
-        </button>
-        <button
-          class="tabButton"
-          :class="{ active: activePremiumView === 'board' }"
-          type="button"
-          @click="activePremiumView = 'board'"
-        >
-          Board
-        </button>
-      </div>
-
+    <div v-if="isPremium && resolvedView === 'home'" class="premiumCommandBar">
       <div class="focusPanel">
         <p class="settingsLabel">Focus mode</p>
         <strong>{{ focusFormatted === '00:00' ? `${focusDuration} min` : focusFormatted }}</strong>
@@ -434,7 +432,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="toolbar">
+    <div v-if="resolvedView === 'home'" class="toolbar">
       <div class="tabs" role="tablist" aria-label="Vistas de tareas">
         <button
           class="tabButton"
@@ -452,14 +450,6 @@ onBeforeUnmount(() => {
         >
           Hechas
         </button>
-        <button
-          class="tabButton"
-          :class="{ active: activeTab === 'settings' }"
-          type="button"
-          @click="activeTab = 'settings'"
-        >
-          Configuraciones
-        </button>
       </div>
 
       <label class="searchField">
@@ -472,8 +462,8 @@ onBeforeUnmount(() => {
       </label>
     </div>
 
-    <div v-if="activeTab !== 'settings'" class="contentStage">
-      <div v-if="!isPremium || activePremiumView === 'list'" class="listScroll">
+    <div v-if="resolvedView === 'home'" class="contentStage">
+      <div class="listScroll">
         <TodoList
           :todos="filteredBaseTodos"
           :empty-message="activeTab === 'completed' ? 'No hay tareas completadas todavia.' : 'No hay tareas pendientes. Agrega una nueva.'"
@@ -484,46 +474,45 @@ onBeforeUnmount(() => {
           @toggle-subtask="toggleSubtask"
         />
       </div>
-
-      <div v-else-if="activePremiumView === 'agenda'" class="agendaGrid">
-        <article v-for="group in agendaGroups" :key="group.label" class="agendaCard">
-          <p class="settingsLabel">{{ group.label }}</p>
-          <div class="agendaItems">
-            <div v-for="todo in group.items" :key="todo.id" class="agendaItem">
-              <div class="agendaCopy">
-                <strong>{{ todo.title }}</strong>
-                <small>{{ todo.reminderAt ? 'Con recordatorio' : 'Sin hora fijada' }}</small>
-              </div>
-              <span>{{ todo.reminderAt ? new Date(todo.reminderAt).toLocaleTimeString() : 'Pendiente' }}</span>
+    </div>
+    <div v-else-if="resolvedView === 'agenda'" class="agendaGrid">
+      <article v-for="group in agendaGroups" :key="group.label" class="agendaCard">
+        <p class="settingsLabel">{{ group.label }}</p>
+        <div class="agendaItems">
+          <div v-for="todo in group.items" :key="todo.id" class="agendaItem">
+            <div class="agendaCopy">
+              <strong>{{ todo.title }}</strong>
+              <small>{{ todo.reminderAt ? 'Con recordatorio' : 'Sin hora fijada' }}</small>
             </div>
+            <span>{{ todo.reminderAt ? new Date(todo.reminderAt).toLocaleTimeString() : 'Pendiente' }}</span>
           </div>
-        </article>
-        <p v-if="!agendaGroups.length" class="emptyPremium">No hay tareas para mostrar en agenda.</p>
-      </div>
+        </div>
+      </article>
+      <p v-if="!agendaGroups.length" class="emptyPremium">No hay tareas para mostrar en agenda.</p>
+    </div>
 
-      <div v-else class="boardGrid">
-        <article class="boardColumn">
-          <p class="settingsLabel">Alta</p>
-          <div v-if="boardColumns.high.length" class="boardItems">
-            <div v-for="todo in boardColumns.high" :key="todo.id" class="boardItem">{{ todo.title }}</div>
-          </div>
-          <p v-else class="emptyPremium">Sin tareas</p>
-        </article>
-        <article class="boardColumn">
-          <p class="settingsLabel">Media</p>
-          <div v-if="boardColumns.medium.length" class="boardItems">
-            <div v-for="todo in boardColumns.medium" :key="todo.id" class="boardItem">{{ todo.title }}</div>
-          </div>
-          <p v-else class="emptyPremium">Sin tareas</p>
-        </article>
-        <article class="boardColumn">
-          <p class="settingsLabel">Baja</p>
-          <div v-if="boardColumns.low.length" class="boardItems">
-            <div v-for="todo in boardColumns.low" :key="todo.id" class="boardItem">{{ todo.title }}</div>
-          </div>
-          <p v-else class="emptyPremium">Sin tareas</p>
-        </article>
-      </div>
+    <div v-else-if="resolvedView === 'board'" class="boardGrid">
+      <article class="boardColumn">
+        <p class="settingsLabel">Alta</p>
+        <div v-if="boardColumns.high.length" class="boardItems">
+          <div v-for="todo in boardColumns.high" :key="todo.id" class="boardItem">{{ todo.title }}</div>
+        </div>
+        <p v-else class="emptyPremium">Sin tareas</p>
+      </article>
+      <article class="boardColumn">
+        <p class="settingsLabel">Media</p>
+        <div v-if="boardColumns.medium.length" class="boardItems">
+          <div v-for="todo in boardColumns.medium" :key="todo.id" class="boardItem">{{ todo.title }}</div>
+        </div>
+        <p v-else class="emptyPremium">Sin tareas</p>
+      </article>
+      <article class="boardColumn">
+        <p class="settingsLabel">Baja</p>
+        <div v-if="boardColumns.low.length" class="boardItems">
+          <div v-for="todo in boardColumns.low" :key="todo.id" class="boardItem">{{ todo.title }}</div>
+        </div>
+        <p v-else class="emptyPremium">Sin tareas</p>
+      </article>
     </div>
 
     <div v-else class="settingsPanel">

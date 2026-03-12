@@ -241,6 +241,31 @@ export class ThemeCatalog {
     Object.entries(palette.variables).forEach(([key, value]) => {
       target.style.setProperty(key, value);
     });
+
+    const menuRuntime = palette.mode === 'dark'
+      ? {
+          '--menu-panel-bg': 'rgba(8, 14, 26, 0.96)',
+          '--menu-panel-text': '#f5f8ff',
+          '--menu-panel-muted': 'rgba(255, 255, 255, 0.72)',
+          '--menu-item-bg': 'rgba(255, 255, 255, 0.08)',
+          '--menu-item-active': 'rgba(255, 255, 255, 0.18)',
+          '--menu-trigger-bg': '#f5f8ff',
+          '--menu-trigger-line': '#0d1726',
+        }
+      : {
+          '--menu-panel-bg': '#20364d',
+          '--menu-panel-text': '#f9fbff',
+          '--menu-panel-muted': 'rgba(249, 251, 255, 0.76)',
+          '--menu-item-bg': 'rgba(255, 255, 255, 0.08)',
+          '--menu-item-active': 'rgba(255, 255, 255, 0.18)',
+          '--menu-trigger-bg': '#20364d',
+          '--menu-trigger-line': '#ffffff',
+        };
+
+    Object.entries(menuRuntime).forEach(([key, value]) => {
+      target.style.setProperty(key, value);
+    });
+
     target.dataset.theme = palette.id;
     target.style.setProperty('color-scheme', palette.mode);
     return palette;
