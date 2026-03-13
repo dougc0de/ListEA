@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
     <div class="heroCard">
       <div class="heroCopy">
         <p class="eyebrow">{{ isPremium ? 'Premium workspace' : 'Privado, local y mantenible' }}</p>
-        <h2>Basado en modalidad Local-first no dependes de la nube.</h2>
+        <h2>Con modalidad Local-first no dependes de la nube.</h2>
         <p class="heroText">
           Crea tareas, editalas, agrega snippets y mucho mas.
         </p>

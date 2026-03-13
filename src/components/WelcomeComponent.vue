@@ -1,10 +1,17 @@
+<script setup>
+const emit = defineEmits(['navigate']);
+
+function goHome() {
+  emit('navigate', 'home');
+}
+</script>
+
 <template>
   <section class="welcome">
     <p class="kicker">Lista privada para telefono y escritorio</p>
-    <h1><span>List-EA</span></h1>
-    <p class="summary">
-      Organiza tus pendientes sin nube y con privacidad.
-    </p>
+    <button type="button" class="brandLink" @click="goHome">
+      <h1><span>ListEA</span></h1>
+    </button>
   </section>
 </template>
 
@@ -13,6 +20,18 @@
   width: min(1120px, calc(100% - 32px));
   margin: 28px auto 8px;
   text-align: left;
+}
+
+.brandLink {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.brandLink:hover {
+  transform: none;
+  border-color: transparent;
 }
 
 .kicker {

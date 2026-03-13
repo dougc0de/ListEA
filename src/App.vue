@@ -24,7 +24,7 @@ function syncPlan(planId) {
     @navigate="changeView"
   />
   <main class="appShell">
-    <WelcomeComponent />
+    <WelcomeComponent @navigate="changeView" />
     <TasksSection
       :current-view="currentView"
       @navigate="changeView"
