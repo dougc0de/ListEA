@@ -4,6 +4,7 @@ import { TaskFactory } from './tasks';
 export const DEFAULT_PREFERENCES = Object.freeze({
   notificationsEnabled: false,
   reminderPermission: 'default',
+  exactAlarmPermission: 'prompt',
   avatar: new AvatarPreferences({
     enabled: true,
     reminderTiming: AVATAR_TIMINGS.BEFORE_10,
@@ -66,6 +67,7 @@ export class LocalTaskRepository {
     return {
       notificationsEnabled: Boolean(rawPreferences.notificationsEnabled),
       reminderPermission: rawPreferences.reminderPermission ?? DEFAULT_PREFERENCES.reminderPermission,
+      exactAlarmPermission: rawPreferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
       avatar,
     };
   }
@@ -74,6 +76,7 @@ export class LocalTaskRepository {
     return {
       notificationsEnabled: Boolean(preferences.notificationsEnabled),
       reminderPermission: preferences.reminderPermission ?? DEFAULT_PREFERENCES.reminderPermission,
+      exactAlarmPermission: preferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
       avatar: new AvatarPreferences(preferences.avatar),
     };
   }

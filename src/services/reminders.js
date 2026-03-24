@@ -34,6 +34,15 @@ async function isNativeNotificationsAvailable() {
   }
 }
 
+async function getNativeNotificationsPlugin() {
+  if (!await isNativeNotificationsAvailable()) {
+    return null;
+  }
+
+  const { LocalNotifications } = await getCapacitorModules();
+  return LocalNotifications;
+}
+
 function buildReminderPayload(todo) {
   return {
     title: 'Es momento de esta tarea',
@@ -42,9 +51,9 @@ function buildReminderPayload(todo) {
 }
 
 export async function getReminderPermission() {
-  if (await isNativeNotificationsAvailable()) {
-    const { LocalNotifications } = await getCapacitorModules();
-    const permission = await LocalNotifications.checkPermissions();
+  const nativeNotifications = await getNativeNotificationsPlugin();
+  if (nativeNotifications) {
+    const permission = await nativeNotifications.checkPermissions();
     return permission.display;
   }
 
@@ -55,10 +64,24 @@ export async function getReminderPermission() {
   return Notification.permission;
 }
 
+export async function getExactAlarmPermission() {
+  const nativeNotifications = await getNativeNotificationsPlugin();
+  if (!nativeNotifications?.checkExactNotificationSetting) {
+    return 'granted';
+  }
+
+  try {
+    const permission = await nativeNotifications.checkExactNotificationSetting();
+    return permission.exact_alarm;
+  } catch {
+    return 'prompt';
+  }
+}
+
 export async function enableReminders() {
-  if (await isNativeNotificationsAvailable()) {
-    const { LocalNotifications } = await getCapacitorModules();
-    const permission = await LocalNotifications.requestPermissions();
+  const nativeNotifications = await getNativeNotificationsPlugin();
+  if (nativeNotifications) {
+    const permission = await nativeNotifications.requestPermissions();
     return permission.display;
   }
 
@@ -69,6 +92,20 @@ export async function enableReminders() {
   return Notification.requestPermission();
 }
 
+export async function enableExactReminders() {
+  const nativeNotifications = await getNativeNotificationsPlugin();
+  if (!nativeNotifications?.changeExactNotificationSetting) {
+    return 'granted';
+  }
+
+  try {
+    const permission = await nativeNotifications.changeExactNotificationSetting();
+    return permission.exact_alarm;
+  } catch {
+    return 'prompt';
+  }
+}
+
 export async function cancelReminder(id) {
   const timeoutId = reminderTimeouts.get(id);
   if (timeoutId) {
@@ -76,9 +113,9 @@ export async function cancelReminder(id) {
     reminderTimeouts.delete(id);
   }
 
-  if (await isNativeNotificationsAvailable()) {
-    const { LocalNotifications } = await getCapacitorModules();
-    await LocalNotifications.cancel({
+  const nativeNotifications = await getNativeNotificationsPlugin();
+  if (nativeNotifications) {
+    await nativeNotifications.cancel({
       notifications: [{ id: toNativeNotificationId(id) }],
     });
   }
@@ -90,14 +127,15 @@ export async function clearAllReminderTimers() {
 }
 
 async function scheduleNativeReminder(todo) {
-  const { LocalNotifications } = await getCapacitorModules();
+  const nativeNotifications = await getNativeNotificationsPlugin();
+  if (!nativeNotifications) return;
   const notificationCopy = buildReminderPayload(todo);
 
-  await LocalNotifications.cancel({
+  await nativeNotifications.cancel({
     notifications: [{ id: toNativeNotificationId(todo.id) }],
   });
 
-  await LocalNotifications.schedule({
+  await nativeNotifications.schedule({
     notifications: [
       {
         id: toNativeNotificationId(todo.id),

@@ -5,7 +5,9 @@ import TodoList from './TodoList.vue';
 import {
   cancelReminder,
   clearAllReminderTimers,
+  enableExactReminders,
   enableReminders,
+  getExactAlarmPermission,
   getReminderPermission,
   scheduleReminder,
 } from '../services/reminders';
@@ -227,7 +229,19 @@ function syncAvatarSnippet() {
 async function enableNotificationsFlow() {
   const permission = await enableReminders();
   preferences.value.reminderPermission = permission;
-  preferences.value.notificationsEnabled = permission === 'granted';
+  if (permission !== 'granted') {
+    preferences.value.notificationsEnabled = false;
+    return;
+  }
+
+  const exactPermission = await getExactAlarmPermission();
+  preferences.value.exactAlarmPermission = exactPermission;
+
+  if (exactPermission !== 'granted') {
+    preferences.value.exactAlarmPermission = await enableExactReminders();
+  }
+
+  preferences.value.notificationsEnabled = preferences.value.exactAlarmPermission === 'granted';
 }
 
 async function disableNotificationsFlow() {
@@ -327,6 +341,7 @@ watch(
 onMounted(async () => {
   loadState();
   preferences.value.reminderPermission = await getReminderPermission();
+  preferences.value.exactAlarmPermission = await getExactAlarmPermission();
   mounted.value = true;
   persistState();
   await syncReminders();
@@ -485,6 +500,7 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Notificaciones</p>
         <h3>Recordatorios moviles con control del usuario</h3>
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
+        <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
         <div class="buttonRow">
           <button
             v-if="!preferences.notificationsEnabled"
@@ -645,7 +661,6 @@ onBeforeUnmount(() => {
 }
 
 .panelText,
-.avatarCopy p,
 .emptyText {
   color: var(--text-muted);
 }
@@ -676,9 +691,8 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   padding: max(16px, env(safe-area-inset-top)) 18px max(16px, env(safe-area-inset-bottom));
   pointer-events: none;
 }
@@ -687,8 +701,8 @@ onBeforeUnmount(() => {
   --snippet-card-max: min(88vw, 320px);
   width: min(100%, var(--snippet-card-max));
   max-width: var(--snippet-card-max);
-  display: flex;
-  justify-content: center;
+  margin-inline: auto;
+  display: block;
   padding: 0;
   border-radius: 26px;
   border: 1px solid var(--line);
@@ -714,6 +728,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   max-width: 100%;
+  box-sizing: border-box;
   padding: 18px 44px 18px 18px;
   border-radius: 22px;
   background: var(--surface-soft);
@@ -755,6 +770,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   border-radius: 999px;
   line-height: 1;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .filterBar {

@@ -175,22 +175,28 @@ function onSwipeEnd(event) {
 .drawer {
   position: fixed;
   top: 0;
-  right: 0;
-  width: min(320px, calc(100vw - 18px));
-  height: 100vh;
-  padding: 92px 18px 18px;
+  left: 50%;
+  transform: translate(-50%, calc(-100% - 18px));
+  width: min(960px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  padding: 84px 18px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   background: var(--surface);
-  transform: translateX(100%);
-  transition: transform 180ms ease;
-  box-shadow: -20px 0 50px rgba(18, 28, 44, 0.14);
+  transition: transform 220ms ease, opacity 220ms ease;
+  box-shadow: 0 20px 50px rgba(18, 28, 44, 0.14);
   z-index: 31;
+  overflow-y: auto;
+  opacity: 0;
+  border-radius: 0 0 28px 28px;
+  border: 1px solid var(--line);
+  border-top: 0;
 }
 
 .drawer.active {
-  transform: translateX(0);
+  transform: translate(-50%, 0);
+  opacity: 1;
 }
 
 .drawerItem {
@@ -225,6 +231,12 @@ function onSwipeEnd(event) {
 @media (max-width: 640px) {
   .menuBar {
     width: min(100% - 20px, 960px);
+  }
+
+  .drawer {
+    width: min(100% - 16px, 960px);
+    padding: 80px 14px 14px;
+    border-radius: 0 0 22px 22px;
   }
 
   .brandCopy span {
