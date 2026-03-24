@@ -36,13 +36,13 @@ const contextChips = computed(() => presenter.buildTaskContext(props.todo));
 const nextAction = computed(() => advisor.suggest(props.todo));
 const recurrenceLabel = computed(() => {
   const labels = {
-    daily: 'Cada dia',
-    weekly: 'Cada semana',
-    monthly: 'Cada mes',
-    yearly: 'Cada ano',
-    weekdays: 'Dias laborables',
-    weekends: 'Fines de semana',
-    'every-x-days': 'Cada X dias',
+    daily: 'Daily / Cada dia',
+    weekly: 'Weekly / Cada semana',
+    monthly: 'Monthly / Cada mes',
+    yearly: 'Yearly / Cada ano',
+    weekdays: 'Weekdays / Dias laborables',
+    weekends: 'Weekends / Fines de semana',
+    'every-x-days': 'Every X days / Cada X dias',
     none: 'Sin recurrencia',
   };
 
@@ -176,7 +176,7 @@ function cancelEdit() {
         {{ detailsOpen ? 'Ocultar detalle' : 'Ver detalle' }}
       </button>
       <button type="button" class="ghostButton" @click="emit('toggle', todo.id)">
-        {{ todo.isCompleted() ? 'Reabrir' : 'Completar' }}
+        {{ todo.isCompleted() ? 'Reabrir / Reopen' : 'Completar' }}
       </button>
       <button v-if="!isEditing" type="button" class="ghostButton" @click="isEditing = true">
         Editar

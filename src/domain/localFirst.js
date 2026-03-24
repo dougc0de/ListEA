@@ -7,10 +7,10 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   reminderPermission: 'default',
   exactAlarmPermission: 'prompt',
   avatar: new AvatarPreferences({
-    enabled: true,
+    enabled: false,
     reminderTiming: AVATAR_TIMINGS.BEFORE_10,
     importantOnly: false,
-    snippetEnabled: true,
+    snippetEnabled: false,
     snippetTiming: AVATAR_TIMINGS.ON_TIME,
     snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
   }),

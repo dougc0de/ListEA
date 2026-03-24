@@ -352,7 +352,8 @@ export class TaskFactory {
   createDemoTasks(baseDate = this.clock()) {
     const now = baseDate instanceof Date ? new Date(baseDate) : new Date(baseDate);
     const dueSoon = new Date(now);
-    dueSoon.setMinutes(dueSoon.getMinutes() + 45);
+    dueSoon.setDate(dueSoon.getDate() + 1);
+    dueSoon.setHours(10, 0, 0, 0);
 
     const followUp = new Date(now);
     followUp.setDate(followUp.getDate() + 2);
@@ -368,6 +369,7 @@ export class TaskFactory {
     recurringCompletedAt.setHours(18, 10, 0, 0);
 
     const recurringNextDue = new Date(now);
+    recurringNextDue.setDate(recurringNextDue.getDate() + 1);
     recurringNextDue.setHours(18, 0, 0, 0);
 
     const recurringFailureDue = new Date(now);
@@ -397,7 +399,7 @@ export class TaskFactory {
         tags: ['follow-up'],
       }),
       this.create({
-        title: 'Regar plantas',
+        title: 'Recurring Task',
         project: 'Hogar',
         area: 'Casa',
         priority: TASK_PRIORITY.MEDIUM,
@@ -429,7 +431,7 @@ export class TaskFactory {
         },
       }),
       this.create({
-        title: 'Regar plantas',
+        title: 'Recurring Task done',
         project: 'Hogar',
         area: 'Casa',
         priority: TASK_PRIORITY.MEDIUM,

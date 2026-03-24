@@ -6,7 +6,7 @@ describe('NavigationCatalog', () => {
     const views = new NavigationCatalog().getMenuViews();
 
     expect(views.map(view => view.id)).toEqual(['today', 'backlog', 'dashboard', 'settings']);
-    expect(views.find(view => view.id === 'backlog')?.label).toBe('Agenda');
+    expect(views.find(view => view.id === 'backlog')?.label).toBe('Backlog');
     expect(new NavigationCatalog().getFallbackView('unknown')).toBe('today');
   });
 });

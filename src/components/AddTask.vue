@@ -7,6 +7,7 @@ const emit = defineEmits(['add']);
 const title = ref('');
 const notes = ref('');
 const project = ref('');
+const area = ref('');
 const dueAt = ref('');
 const followUpAt = ref('');
 const priority = ref('');
@@ -15,6 +16,7 @@ const effortMinutes = ref('');
 const tags = ref('');
 const subtasks = ref('');
 const recurrencePreset = ref('none');
+const recurrenceInterval = ref(1);
 const recurrenceMode = ref('fixed');
 const recurrenceResetNotes = ref(true);
 const advancedOpen = ref(false);
@@ -78,6 +80,7 @@ function resetForm() {
   title.value = '';
   notes.value = '';
   project.value = '';
+  area.value = '';
   dueAt.value = '';
   followUpAt.value = '';
   priority.value = '';
@@ -86,6 +89,7 @@ function resetForm() {
   tags.value = '';
   subtasks.value = '';
   recurrencePreset.value = 'none';
+  recurrenceInterval.value = 1;
   recurrenceMode.value = 'fixed';
   recurrenceResetNotes.value = true;
   advancedOpen.value = false;
@@ -95,19 +99,17 @@ function resetForm() {
 
 function onSubmit() {
   const interpreted = capturePreview.value;
-  const nextTitle = (interpreted.title || title.value).trim();
+  const nextTitle = title.value.trim() || (interpreted.title || '').trim();
   const resolvedDueAt = dueAt.value || interpreted.dueAt;
+  const effectiveRecurrenceMode = recurrencePreset.value !== 'none' && !resolvedDueAt
+    ? 'after-completion'
+    : recurrenceMode.value;
 
   titleError.value = '';
   recurrenceError.value = '';
 
   if (!nextTitle) {
-    titleError.value = 'Título requerido';
-    return;
-  }
-
-  if (recurrencePreset.value !== 'none' && recurrenceMode.value === 'fixed' && !resolvedDueAt) {
-    recurrenceError.value = 'Define una fecha objetivo para repetir esta tarea.';
+    titleError.value = 'Title required / Titulo requerido';
     advancedOpen.value = true;
     return;
   }
@@ -115,8 +117,8 @@ function onSubmit() {
   emit('add', {
     title: nextTitle,
     notes: notes.value.trim(),
-    project: project.value.trim() || interpreted.project || interpreted.area,
-    area: interpreted.area,
+    project: project.value.trim() || interpreted.project || '',
+    area: area.value.trim() || interpreted.area || '',
     dueAt: resolvedDueAt,
     followUpAt: followUpAt.value,
     priority: priority.value || interpreted.priority,
@@ -127,14 +129,15 @@ function onSubmit() {
     recurrence: {
       ...(recurrencePreset.value === 'none' ? interpreted.recurrence : {
         preset: recurrencePreset.value,
-        interval: recurrencePreset.value === 'every-x-days' ? 3 : 1,
-        mode: recurrenceMode.value,
+        interval: Math.max(Number(recurrenceInterval.value) || 1, 1),
+        mode: effectiveRecurrenceMode,
         resetNotes: recurrenceResetNotes.value,
       }),
     },
   });
 
   resetForm();
+  closeComposer();
 }
 </script>
 
@@ -167,10 +170,12 @@ function onSubmit() {
       </div>
 
       <form class="composerForm" @submit.prevent="onSubmit">
+        <p class="fieldLabel">Title</p>
         <textarea
           ref="titleField"
           v-model="title"
           class="primaryField"
+          aria-label="Title"
           autofocus
           :aria-invalid="titleError ? 'true' : 'false'"
           rows="3"
@@ -196,7 +201,7 @@ function onSubmit() {
           </label>
 
           <label class="fieldGroup">
-            <span>Area</span>
+            <span>Project</span>
             <input v-model="project" class="detailField" type="text" placeholder="Trabajo" />
           </label>
 
@@ -208,6 +213,11 @@ function onSubmit() {
           <label class="fieldGroup">
             <span>Follow-up</span>
             <input v-model="followUpAt" class="detailField" type="datetime-local" />
+          </label>
+
+          <label class="fieldGroup">
+            <span>Area</span>
+            <input v-model="area" class="detailField" type="text" placeholder="Personal" />
           </label>
 
           <label class="fieldGroup">
@@ -261,6 +271,11 @@ function onSubmit() {
               <option value="weekends">Fines de semana</option>
               <option value="every-x-days">Cada 3 dias</option>
             </select>
+          </label>
+
+          <label v-if="recurrencePreset !== 'none'" class="fieldGroup">
+            <span>Recurrence interval</span>
+            <input v-model="recurrenceInterval" class="detailField" type="number" min="1" step="1" @input="recurrenceError = ''" />
           </label>
 
           <label class="fieldGroup">
@@ -451,6 +466,13 @@ function onSubmit() {
   text-align: left;
   font-size: 0.92rem;
   font-weight: 700;
+}
+
+.fieldLabel {
+  margin: 0 0 -6px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
 .noteComposer-enter-active,

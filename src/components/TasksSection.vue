@@ -58,6 +58,7 @@ const searchQuery = ref('');
 const mounted = ref(false);
 const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
+const backlogCompletedOpen = ref(true);
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
@@ -120,12 +121,14 @@ function toggleTask(id) {
   if (task.isCompleted()) {
     task.reopen();
     tasks.value = recurrenceEngine.reconcileReopenedTask(tasks.value, task);
+    tasks.value = [...tasks.value];
     showUiFeedback(`Tarea "${task.title}" reabierta.`, 'success');
     revealTask(task);
     return;
   }
 
   task.complete();
+  tasks.value = [...tasks.value];
   analytics.value.recordCompleted(task, task.completedAt);
   const nextOccurrence = recurrenceEngine.createNextOccurrence(task, task.completedAt);
   if (nextOccurrence) {
@@ -147,6 +150,7 @@ function updateTask(payload) {
   const task = tasks.value.find(item => item.id === payload.id);
   if (!task) return;
   task.applyPatch(payload);
+  tasks.value = [...tasks.value];
   showUiFeedback(`Cambios guardados en "${task.title}".`, 'success');
   if (!task.isCompleted()) {
     revealTask(task);
@@ -162,6 +166,7 @@ function toggleSubtask({ taskId, subtaskId }) {
 
   subtask.done = !subtask.done;
   task.updatedAt = new Date().toISOString();
+  tasks.value = [...tasks.value];
 }
 
 async function removeTask(id) {
@@ -411,7 +416,7 @@ const filteredTasks = computed(() => {
 const agendaTasks = computed(() => sortTasksByRelevance(applySearch(openTasks.value)));
 const focusEmptyMessage = computed(() => {
   if (selectedTimeFilter.value?.id === FILTER_IDS.OVERDUE) {
-    return 'No hay tareas vencidas.';
+    return 'No overdue tasks. No hay tareas vencidas.';
   }
 
   if (selectedTimeFilter.value?.id === FILTER_IDS.NO_DATE) {
@@ -497,7 +502,7 @@ onBeforeUnmount(() => {
     <AddTask v-if="showTaskWorkspace" @add="addTask" />
 
     <transition name="timeSwap">
-      <section
+      <div
         v-if="uiFeedback && showTaskWorkspace"
         class="feedbackBanner"
         :data-tone="uiFeedback.tone"
@@ -508,11 +513,11 @@ onBeforeUnmount(() => {
         <button type="button" class="ghostButton feedbackClose" @click="dismissUiFeedback">
           Cerrar
         </button>
-      </section>
+      </div>
     </transition>
 
     <transition name="snippetPulse">
-      <section
+      <div
         v-if="avatarSnippet && showTaskWorkspace"
         class="snippetOverlay"
         aria-atomic="true"
@@ -530,7 +535,7 @@ onBeforeUnmount(() => {
             Cerrar
           </button>
         </div>
-      </section>
+      </div>
     </transition>
 
     <section v-if="showTaskWorkspace" class="filterBar">
@@ -583,7 +588,7 @@ onBeforeUnmount(() => {
       <article class="panelCard focusListPanel">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Vista activa</p>
+            <p class="eyebrow">Activa</p>
             <h3>{{ selectedTimeFilter.label }}</h3>
           </div>
           <span class="laneCount">{{ filteredTasks.length }}</span>
@@ -602,14 +607,33 @@ onBeforeUnmount(() => {
           </div>
         </transition>
       </article>
+
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Completadas</p>
+            <h3>Completadas recientes / Completed</h3>
+          </div>
+          <span class="laneCount">{{ completedTasks.length }}</span>
+        </div>
+
+        <TodoList
+          :todos="completedTasks"
+          empty-message="No recently completed. Todavia no hay tareas completadas."
+          @toggle="toggleTask"
+          @remove="removeTask"
+          @update="updateTask"
+          @toggle-subtask="toggleSubtask"
+        />
+      </article>
     </section>
 
     <section v-else-if="resolvedView === 'backlog'" class="backlogGrid">
       <article class="panelCard insightsPanel">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Agenda inteligente</p>
-            <h3>Senales que conviene resolver primero</h3>
+            <p class="eyebrow">Backlog</p>
+            <h3>Highlighted insights</h3>
           </div>
         </div>
 
@@ -619,14 +643,14 @@ onBeforeUnmount(() => {
             <p>{{ insight.message }}</p>
           </article>
         </div>
-        <p v-else class="emptyText">No hay alertas relevantes en el backlog.</p>
+        <p v-else class="emptyText">No backlog data. No hay alertas relevantes en el backlog.</p>
       </article>
 
       <article class="panelCard">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Agenda</p>
-            <h3>Tareas activas ordenadas por fecha y prioridad</h3>
+            <h3>Pending tasks list</h3>
           </div>
         </div>
 
@@ -642,20 +666,29 @@ onBeforeUnmount(() => {
 
       <article class="panelCard">
         <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Completadas recientes</p>
-            <h3>Cierre visible sin perder control</h3>
-          </div>
+          <button
+            type="button"
+            class="sectionToggle"
+            :aria-expanded="backlogCompletedOpen ? 'true' : 'false'"
+            @click="backlogCompletedOpen = !backlogCompletedOpen"
+          >
+            <span class="eyebrow">Completadas recientes</span>
+            <span class="sectionToggleTitle">Recently Completed</span>
+          </button>
+          <span class="laneCount">{{ completedTasks.length }}</span>
         </div>
 
-        <TodoList
-          :todos="completedTasks"
-          empty-message="Todavia no hay tareas completadas."
-          @toggle="toggleTask"
-          @remove="removeTask"
-          @update="updateTask"
-          @toggle-subtask="toggleSubtask"
-        />
+        <div v-if="backlogCompletedOpen">
+          <p class="panelText recentCompletedLabel">Recently completed tasks list</p>
+          <TodoList
+            :todos="completedTasks"
+            empty-message="No recently completed. Todavia no hay tareas completadas."
+            @toggle="toggleTask"
+            @remove="removeTask"
+            @update="updateTask"
+            @toggle-subtask="toggleSubtask"
+          />
+        </div>
       </article>
     </section>
 
@@ -676,6 +709,7 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Notificaciones</p>
         <h3>Recordatorios moviles con control del usuario</h3>
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
+        <p class="panelText">Reminders: {{ preferences.notificationsEnabled ? 'On' : 'Off' }}</p>
         <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
         <div class="settingsStack">
           <label class="checkboxRow">
@@ -1139,6 +1173,27 @@ onBeforeUnmount(() => {
   margin-bottom: 14px;
 }
 
+.sectionToggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.sectionToggle:hover {
+  transform: none;
+}
+
+.sectionToggleTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
 .laneHeader h3,
 .sectionHeader h3 {
   margin: 0;
@@ -1206,6 +1261,10 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   margin-top: 14px;
+}
+
+.recentCompletedLabel {
+  margin: 0 0 14px;
 }
 
 .checkboxRow,

@@ -19,15 +19,15 @@ function setTimeOnDate(date, hours, minutes) {
 }
 
 function extractTime(value) {
-  const match = value.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
+  const match = value.match(/\b(\d{1,2})(?::(\d{2}))\s*(am|pm)?\b|\b(\d{1,2})\s*(am|pm)\b/i);
 
   if (!match) {
     return null;
   }
 
-  let hours = Number(match[1]);
+  let hours = Number(match[1] ?? match[4]);
   const minutes = Number(match[2] || 0);
-  const meridiem = match[3]?.toLowerCase();
+  const meridiem = (match[3] ?? match[5])?.toLowerCase();
 
   if (meridiem === 'pm' && hours < 12) {
     hours += 12;
