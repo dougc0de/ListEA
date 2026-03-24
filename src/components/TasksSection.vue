@@ -18,13 +18,17 @@ import {
   AVATAR_SNIPPET_DURATIONS,
   AVATAR_TIMINGS,
 } from '../domain/avatar';
-import { FILTER_IDS, TaskFilterCatalog, TaskFilterService } from '../domain/filters';
+import {
+  FILTER_IDS,
+  TaskFilterCatalog,
+  TaskFilterService,
+  TaskVisibilityPlanner,
+} from '../domain/filters';
 import { BacklogInsightAnalyzer } from '../domain/insights';
 import { LocalTaskRepository } from '../domain/localFirst';
 import { NavigationCatalog } from '../domain/navigation';
 import { RecurrenceEngine } from '../domain/recurrence';
 import { TaskContextPresenter, TaskFactory } from '../domain/tasks';
-import { TodayBoardBuilder } from '../domain/today';
 
 const props = defineProps({
   currentView: { type: String, default: 'today' },
@@ -41,8 +45,8 @@ const recurrenceEngine = new RecurrenceEngine(taskFactory);
 const avatarCoach = new AvatarCoach();
 const filterCatalog = new TaskFilterCatalog();
 const filterService = new TaskFilterService();
+const visibilityPlanner = new TaskVisibilityPlanner(filterService);
 const insightAnalyzer = new BacklogInsightAnalyzer();
-const todayBoardBuilder = new TodayBoardBuilder();
 const navigationCatalog = new NavigationCatalog();
 const contextPresenter = new TaskContextPresenter();
 
@@ -53,16 +57,11 @@ const activeFilterId = ref(FILTER_IDS.TODAY);
 const searchQuery = ref('');
 const mounted = ref(false);
 const avatarSnippet = ref(null);
+const uiFeedback = ref(null);
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
-
-const TIME_FILTER_COPY = Object.freeze({
-  [FILTER_IDS.TODAY]: 'Lo inmediato queda al frente para que la decision sea clara desde que abres la lista.',
-  [FILTER_IDS.THIS_WEEK]: 'Ves solo lo que realmente pertenece a esta semana, sin arrastrar ruido extra.',
-  [FILTER_IDS.OVERDUE]: 'Todo lo vencido se junta aqui para resolverlo sin perseguirlo por varias secciones.',
-  [FILTER_IDS.NO_DATE]: 'Este espacio agrupa lo pendiente sin fecha para que no se mezcle con lo urgente.',
-});
+let uiFeedbackTimerId = 0;
 
 function sortTasksByRelevance(list) {
   return list.slice().sort((left, right) => {
@@ -110,6 +109,8 @@ function addTask(payload) {
   if (!task.title) return;
 
   tasks.value = [task, ...tasks.value];
+  showUiFeedback(`Tarea "${task.title}" guardada.`, 'success');
+  revealTask(task);
 }
 
 function toggleTask(id) {
@@ -118,6 +119,9 @@ function toggleTask(id) {
 
   if (task.isCompleted()) {
     task.reopen();
+    tasks.value = recurrenceEngine.reconcileReopenedTask(tasks.value, task);
+    showUiFeedback(`Tarea "${task.title}" reabierta.`, 'success');
+    revealTask(task);
     return;
   }
 
@@ -126,13 +130,27 @@ function toggleTask(id) {
   const nextOccurrence = recurrenceEngine.createNextOccurrence(task, task.completedAt);
   if (nextOccurrence) {
     tasks.value = [nextOccurrence, ...tasks.value];
+    showUiFeedback(`Tarea completada. Se programo la siguiente ocurrencia de "${task.title}".`, 'success');
+    revealTask(nextOccurrence);
+    return;
   }
+
+  if (task.recurrence?.isEnabled?.()) {
+    showUiFeedback('No fue posible programar la siguiente ocurrencia.', 'error');
+    return;
+  }
+
+  showUiFeedback(`Tarea "${task.title}" completada.`, 'success');
 }
 
 function updateTask(payload) {
   const task = tasks.value.find(item => item.id === payload.id);
   if (!task) return;
   task.applyPatch(payload);
+  showUiFeedback(`Cambios guardados en "${task.title}".`, 'success');
+  if (!task.isCompleted()) {
+    revealTask(task);
+  }
 }
 
 function toggleSubtask({ taskId, subtaskId }) {
@@ -150,6 +168,7 @@ async function removeTask(id) {
   const task = tasks.value.find(item => item.id === id);
   if (task) {
     analytics.value.recordDeleted(task);
+    showUiFeedback(`Tarea "${task.title}" eliminada.`, 'success');
   }
   await cancelReminder(id);
   tasks.value = tasks.value.filter(task => task.id !== id);
@@ -168,6 +187,47 @@ function selectTimeFilter(filterId) {
 
 function resetTimeFilter() {
   activeFilterId.value = FILTER_IDS.TODAY;
+}
+
+function clearUiFeedbackTimer() {
+  if (!uiFeedbackTimerId || typeof window === 'undefined') return;
+  window.clearTimeout(uiFeedbackTimerId);
+  uiFeedbackTimerId = 0;
+}
+
+function dismissUiFeedback() {
+  clearUiFeedbackTimer();
+  uiFeedback.value = null;
+}
+
+function showUiFeedback(message, tone = 'success') {
+  uiFeedback.value = { message, tone };
+  clearUiFeedbackTimer();
+
+  if (typeof window === 'undefined') return;
+  uiFeedbackTimerId = window.setTimeout(() => {
+    uiFeedbackTimerId = 0;
+    uiFeedback.value = null;
+  }, 4200);
+}
+
+function revealTask(task) {
+  searchQuery.value = '';
+
+  if (resolvedView.value !== 'today') {
+    return;
+  }
+
+  const nextFilter = visibilityPlanner.resolveVisibleFilter(task, activeFilterId.value, {
+    referenceDate: new Date(),
+  });
+
+  if (nextFilter) {
+    activeFilterId.value = nextFilter;
+    return;
+  }
+
+  emit('navigate', 'backlog');
 }
 
 function clearAvatarSnippetTimer() {
@@ -274,6 +334,20 @@ async function disableNotificationsFlow() {
   await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
 }
 
+async function toggleNotificationsSetting(enabled) {
+  if (enabled) {
+    await enableNotificationsFlow();
+    return;
+  }
+
+  await disableNotificationsFlow();
+}
+
+async function saveReminderSettings() {
+  persistState();
+  await syncReminders();
+}
+
 function markReminderSent(id) {
   const task = tasks.value.find(item => item.id === id);
   if (!task) return;
@@ -322,15 +396,11 @@ const timeFilters = computed(() => {
     .map(filter => ({
       ...filter,
       count: filterService.apply(openTasks.value, filter.id, { referenceDate }).length,
-      description: TIME_FILTER_COPY[filter.id] ?? 'Una vista simple para concentrarte en un solo tramo del tiempo.',
     }));
 });
 const selectedTimeFilter = computed(() =>
   timeFilters.value.find(filter => filter.id === activeFilterId.value)
   ?? timeFilters.value[0],
-);
-const selectedTimeDescription = computed(() =>
-  selectedTimeFilter.value?.description ?? TIME_FILTER_COPY[FILTER_IDS.TODAY],
 );
 const filteredTasks = computed(() => {
   const filtered = filterService.apply(openTasks.value, selectedTimeFilter.value?.id ?? FILTER_IDS.TODAY, {
@@ -338,25 +408,27 @@ const filteredTasks = computed(() => {
   });
   return sortTasksByRelevance(applySearch(filtered));
 });
-const focusBoard = computed(() =>
-  todayBoardBuilder.build(filteredTasks.value, {
-    referenceDate: new Date(),
-  }),
-);
+const agendaTasks = computed(() => sortTasksByRelevance(applySearch(openTasks.value)));
+const focusEmptyMessage = computed(() => {
+  if (selectedTimeFilter.value?.id === FILTER_IDS.OVERDUE) {
+    return 'No hay tareas vencidas.';
+  }
+
+  if (selectedTimeFilter.value?.id === FILTER_IDS.NO_DATE) {
+    return 'No hay tareas sin fecha.';
+  }
+
+  if (selectedTimeFilter.value?.id === FILTER_IDS.THIS_WEEK) {
+    return 'No hay tareas para esta semana.';
+  }
+
+  return 'No hay tareas dentro de esta ventana de tiempo.';
+});
 const backlogInsights = computed(() =>
   insightAnalyzer.analyze(openTasks.value, {
     referenceDate: new Date(),
   }),
 );
-const focusSignals = computed(() => {
-  const lanesById = new Map(focusBoard.value.map(lane => [lane.id, lane.items.length]));
-  return [
-    { id: 'now', label: 'Ahora', value: lanesById.get('now') ?? 0 },
-    { id: 'quickWins', label: 'Rapidas', value: lanesById.get('quickWins') ?? 0 },
-    { id: 'important', label: 'Importantes', value: lanesById.get('important') ?? 0 },
-    { id: 'waiting', label: 'En espera', value: lanesById.get('waiting') ?? 0 },
-  ];
-});
 const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
@@ -403,6 +475,7 @@ onBeforeUnmount(() => {
   clearAllReminderTimers();
   clearAvatarSnippetTimer();
   clearAvatarSnippetHideTimer();
+  clearUiFeedbackTimer();
 });
 </script>
 
@@ -422,6 +495,21 @@ onBeforeUnmount(() => {
     </section>
 
     <AddTask v-if="showTaskWorkspace" @add="addTask" />
+
+    <transition name="timeSwap">
+      <section
+        v-if="uiFeedback && showTaskWorkspace"
+        class="feedbackBanner"
+        :data-tone="uiFeedback.tone"
+        aria-live="polite"
+        role="status"
+      >
+        <p>{{ uiFeedback.message }}</p>
+        <button type="button" class="ghostButton feedbackClose" @click="dismissUiFeedback">
+          Cerrar
+        </button>
+      </section>
+    </transition>
 
     <transition name="snippetPulse">
       <section
@@ -472,7 +560,6 @@ onBeforeUnmount(() => {
             @click="selectTimeFilter(filter.id)"
           >
             <span class="timeFilterLabel">{{ filter.label }}</span>
-            <small>{{ filter.description }}</small>
             <strong>{{ filter.count }}</strong>
           </button>
         </div>
@@ -481,14 +568,6 @@ onBeforeUnmount(() => {
           <div :key="selectedTimeFilter.id" class="timeFocusBody">
             <div class="timeFocusCopy">
               <span class="activeFilterChip">{{ selectedTimeFilter.label }}</span>
-              <p class="activeFilterCopy">{{ selectedTimeDescription }}</p>
-            </div>
-
-            <div class="timeSignalGrid">
-              <article v-for="signal in focusSignals" :key="signal.id" class="timeSignalCard">
-                <strong>{{ signal.value }}</strong>
-                <span>{{ signal.label }}</span>
-              </article>
             </div>
           </div>
         </transition>
@@ -514,7 +593,7 @@ onBeforeUnmount(() => {
           <div :key="selectedTimeFilter.id" class="focusListWrap">
             <TodoList
               :todos="filteredTasks"
-              empty-message="No hay tareas dentro de esta ventana de tiempo."
+              :empty-message="focusEmptyMessage"
               @toggle="toggleTask"
               @remove="removeTask"
               @update="updateTask"
@@ -529,7 +608,7 @@ onBeforeUnmount(() => {
       <article class="panelCard insightsPanel">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Backlog inteligente</p>
+            <p class="eyebrow">Agenda inteligente</p>
             <h3>Senales que conviene resolver primero</h3>
           </div>
         </div>
@@ -546,14 +625,14 @@ onBeforeUnmount(() => {
       <article class="panelCard">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Tareas activas</p>
-            <h3>Ordenadas por fecha y prioridad</h3>
+            <p class="eyebrow">Agenda</p>
+            <h3>Tareas activas ordenadas por fecha y prioridad</h3>
           </div>
         </div>
 
         <TodoList
-          :todos="filteredTasks"
-          empty-message="No hay tareas activas para este filtro."
+          :todos="agendaTasks"
+          empty-message="No hay tareas activas en tu agenda."
           @toggle="toggleTask"
           @remove="removeTask"
           @update="updateTask"
@@ -598,37 +677,14 @@ onBeforeUnmount(() => {
         <h3>Recordatorios moviles con control del usuario</h3>
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
         <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
-        <div class="buttonRow">
-          <button
-            v-if="!preferences.notificationsEnabled"
-            type="button"
-            class="primaryButton"
-            @click="enableNotificationsFlow"
-          >
-            Activar recordatorios
-          </button>
-          <button
-            v-else
-            type="button"
-            class="ghostButton"
-            @click="disableNotificationsFlow"
-          >
-            Desactivar recordatorios
-          </button>
-        </div>
-      </article>
-
-      <article class="panelCard">
-        <p class="eyebrow">Snippet</p>
-        <h3>Aparece al centro cuando toca</h3>
         <div class="settingsStack">
           <label class="checkboxRow">
             <input
-              :checked="preferences.avatar.enabled"
+              :checked="preferences.notificationsEnabled"
               type="checkbox"
-              @change="setAvatarPreferences({ enabled: $event.target.checked })"
+              @change="toggleNotificationsSetting($event.target.checked)"
             />
-            <span>Activar snippet</span>
+            <span>Activar recordatorios</span>
           </label>
 
           <label class="fieldGroup">
@@ -644,6 +700,27 @@ onBeforeUnmount(() => {
               <option :value="AVATAR_TIMINGS.ON_TIME">Justo a tiempo</option>
               <option :value="AVATAR_TIMINGS.AFTER_10">10 min despues</option>
             </select>
+          </label>
+
+          <div class="buttonRow">
+            <button type="button" class="primaryButton" @click="saveReminderSettings">
+              Guardar preferencias
+            </button>
+          </div>
+        </div>
+      </article>
+
+      <article class="panelCard">
+        <p class="eyebrow">Snippet</p>
+        <h3>Aparece al centro cuando toca</h3>
+        <div class="settingsStack">
+          <label class="checkboxRow">
+            <input
+              :checked="preferences.avatar.enabled"
+              type="checkbox"
+              @change="setAvatarPreferences({ enabled: $event.target.checked })"
+            />
+            <span>Activar snippet</span>
           </label>
 
           <label class="checkboxRow">
@@ -768,6 +845,36 @@ onBeforeUnmount(() => {
   align-self: stretch;
 }
 
+.feedbackBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 88%, white);
+  box-shadow: var(--card-shadow);
+}
+
+.feedbackBanner[data-tone='success'] {
+  border-color: color-mix(in srgb, #5f8d64 34%, var(--line));
+}
+
+.feedbackBanner[data-tone='error'] {
+  border-color: color-mix(in srgb, #de6f4d 38%, var(--line));
+}
+
+.feedbackBanner p {
+  margin: 0;
+  text-align: left;
+  font-weight: 600;
+}
+
+.feedbackClose {
+  flex-shrink: 0;
+}
+
 .statCard {
   display: flex;
   flex-direction: column;
@@ -889,8 +996,7 @@ onBeforeUnmount(() => {
 
 .timeFocusHeader,
 .timeFocusBody,
-.timeFilterGrid,
-.timeSignalGrid {
+.timeFilterGrid {
   display: grid;
   gap: 10px;
 }
@@ -898,11 +1004,6 @@ onBeforeUnmount(() => {
 .timeFocusHeader {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-}
-
-.timeFocusBody {
-  grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.95fr);
-  align-items: start;
 }
 
 .timeFocusHeader h3 {
@@ -914,8 +1015,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.timeFilterTile,
-.timeSignalCard {
+.timeFilterTile {
   min-height: 82px;
   border-radius: 20px;
   border: 1px solid var(--line);
@@ -926,22 +1026,18 @@ onBeforeUnmount(() => {
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  gap: 6px;
+  gap: 10px;
   padding: 14px;
   background: var(--surface-soft);
   color: var(--text-main);
   text-align: left;
 }
 
-.timeFilterLabel,
-.timeSignalCard span,
-.activeFilterCopy,
-.timeFilterTile small {
+.timeFilterLabel {
   color: var(--text-muted);
 }
 
-.timeFilterTile strong,
-.timeSignalCard strong {
+.timeFilterTile strong {
   font-size: clamp(1.1rem, 4vw, 1.55rem);
 }
 
@@ -952,12 +1048,6 @@ onBeforeUnmount(() => {
 .timeFilterLabel {
   font-weight: 700;
   color: var(--text-main);
-}
-
-.timeFilterTile small {
-  display: block;
-  min-height: 2.5em;
-  line-height: 1.25;
 }
 
 .timeFilterTile.active {
@@ -981,23 +1071,6 @@ onBeforeUnmount(() => {
   background: var(--accent);
   color: var(--accent-contrast);
   font-weight: 700;
-}
-
-.activeFilterCopy {
-  margin: 0;
-}
-
-.timeSignalGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.timeSignalCard {
-  padding: 12px 14px;
-  background: var(--surface-soft);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
 }
 
 .filterChip,
@@ -1189,8 +1262,7 @@ onBeforeUnmount(() => {
   .backlogGrid,
   .settingsGrid,
   .timeFilterGrid,
-  .timeFocusBody,
-  .timeSignalGrid {
+  .timeFocusBody {
     grid-template-columns: 1fr;
   }
 }

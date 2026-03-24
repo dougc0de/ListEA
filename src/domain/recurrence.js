@@ -39,14 +39,35 @@ export class RecurrenceEngine {
     this.factory = factory;
   }
 
+  getSeriesCandidates(tasks, task) {
+    if (!task?.recurrence?.seriesId) {
+      return [];
+    }
+
+    return tasks.filter(candidate =>
+      candidate.id !== task.id
+      && candidate.recurrence?.seriesId === task.recurrence.seriesId,
+    );
+  }
+
+  findNearestActiveOccurrence(tasks, task) {
+    return this.getSeriesCandidates(tasks, task)
+      .filter(candidate => !candidate.isCompleted())
+      .sort((left, right) => {
+        const leftTime = new Date(left.getRelevantDate() || left.createdAt).getTime();
+        const rightTime = new Date(right.getRelevantDate() || right.createdAt).getTime();
+        return leftTime - rightTime;
+      })[0] ?? null;
+  }
+
   createNextOccurrence(task, completedAt = new Date().toISOString()) {
-    if (!task.recurrence?.isEnabled?.()) {
+    if (!task.recurrence?.isEnabled?.() || !task.recurrence?.canScheduleNext?.()) {
       return null;
     }
 
     const anchor = task.recurrence.mode === 'after-completion'
       ? new Date(completedAt)
-      : new Date(task.dueAt || completedAt);
+      : new Date(task.recurrence.anchorAt);
 
     if (Number.isNaN(anchor.getTime())) {
       return null;
@@ -77,5 +98,18 @@ export class RecurrenceEngine {
         done: false,
       })),
     });
+  }
+
+  reconcileReopenedTask(tasks, reopenedTask) {
+    if (!reopenedTask?.recurrence?.isEnabled?.()) {
+      return tasks;
+    }
+
+    const duplicateOccurrence = this.findNearestActiveOccurrence(tasks, reopenedTask);
+    if (!duplicateOccurrence) {
+      return tasks;
+    }
+
+    return tasks.filter(task => task.id !== duplicateOccurrence.id);
   }
 }

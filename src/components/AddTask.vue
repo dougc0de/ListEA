@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
 
 const emit = defineEmits(['add']);
@@ -7,13 +7,10 @@ const emit = defineEmits(['add']);
 const title = ref('');
 const notes = ref('');
 const project = ref('');
-const area = ref('');
 const dueAt = ref('');
 const followUpAt = ref('');
 const priority = ref('');
 const status = ref('active');
-const energy = ref('medium');
-const impact = ref('medium');
 const effortMinutes = ref('');
 const tags = ref('');
 const subtasks = ref('');
@@ -21,6 +18,10 @@ const recurrencePreset = ref('none');
 const recurrenceMode = ref('fixed');
 const recurrenceResetNotes = ref(true);
 const advancedOpen = ref(false);
+const composerOpen = ref(false);
+const titleError = ref('');
+const recurrenceError = ref('');
+const titleField = ref(null);
 
 const interpreter = new QuickCaptureInterpreter();
 
@@ -36,24 +37,51 @@ const capturePreview = computed(() => interpreter.interpret(title.value));
 const previewItems = computed(() => {
   const items = [];
   if (capturePreview.value.dueAt) items.push(`Fecha detectada: ${new Date(capturePreview.value.dueAt).toLocaleString()}`);
-  if (capturePreview.value.project) items.push(`Proyecto: ${capturePreview.value.project}`);
+  if (capturePreview.value.project || capturePreview.value.area) {
+    items.push(`Area: ${capturePreview.value.project || capturePreview.value.area}`);
+  }
   if (capturePreview.value.tags.length) items.push(`Tags: ${capturePreview.value.tags.join(', ')}`);
   if (capturePreview.value.priority !== 'medium') items.push(`Prioridad sugerida: ${capturePreview.value.priority}`);
   if (capturePreview.value.recurrence.preset !== 'none') items.push(`Recurrencia: ${capturePreview.value.recurrence.preset}`);
   return items;
 });
 
+function openComposer() {
+  composerOpen.value = true;
+  nextTick(() => {
+    focusTitleField();
+  });
+}
+
+function closeComposer() {
+  composerOpen.value = false;
+  advancedOpen.value = false;
+  titleError.value = '';
+  recurrenceError.value = '';
+}
+
+function focusTitleField() {
+  if (!titleField.value) return;
+
+  titleField.value.focus({ preventScroll: true });
+  titleField.value.setSelectionRange?.(titleField.value.value.length, titleField.value.value.length);
+  titleField.value.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  if (typeof window !== 'undefined') {
+    window.requestAnimationFrame(() => {
+      titleField.value?.focus({ preventScroll: true });
+    });
+  }
+}
+
 function resetForm() {
   title.value = '';
   notes.value = '';
   project.value = '';
-  area.value = '';
   dueAt.value = '';
   followUpAt.value = '';
   priority.value = '';
   status.value = 'active';
-  energy.value = 'medium';
-  impact.value = 'medium';
   effortMinutes.value = '';
   tags.value = '';
   subtasks.value = '';
@@ -61,25 +89,38 @@ function resetForm() {
   recurrenceMode.value = 'fixed';
   recurrenceResetNotes.value = true;
   advancedOpen.value = false;
+  titleError.value = '';
+  recurrenceError.value = '';
 }
 
 function onSubmit() {
   const interpreted = capturePreview.value;
   const nextTitle = (interpreted.title || title.value).trim();
+  const resolvedDueAt = dueAt.value || interpreted.dueAt;
 
-  if (!nextTitle) return;
+  titleError.value = '';
+  recurrenceError.value = '';
+
+  if (!nextTitle) {
+    titleError.value = 'Título requerido';
+    return;
+  }
+
+  if (recurrencePreset.value !== 'none' && recurrenceMode.value === 'fixed' && !resolvedDueAt) {
+    recurrenceError.value = 'Define una fecha objetivo para repetir esta tarea.';
+    advancedOpen.value = true;
+    return;
+  }
 
   emit('add', {
     title: nextTitle,
     notes: notes.value.trim(),
-    project: project.value.trim() || interpreted.project,
-    area: area.value.trim() || interpreted.area,
-    dueAt: dueAt.value || interpreted.dueAt,
+    project: project.value.trim() || interpreted.project || interpreted.area,
+    area: interpreted.area,
+    dueAt: resolvedDueAt,
     followUpAt: followUpAt.value,
     priority: priority.value || interpreted.priority,
     status: status.value,
-    energy: energy.value,
-    impact: impact.value,
     effortMinutes: effortMinutes.value || interpreted.effortMinutes || 20,
     tags: [tags.value, interpreted.tags.join(',')].filter(Boolean).join(','),
     subtasks: parsedSubtasks.value,
@@ -98,154 +139,157 @@ function onSubmit() {
 </script>
 
 <template>
-  <section class="composerCard">
-    <div class="composerHeading">
-      <div>
-        <p class="eyebrow">Nueva tarea</p>
-        <h2>Escribe y guarda.</h2>
-      </div>
-      <button type="button" class="ghostButton" @click="advancedOpen = !advancedOpen">
-        {{ advancedOpen ? 'Ocultar detalle' : 'Agregar detalle' }}
-      </button>
-    </div>
+  <transition name="noteComposer" mode="out-in">
+    <button
+      v-if="!composerOpen"
+      key="launcher"
+      type="button"
+      class="launcherButtonOnly"
+      @click="openComposer"
+    >
+      Agregar tarea 📝
+    </button>
 
-    <form class="composerForm" @submit.prevent="onSubmit">
-      <textarea
-        v-model="title"
-        class="primaryField"
-        rows="3"
-        placeholder="Ejemplo: llamar al cliente manana 10am #ventas urgente"
-      />
-
-      <div v-if="previewItems.length" class="previewBox">
-        <span v-for="item in previewItems" :key="item" class="previewChip">{{ item }}</span>
-      </div>
-
-      <div v-if="advancedOpen" class="advancedPanel">
-        <label class="fieldGroup wide">
-          <span>Notas breves</span>
-          <textarea
-            v-model="notes"
-            class="detailField"
-            rows="3"
-            placeholder="Contexto util, no burocracia."
-          />
-        </label>
-
-        <label class="fieldGroup">
-          <span>Proyecto</span>
-          <input v-model="project" class="detailField" type="text" placeholder="Clientes" />
-        </label>
-
-        <label class="fieldGroup">
-          <span>Area</span>
-          <input v-model="area" class="detailField" type="text" placeholder="Trabajo" />
-        </label>
-
-        <label class="fieldGroup">
-          <span>Fecha objetivo</span>
-          <input v-model="dueAt" class="detailField" type="datetime-local" />
-        </label>
-
-        <label class="fieldGroup">
-          <span>Follow-up</span>
-          <input v-model="followUpAt" class="detailField" type="datetime-local" />
-        </label>
-
-        <label class="fieldGroup">
-          <span>Prioridad</span>
-          <select v-model="priority" class="detailField">
-            <option value="">Sugerida</option>
-            <option value="high">Alta</option>
-            <option value="medium">Media</option>
-            <option value="low">Baja</option>
-          </select>
-        </label>
-
-        <label class="fieldGroup">
-          <span>Estado</span>
-          <select v-model="status" class="detailField">
-            <option value="active">Activa</option>
-            <option value="blocked">Bloqueada</option>
-            <option value="waiting">En espera</option>
-          </select>
-        </label>
-
-        <label class="fieldGroup">
-          <span>Energia</span>
-          <select v-model="energy" class="detailField">
-            <option value="deep">Profunda</option>
-            <option value="medium">Media</option>
-            <option value="light">Ligera</option>
-          </select>
-        </label>
-
-        <label class="fieldGroup">
-          <span>Impacto</span>
-          <select v-model="impact" class="detailField">
-            <option value="high">Alto</option>
-            <option value="medium">Medio</option>
-            <option value="low">Bajo</option>
-          </select>
-        </label>
-
-        <label class="fieldGroup">
-          <span>Esfuerzo en minutos</span>
-          <input v-model="effortMinutes" class="detailField" type="number" min="5" step="5" />
-        </label>
-
-        <label class="fieldGroup wide">
-          <span>Tags</span>
-          <input v-model="tags" class="detailField" type="text" placeholder="ventas, cliente, rapido" />
-        </label>
-
-        <label class="fieldGroup wide">
-          <span>Subtareas</span>
-          <textarea
-            v-model="subtasks"
-            class="detailField"
-            rows="4"
-            placeholder="Una accion por linea"
-          />
-        </label>
-
-        <label class="fieldGroup">
-          <span>Recurrencia</span>
-          <select v-model="recurrencePreset" class="detailField">
-            <option value="none">Sin recurrencia</option>
-            <option value="daily">Cada dia</option>
-            <option value="weekly">Cada semana</option>
-            <option value="monthly">Cada mes</option>
-            <option value="yearly">Cada ano</option>
-            <option value="weekdays">Dias laborables</option>
-            <option value="weekends">Fines de semana</option>
-            <option value="every-x-days">Cada 3 dias</option>
-          </select>
-        </label>
-
-        <label class="fieldGroup">
-          <span>Base de recurrencia</span>
-          <select v-model="recurrenceMode" class="detailField" :disabled="recurrencePreset === 'none'">
-            <option value="fixed">Fecha original</option>
-            <option value="after-completion">Despues de completar</option>
-          </select>
-        </label>
-
-        <label class="checkboxRow wide">
-          <input v-model="recurrenceResetNotes" type="checkbox" />
-          <span>Limpiar notas temporales al crear la siguiente ocurrencia</span>
-        </label>
+    <section v-else key="composer" class="composerCard">
+      <div class="composerHeading">
+        <div>
+          <p class="eyebrow">Nueva tarea</p>
+          <h2>Escribe como si fuera una nota.</h2>
+        </div>
+        <div class="composerHeadingActions">
+          <button type="button" class="ghostButton" @click="advancedOpen = !advancedOpen">
+            {{ advancedOpen ? 'Ocultar detalle' : 'Agregar detalle' }}
+          </button>
+          <button type="button" class="ghostButton" @click="closeComposer">
+            Cerrar
+          </button>
+        </div>
       </div>
 
-      <div class="composerActions">
-        <p class="helperText">Natural si quieres, detallada si hace falta.</p>
-        <button class="submitButton" type="submit">Agregar tarea</button>
-      </div>
-    </form>
-  </section>
+      <form class="composerForm" @submit.prevent="onSubmit">
+        <textarea
+          ref="titleField"
+          v-model="title"
+          class="primaryField"
+          autofocus
+          :aria-invalid="titleError ? 'true' : 'false'"
+          rows="3"
+          placeholder="Ejemplo: llamar al cliente manana 10am #ventas urgente"
+          @input="titleError = ''"
+        />
+
+        <p v-if="titleError" class="fieldError" role="alert">{{ titleError }}</p>
+
+        <div v-if="previewItems.length" class="previewBox">
+          <span v-for="item in previewItems" :key="item" class="previewChip">{{ item }}</span>
+        </div>
+
+        <div v-if="advancedOpen" class="advancedPanel">
+          <label class="fieldGroup wide">
+            <span>Notas breves</span>
+            <textarea
+              v-model="notes"
+              class="detailField"
+              rows="3"
+              placeholder="Contexto util, no burocracia."
+            />
+          </label>
+
+          <label class="fieldGroup">
+            <span>Area</span>
+            <input v-model="project" class="detailField" type="text" placeholder="Trabajo" />
+          </label>
+
+          <label class="fieldGroup">
+            <span>Fecha objetivo</span>
+            <input v-model="dueAt" class="detailField" type="datetime-local" @input="recurrenceError = ''" />
+          </label>
+
+          <label class="fieldGroup">
+            <span>Follow-up</span>
+            <input v-model="followUpAt" class="detailField" type="datetime-local" />
+          </label>
+
+          <label class="fieldGroup">
+            <span>Prioridad</span>
+            <select v-model="priority" class="detailField">
+              <option value="">Sugerida</option>
+              <option value="high">Alta</option>
+              <option value="medium">Media</option>
+              <option value="low">Baja</option>
+            </select>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Estado</span>
+            <select v-model="status" class="detailField">
+              <option value="active">Activa</option>
+              <option value="blocked">Bloqueada</option>
+              <option value="waiting">En espera</option>
+            </select>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Esfuerzo en minutos</span>
+            <input v-model="effortMinutes" class="detailField" type="number" min="5" step="5" />
+          </label>
+
+          <label class="fieldGroup wide">
+            <span>Tags</span>
+            <input v-model="tags" class="detailField" type="text" placeholder="ventas, cliente, rapido" />
+          </label>
+
+          <label class="fieldGroup wide">
+            <span>Subtareas</span>
+            <textarea
+              v-model="subtasks"
+              class="detailField"
+              rows="4"
+              placeholder="Una accion por linea"
+            />
+          </label>
+
+          <label class="fieldGroup">
+            <span>Recurrencia</span>
+            <select v-model="recurrencePreset" class="detailField" @change="recurrenceError = ''">
+              <option value="none">Sin recurrencia</option>
+              <option value="daily">Cada dia</option>
+              <option value="weekly">Cada semana</option>
+              <option value="monthly">Cada mes</option>
+              <option value="yearly">Cada ano</option>
+              <option value="weekdays">Dias laborables</option>
+              <option value="weekends">Fines de semana</option>
+              <option value="every-x-days">Cada 3 dias</option>
+            </select>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Base de recurrencia</span>
+            <select v-model="recurrenceMode" class="detailField" :disabled="recurrencePreset === 'none'" @change="recurrenceError = ''">
+              <option value="fixed">Fecha original</option>
+              <option value="after-completion">Despues de completar</option>
+            </select>
+          </label>
+
+          <label class="checkboxRow wide">
+            <input v-model="recurrenceResetNotes" type="checkbox" />
+            <span>Limpiar notas temporales al crear la siguiente ocurrencia</span>
+          </label>
+
+          <p v-if="recurrenceError" class="fieldError wide" role="alert">{{ recurrenceError }}</p>
+        </div>
+
+        <div class="composerActions">
+          <p class="helperText">Primero idea, luego estructura.</p>
+          <button class="submitButton" type="submit">Agregar tarea</button>
+        </div>
+      </form>
+    </section>
+  </transition>
 </template>
 
 <style scoped>
+.launcherButtonOnly,
 .composerCard {
   display: flex;
   flex-direction: column;
@@ -257,11 +301,33 @@ function onSubmit() {
   box-shadow: var(--card-shadow);
 }
 
+.launcherButtonOnly {
+  width: clamp(180px, 50%, 320px);
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
 .composerHeading {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+}
+
+.composerHeadingActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .composerHeading h2,
@@ -379,7 +445,34 @@ function onSubmit() {
   font-size: 0.92rem;
 }
 
+.fieldError {
+  margin: -4px 0 0;
+  color: #8b3a21;
+  text-align: left;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.noteComposer-enter-active,
+.noteComposer-leave-active {
+  transition: opacity 240ms ease, transform 240ms ease, filter 240ms ease;
+}
+
+.noteComposer-enter-from,
+.noteComposer-leave-to {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  filter: blur(6px);
+}
+
+@media (max-width: 960px) {
+  .launcherButtonOnly {
+    width: min(60%, 280px);
+  }
+}
+
 @media (max-width: 720px) {
+  .launcherButtonOnly,
   .composerCard {
     padding: 14px;
     border-radius: 22px;
@@ -387,14 +480,16 @@ function onSubmit() {
 
   .composerHeading,
   .composerActions,
-  .advancedPanel {
+  .advancedPanel,
+  .composerHeadingActions {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
   }
 
   .ghostButton,
-  .submitButton {
+  .submitButton,
+  .launcherButtonOnly {
     width: 100%;
   }
 

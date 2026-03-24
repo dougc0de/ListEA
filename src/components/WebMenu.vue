@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { DrawerGestureController, NavigationCatalog } from '../domain/navigation';
 
 const props = defineProps({
@@ -11,6 +11,7 @@ const emit = defineEmits(['navigate']);
 const navigationCatalog = new NavigationCatalog();
 const drawerGesture = new DrawerGestureController();
 const menuOpen = ref(false);
+const menuRoot = ref(null);
 const views = computed(() => navigationCatalog.getMenuViews());
 
 function toggleMenu() {
@@ -35,10 +36,35 @@ function onSwipeEnd(event) {
     menuOpen.value = true;
   }
 }
+
+function onDocumentPointerDown(event) {
+  if (!menuOpen.value) return;
+
+  const root = menuRoot.value;
+  if (root && !root.contains(event.target)) {
+    closeMenu();
+  }
+}
+
+function onDocumentKeydown(event) {
+  if (event.key === 'Escape') {
+    closeMenu();
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', onDocumentPointerDown);
+  document.addEventListener('keydown', onDocumentKeydown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocumentPointerDown);
+  document.removeEventListener('keydown', onDocumentKeydown);
+});
 </script>
 
 <template>
-  <header class="menuShell">
+  <header ref="menuRoot" class="menuShell">
     <div class="menuBar">
       <button type="button" class="brandButton" @click="navigateTo('today')">
         <img src="../assets/logo.png" alt="Logo de ListEA" class="brandLogo" />

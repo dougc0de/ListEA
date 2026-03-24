@@ -14,6 +14,8 @@ describe('LocalTaskRepository', () => {
 
     const state = new LocalTaskRepository({ storage }).load();
     expect(state.tasks.length).toBeGreaterThan(0);
+    expect(state.tasks.some(task => task.recurrence?.isEnabled?.())).toBe(true);
+    expect(state.tasks.some(task => task.isCompleted())).toBe(true);
     expect(state.preferences.avatar.enabled).toBe(true);
   });
 

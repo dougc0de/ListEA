@@ -4,6 +4,7 @@ import {
   TASK_STATUS,
   TaskContextPresenter,
   TaskFactory,
+  toDateTimeInputValue,
 } from '../tasks';
 
 describe('TaskFactory', () => {
@@ -67,5 +68,9 @@ describe('TaskContextPresenter', () => {
     });
 
     expect(task.avatarSnippetShownAt).toBe('');
+  });
+
+  it('formats ISO datetimes for datetime-local inputs without shifting the local wall-clock text', () => {
+    expect(toDateTimeInputValue('2026-03-24T18:30:00.000Z')).toMatch(/^2026-03-24T\d{2}:30$/);
   });
 });

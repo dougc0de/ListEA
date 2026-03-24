@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
-import { TaskContextPresenter } from '../domain/tasks';
+import { TaskContextPresenter, toDateTimeInputValue } from '../domain/tasks';
 
 const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask']);
 
@@ -30,6 +30,7 @@ const editableSubtasks = ref((props.todo.subtasks ?? []).map(subtask => subtask.
 const editableRecurrencePreset = ref(props.todo.recurrence?.preset ?? 'none');
 const editableRecurrenceMode = ref(props.todo.recurrence?.mode ?? 'fixed');
 const editableRecurrenceResetNotes = ref(props.todo.recurrence?.resetNotes ?? true);
+const editError = ref('');
 
 const contextChips = computed(() => presenter.buildTaskContext(props.todo));
 const nextAction = computed(() => advisor.suggest(props.todo));
@@ -51,14 +52,17 @@ const recurrenceLabel = computed(() => {
 const subtaskRows = computed(() =>
   props.todo.subtasks.map(subtask => presenter.buildSubtaskContext(props.todo, subtask)),
 );
+const visibleTags = computed(() => props.todo.tags ?? []);
+const subtaskPreviewRows = computed(() => subtaskRows.value.slice(0, 3));
+const hiddenSubtaskCount = computed(() => Math.max(subtaskRows.value.length - subtaskPreviewRows.value.length, 0));
 
 function resetEditors(todo = props.todo) {
   editableTitle.value = todo.title;
   editableNotes.value = todo.notes ?? '';
   editableProject.value = todo.project ?? '';
   editableArea.value = todo.area ?? '';
-  editableDueAt.value = todo.dueAt ? todo.dueAt.slice(0, 16) : '';
-  editableFollowUpAt.value = todo.followUpAt ? todo.followUpAt.slice(0, 16) : '';
+  editableDueAt.value = toDateTimeInputValue(todo.dueAt);
+  editableFollowUpAt.value = toDateTimeInputValue(todo.followUpAt);
   editablePriority.value = todo.priority ?? 'medium';
   editableStatus.value = todo.status ?? 'active';
   editableEnergy.value = todo.energy ?? 'medium';
@@ -69,6 +73,7 @@ function resetEditors(todo = props.todo) {
   editableRecurrencePreset.value = todo.recurrence?.preset ?? 'none';
   editableRecurrenceMode.value = todo.recurrence?.mode ?? 'fixed';
   editableRecurrenceResetNotes.value = todo.recurrence?.resetNotes ?? true;
+  editError.value = '';
 }
 
 watch(
@@ -81,7 +86,12 @@ watch(
 
 function saveTask() {
   const nextTitle = editableTitle.value.trim();
-  if (!nextTitle) return;
+  if (!nextTitle) {
+    editError.value = 'Título requerido';
+    return;
+  }
+
+  editError.value = '';
 
   const currentSubtasksByTitle = new Map(
     props.todo.subtasks.map(subtask => [subtask.title.toLowerCase(), subtask.done]),
@@ -117,6 +127,7 @@ function saveTask() {
     },
   });
 
+  detailsOpen.value = true;
   isEditing.value = false;
 }
 
@@ -144,6 +155,7 @@ function cancelEdit() {
             v-model="editableTitle"
             class="titleEditor"
             rows="2"
+            @input="editError = ''"
           />
           <h3 v-else :class="{ completedTitle: todo.isCompleted() }">{{ todo.title }}</h3>
           <span class="statusBadge">{{ presenter.getStatusLabel(todo.status) }}</span>
@@ -163,6 +175,9 @@ function cancelEdit() {
       <button type="button" class="ghostButton" @click="detailsOpen = !detailsOpen">
         {{ detailsOpen ? 'Ocultar detalle' : 'Ver detalle' }}
       </button>
+      <button type="button" class="ghostButton" @click="emit('toggle', todo.id)">
+        {{ todo.isCompleted() ? 'Reabrir' : 'Completar' }}
+      </button>
       <button v-if="!isEditing" type="button" class="ghostButton" @click="isEditing = true">
         Editar
       </button>
@@ -176,6 +191,8 @@ function cancelEdit() {
         Eliminar
       </button>
     </div>
+
+    <p v-if="editError" class="editError" role="alert">{{ editError }}</p>
 
     <div v-if="detailsOpen || isEditing" class="detailsPanel">
       <label class="fieldGroup wide">
@@ -249,6 +266,13 @@ function cancelEdit() {
         <input v-model="editableTags" class="detailField" type="text" :readonly="!isEditing" />
       </label>
 
+      <div v-if="!isEditing && visibleTags.length" class="fieldGroup wide">
+        <span>Etiquetas visibles</span>
+        <div class="tagList">
+          <span v-for="tag in visibleTags" :key="tag" class="tagChip">#{{ tag }}</span>
+        </div>
+      </div>
+
       <label class="fieldGroup">
         <span>Recurrencia</span>
         <select v-model="editableRecurrencePreset" class="detailField" :disabled="!isEditing">
@@ -297,6 +321,17 @@ function cancelEdit() {
           </label>
         </div>
       </div>
+    </div>
+
+    <div v-if="!isEditing && visibleTags.length" class="tagList">
+      <span v-for="tag in visibleTags" :key="`inline-${tag}`" class="tagChip">#{{ tag }}</span>
+    </div>
+
+    <div v-if="!isEditing && subtaskPreviewRows.length" class="subtaskPreviewList">
+      <div v-for="row in subtaskPreviewRows" :key="`preview-${row.id}`" class="subtaskPreviewItem">
+        <strong :class="{ completedTitle: row.done }">{{ row.title }}</strong>
+      </div>
+      <span v-if="hiddenSubtaskCount" class="subtaskOverflow">+{{ hiddenSubtaskCount }} subtarea(s)</span>
     </div>
   </article>
 </template>
@@ -384,6 +419,24 @@ function cancelEdit() {
   gap: 8px;
 }
 
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tagChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 .notesPreview,
 .advisorText {
   margin: 0;
@@ -456,6 +509,33 @@ function cancelEdit() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.subtaskPreviewList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subtaskPreviewItem {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface-soft);
+  text-align: left;
+}
+
+.subtaskOverflow {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.editError {
+  margin: -4px 0 0;
+  color: #8b3a21;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .subtaskRow {

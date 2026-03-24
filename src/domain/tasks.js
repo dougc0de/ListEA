@@ -46,6 +46,16 @@ function normalizeDateTime(value) {
   return Number.isNaN(nextDate.getTime()) ? '' : nextDate.toISOString();
 }
 
+export function toDateTimeInputValue(value) {
+  if (!value) return '';
+
+  const nextDate = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(nextDate.getTime())) return '';
+
+  const localDate = new Date(nextDate.getTime() - nextDate.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+}
+
 function normalizePriority(priority) {
   return Object.values(TASK_PRIORITY).includes(priority) ? priority : TASK_PRIORITY.MEDIUM;
 }
@@ -83,16 +93,32 @@ export class RecurrenceRule {
     mode = 'fixed',
     resetNotes = true,
     seriesId = '',
+    anchorAt = undefined,
   } = {}) {
     this.preset = RECURRENCE_PRESETS.has(preset) ? preset : 'none';
     this.interval = Number.isFinite(Number(interval)) && Number(interval) > 0 ? Number(interval) : 1;
     this.mode = RECURRENCE_MODES.has(mode) ? mode : 'fixed';
     this.resetNotes = Boolean(resetNotes);
     this.seriesId = seriesId || (this.preset === 'none' ? '' : createId('series'));
+    this.anchorAt = this.preset === 'none'
+      ? ''
+      : (anchorAt === undefined ? '' : normalizeDateTime(anchorAt));
   }
 
   isEnabled() {
     return this.preset !== 'none';
+  }
+
+  canScheduleNext() {
+    if (!this.isEnabled()) {
+      return false;
+    }
+
+    if (this.mode === 'fixed') {
+      return Boolean(this.anchorAt);
+    }
+
+    return true;
   }
 
   toJSON() {
@@ -102,6 +128,7 @@ export class RecurrenceRule {
       mode: this.mode,
       resetNotes: this.resetNotes,
       seriesId: this.seriesId,
+      anchorAt: this.anchorAt,
     };
   }
 }
@@ -221,6 +248,9 @@ export class TaskEntity {
       this.dueAt = normalizeDateTime(patch.dueAt);
       this.reminderSent = false;
       this.avatarSnippetShownAt = '';
+      if (this.recurrence.isEnabled() && this.recurrence.mode === 'fixed') {
+        this.recurrence.anchorAt = this.dueAt;
+      }
     }
 
     if (patch.followUpAt !== undefined) {
@@ -236,7 +266,9 @@ export class TaskEntity {
     }
 
     if (patch.recurrence !== undefined) {
-      this.recurrence = TaskFactory.normalizeRecurrence(patch.recurrence);
+      this.recurrence = TaskFactory.normalizeRecurrence(patch.recurrence, {
+        dueAt: patch.dueAt !== undefined ? patch.dueAt : this.dueAt,
+      });
     }
 
     if (patch.reminderSent !== undefined) {
@@ -304,7 +336,9 @@ export class TaskFactory {
       completedAt: normalizeDateTime(payload.completedAt),
       reminderSent: Boolean(payload.reminderSent),
       avatarSnippetShownAt: normalizeDateTime(payload.avatarSnippetShownAt),
-      recurrence: TaskFactory.normalizeRecurrence(payload.recurrence),
+      recurrence: TaskFactory.normalizeRecurrence(payload.recurrence, {
+        dueAt: payload.dueAt,
+      }),
     });
   }
 
@@ -324,9 +358,20 @@ export class TaskFactory {
     followUp.setDate(followUp.getDate() + 2);
     followUp.setHours(9, 0, 0, 0);
 
-    const overdue = new Date(now);
-    overdue.setDate(overdue.getDate() - 1);
-    overdue.setHours(16, 0, 0, 0);
+    const recurringSeriesId = createId('series-demo');
+    const recurringCompletedDue = new Date(now);
+    recurringCompletedDue.setDate(recurringCompletedDue.getDate() - 7);
+    recurringCompletedDue.setHours(18, 0, 0, 0);
+
+    const recurringCompletedAt = new Date(now);
+    recurringCompletedAt.setDate(recurringCompletedAt.getDate() - 1);
+    recurringCompletedAt.setHours(18, 10, 0, 0);
+
+    const recurringNextDue = new Date(now);
+    recurringNextDue.setHours(18, 0, 0, 0);
+
+    const recurringFailureDue = new Date(now);
+    recurringFailureDue.setHours(20, 0, 0, 0);
 
     return [
       this.create({
@@ -339,6 +384,7 @@ export class TaskFactory {
         energy: TASK_ENERGY.DEEP,
         effortMinutes: 50,
         dueAt: dueSoon,
+        tags: ['cliente', 'propuesta'],
         subtasks: ['Definir alcance', 'Confirmar costos'],
       }),
       this.create({
@@ -351,11 +397,60 @@ export class TaskFactory {
         tags: ['follow-up'],
       }),
       this.create({
-        title: 'Revisar backlog sin fecha',
+        title: 'Regar plantas',
+        project: 'Hogar',
+        area: 'Casa',
+        priority: TASK_PRIORITY.MEDIUM,
+        effortMinutes: 10,
+        dueAt: recurringNextDue,
+        tags: ['hogar', 'rutina'],
+        subtasks: ['Revisar macetas grandes', 'Agregar agua a las suculentas'],
+        recurrence: {
+          preset: 'weekly',
+          mode: 'fixed',
+          resetNotes: true,
+          seriesId: recurringSeriesId,
+        },
+      }),
+      this.create({
+        title: 'Cerrar caja semanal',
+        notes: 'Esta serie necesita repararse antes de generar la siguiente ocurrencia.',
+        project: 'Finanzas',
+        area: 'Administracion',
+        priority: TASK_PRIORITY.HIGH,
+        effortMinutes: 20,
+        dueAt: recurringFailureDue,
+        tags: ['revision', 'semanal'],
+        recurrence: {
+          preset: 'weekly',
+          mode: 'fixed',
+          resetNotes: false,
+          anchorAt: '',
+        },
+      }),
+      this.create({
+        title: 'Regar plantas',
+        project: 'Hogar',
+        area: 'Casa',
+        priority: TASK_PRIORITY.MEDIUM,
+        status: TASK_STATUS.COMPLETED,
+        effortMinutes: 10,
+        dueAt: recurringCompletedDue,
+        completedAt: recurringCompletedAt,
+        tags: ['hogar', 'rutina'],
+        subtasks: ['Revisar macetas grandes', 'Agregar agua a las suculentas'],
+        recurrence: {
+          preset: 'weekly',
+          mode: 'fixed',
+          resetNotes: true,
+          seriesId: recurringSeriesId,
+        },
+      }),
+      this.create({
+        title: 'Revisar agenda sin fecha',
         area: 'Personal',
         priority: TASK_PRIORITY.MEDIUM,
         effortMinutes: 15,
-        dueAt: overdue,
       }),
     ];
   }
@@ -389,7 +484,7 @@ export class TaskFactory {
       .filter(subtask => subtask.title);
   }
 
-  static normalizeRecurrence(recurrence = {}) {
+  static normalizeRecurrence(recurrence = {}, { dueAt = '' } = {}) {
     if (recurrence instanceof RecurrenceRule) {
       return recurrence;
     }
@@ -398,7 +493,13 @@ export class TaskFactory {
       return new RecurrenceRule();
     }
 
-    return new RecurrenceRule(recurrence);
+    const normalizedDueAt = normalizeDateTime(dueAt);
+    const hasExplicitAnchor = Object.prototype.hasOwnProperty.call(recurrence, 'anchorAt');
+
+    return new RecurrenceRule({
+      ...recurrence,
+      anchorAt: hasExplicitAnchor ? recurrence.anchorAt : normalizedDueAt,
+    });
   }
 }
 

@@ -121,3 +121,49 @@ export class TaskFilterService {
     return baseTasks;
   }
 }
+
+export class TaskVisibilityPlanner {
+  constructor(service = new TaskFilterService()) {
+    this.service = service;
+  }
+
+  isVisible(task, filterId, options = {}) {
+    return this.service.apply([task], filterId, options).length > 0;
+  }
+
+  getPreferredFilter(task, { referenceDate = new Date() } = {}) {
+    if (!task) return FILTER_IDS.TODAY;
+
+    const relevantDate = task.getRelevantDate?.();
+    if (!relevantDate) {
+      return FILTER_IDS.NO_DATE;
+    }
+
+    const parsedDate = new Date(relevantDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      return FILTER_IDS.NO_DATE;
+    }
+
+    if (task.dueAt && new Date(task.dueAt) < referenceDate) {
+      return FILTER_IDS.OVERDUE;
+    }
+
+    if (isSameDay(parsedDate, referenceDate)) {
+      return FILTER_IDS.TODAY;
+    }
+
+    if (isSameWeek(parsedDate, referenceDate)) {
+      return FILTER_IDS.THIS_WEEK;
+    }
+
+    return null;
+  }
+
+  resolveVisibleFilter(task, currentFilterId, options = {}) {
+    if (currentFilterId && this.isVisible(task, currentFilterId, options)) {
+      return currentFilterId;
+    }
+
+    return this.getPreferredFilter(task, options);
+  }
+}

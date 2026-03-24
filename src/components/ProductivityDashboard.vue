@@ -25,6 +25,24 @@ const weekAgoInputValue = new Date(today.getFullYear(), today.getMonth(), today.
 if (!customStart.value) customStart.value = weekAgoInputValue;
 if (!customEnd.value) customEnd.value = todayInputValue;
 
+function parseDateInput(value) {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const customRangeError = computed(() => {
+  if (viewMode.value !== 'custom') return '';
+
+  const startDate = parseDateInput(customStart.value);
+  const endDate = parseDateInput(customEnd.value);
+  if (!startDate || !endDate) {
+    return '';
+  }
+
+  return startDate > endDate ? 'Invalid date range' : '';
+});
+
 const dashboard = computed(() => {
   if (viewMode.value === 'week') {
     return dashboardService.build(props.analytics, {
@@ -35,11 +53,20 @@ const dashboard = computed(() => {
   }
 
   if (viewMode.value === 'custom') {
+    const startDate = parseDateInput(customStart.value);
+    const endDate = parseDateInput(customEnd.value);
+    const resolvedStart = startDate && endDate && startDate > endDate
+      ? customEnd.value || todayInputValue
+      : customStart.value || todayInputValue;
+    const resolvedEnd = startDate && endDate && startDate > endDate
+      ? customEnd.value || todayInputValue
+      : customEnd.value || customStart.value || todayInputValue;
+
     return dashboardService.build(props.analytics, {
       referenceDate: new Date(),
       granularity: customGranularity.value,
-      startDate: customStart.value || todayInputValue,
-      endDate: customEnd.value || customStart.value || todayInputValue,
+      startDate: resolvedStart,
+      endDate: resolvedEnd,
     });
   }
 
@@ -206,7 +233,7 @@ onBeforeUnmount(destroyCharts);
           Por semana
         </button>
         <button type="button" class="modeChip" :class="{ active: viewMode === 'custom' }" @click="viewMode = 'custom'">
-          Personalizar
+          Personalizado
         </button>
       </div>
 
@@ -229,6 +256,8 @@ onBeforeUnmount(destroyCharts);
           </select>
         </label>
       </div>
+
+      <p v-if="customRangeError" class="rangeError">{{ customRangeError }}</p>
 
       <div class="summaryRow">
         <article class="summaryCard">
@@ -349,7 +378,8 @@ onBeforeUnmount(destroyCharts);
 .summaryCard span,
 .chartHead span,
 .eventCopy p,
-.emptyText {
+.emptyText,
+.rangeError {
   color: var(--text-muted);
 }
 
@@ -442,6 +472,17 @@ onBeforeUnmount(destroyCharts);
 
 .summaryRow {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rangeError {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, #de6f4d 28%, var(--line));
+  background: color-mix(in srgb, #de6f4d 10%, var(--surface));
+  color: #8b3a21;
+  text-align: left;
+  font-weight: 600;
 }
 
 .summaryCard,
