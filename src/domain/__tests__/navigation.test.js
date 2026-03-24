@@ -5,7 +5,7 @@ describe('NavigationCatalog', () => {
   it('returns the simplified mobile views aligned with the PRD', () => {
     const views = new NavigationCatalog().getMenuViews();
 
-    expect(views.map(view => view.id)).toEqual(['today', 'backlog', 'settings']);
+    expect(views.map(view => view.id)).toEqual(['today', 'backlog', 'dashboard', 'settings']);
     expect(new NavigationCatalog().getFallbackView('unknown')).toBe('today');
   });
 });

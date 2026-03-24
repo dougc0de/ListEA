@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AddTask from './AddTask.vue';
+import ProductivityDashboard from './ProductivityDashboard.vue';
 import TodoList from './TodoList.vue';
 import {
   cancelReminder,
@@ -46,6 +47,7 @@ const navigationCatalog = new NavigationCatalog();
 const contextPresenter = new TaskContextPresenter();
 
 const tasks = ref([]);
+const analytics = ref(repository.normalizeAnalytics());
 const preferences = ref(repository.normalizePreferences());
 const activeFilterId = ref(FILTER_IDS.TODAY);
 const searchQuery = ref('');
@@ -54,6 +56,13 @@ const avatarSnippet = ref(null);
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
+
+const TIME_FILTER_COPY = Object.freeze({
+  [FILTER_IDS.TODAY]: 'Lo inmediato queda al frente para que la decision sea clara desde que abres la lista.',
+  [FILTER_IDS.THIS_WEEK]: 'Ves solo lo que realmente pertenece a esta semana, sin arrastrar ruido extra.',
+  [FILTER_IDS.OVERDUE]: 'Todo lo vencido se junta aqui para resolverlo sin perseguirlo por varias secciones.',
+  [FILTER_IDS.NO_DATE]: 'Este espacio agrupa lo pendiente sin fecha para que no se mezcle con lo urgente.',
+});
 
 function sortTasksByRelevance(list) {
   return list.slice().sort((left, right) => {
@@ -84,12 +93,14 @@ function applySearch(list) {
 function loadState() {
   const state = repository.load();
   tasks.value = state.tasks;
+  analytics.value = state.analytics;
   preferences.value = state.preferences;
 }
 
 function persistState() {
   repository.save({
     tasks: tasks.value,
+    analytics: analytics.value,
     preferences: preferences.value,
   });
 }
@@ -111,6 +122,7 @@ function toggleTask(id) {
   }
 
   task.complete();
+  analytics.value.recordCompleted(task, task.completedAt);
   const nextOccurrence = recurrenceEngine.createNextOccurrence(task, task.completedAt);
   if (nextOccurrence) {
     tasks.value = [nextOccurrence, ...tasks.value];
@@ -135,6 +147,10 @@ function toggleSubtask({ taskId, subtaskId }) {
 }
 
 async function removeTask(id) {
+  const task = tasks.value.find(item => item.id === id);
+  if (task) {
+    analytics.value.recordDeleted(task);
+  }
   await cancelReminder(id);
   tasks.value = tasks.value.filter(task => task.id !== id);
 }
@@ -144,6 +160,14 @@ function setAvatarPreferences(patch) {
     ...preferences.value.avatar,
     ...patch,
   });
+}
+
+function selectTimeFilter(filterId) {
+  activeFilterId.value = filterId;
+}
+
+function resetTimeFilter() {
+  activeFilterId.value = FILTER_IDS.TODAY;
 }
 
 function clearAvatarSnippetTimer() {
@@ -188,7 +212,7 @@ function syncAvatarSnippet() {
   clearAvatarSnippetTimer();
 
   const canRenderSnippet = mounted.value
-    && resolvedView.value !== 'settings'
+    && showTaskWorkspace.value
     && preferences.value.avatar.enabled
     && preferences.value.avatar.snippetEnabled;
 
@@ -277,6 +301,7 @@ async function syncReminders() {
 }
 
 const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
+const showTaskWorkspace = computed(() => ['today', 'backlog'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
 const completedTasks = computed(() =>
   tasks.value
@@ -285,17 +310,35 @@ const completedTasks = computed(() =>
     .sort((left, right) => new Date(right.completedAt) - new Date(left.completedAt))
     .slice(0, 6),
 );
-const activeFilters = computed(() => [
-  ...filterCatalog.getPrimaryFilters(),
-  ...filterCatalog.getDynamicFilters(openTasks.value),
-]);
+const timeFilters = computed(() => {
+  const referenceDate = new Date();
+  return filterCatalog.getPrimaryFilters()
+    .filter(filter => [
+      FILTER_IDS.TODAY,
+      FILTER_IDS.THIS_WEEK,
+      FILTER_IDS.OVERDUE,
+      FILTER_IDS.NO_DATE,
+    ].includes(filter.id))
+    .map(filter => ({
+      ...filter,
+      count: filterService.apply(openTasks.value, filter.id, { referenceDate }).length,
+      description: TIME_FILTER_COPY[filter.id] ?? 'Una vista simple para concentrarte en un solo tramo del tiempo.',
+    }));
+});
+const selectedTimeFilter = computed(() =>
+  timeFilters.value.find(filter => filter.id === activeFilterId.value)
+  ?? timeFilters.value[0],
+);
+const selectedTimeDescription = computed(() =>
+  selectedTimeFilter.value?.description ?? TIME_FILTER_COPY[FILTER_IDS.TODAY],
+);
 const filteredTasks = computed(() => {
-  const filtered = filterService.apply(openTasks.value, activeFilterId.value, {
+  const filtered = filterService.apply(openTasks.value, selectedTimeFilter.value?.id ?? FILTER_IDS.TODAY, {
     referenceDate: new Date(),
   });
   return sortTasksByRelevance(applySearch(filtered));
 });
-const todayBoard = computed(() =>
+const focusBoard = computed(() =>
   todayBoardBuilder.build(filteredTasks.value, {
     referenceDate: new Date(),
   }),
@@ -305,6 +348,15 @@ const backlogInsights = computed(() =>
     referenceDate: new Date(),
   }),
 );
+const focusSignals = computed(() => {
+  const lanesById = new Map(focusBoard.value.map(lane => [lane.id, lane.items.length]));
+  return [
+    { id: 'now', label: 'Ahora', value: lanesById.get('now') ?? 0 },
+    { id: 'quickWins', label: 'Rapidas', value: lanesById.get('quickWins') ?? 0 },
+    { id: 'important', label: 'Importantes', value: lanesById.get('important') ?? 0 },
+    { id: 'waiting', label: 'En espera', value: lanesById.get('waiting') ?? 0 },
+  ];
+});
 const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
@@ -322,13 +374,12 @@ watch(
     if (nextView !== props.currentView) {
       emit('navigate', nextView);
     }
-
     syncAvatarSnippet();
   },
 );
 
 watch(
-  [tasks, preferences],
+  [tasks, analytics, preferences],
   async () => {
     if (!mounted.value) return;
     persistState();
@@ -357,10 +408,10 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="tasksShell">
-    <section v-if="resolvedView !== 'settings'" class="topBar">
+    <section v-if="showTaskWorkspace" class="topBar">
       <div class="topCopy">
         <p class="eyebrow">Captura y ejecuta</p>
-        <h1>Tu lista empieza en el input, no en una portada.</h1>
+        <h1>Todo empieza con lo que anotas hoy.</h1>
       </div>
       <div class="topStats">
         <article v-for="card in summaryCards" :key="card.id" class="statCard">
@@ -370,11 +421,11 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <AddTask v-if="resolvedView !== 'settings'" @add="addTask" />
+    <AddTask v-if="showTaskWorkspace" @add="addTask" />
 
     <transition name="snippetPulse">
       <section
-        v-if="avatarSnippet && resolvedView !== 'settings'"
+        v-if="avatarSnippet && showTaskWorkspace"
         class="snippetOverlay"
         aria-atomic="true"
         aria-live="polite"
@@ -388,25 +439,60 @@ onBeforeUnmount(() => {
           </div>
 
           <button type="button" class="ghostButton snippetClose" @click="dismissAvatarSnippet()">
-            ×
+            Cerrar
           </button>
         </div>
       </section>
     </transition>
 
-    <section v-if="resolvedView !== 'settings'" class="filterBar">
-      <div class="filterRow">
-        <button
-          v-for="filter in activeFilters"
-          :key="filter.id"
-          type="button"
-          class="filterChip"
-          :class="{ active: activeFilterId === filter.id }"
-          @click="activeFilterId = filter.id"
-        >
-          {{ filter.label }}
-        </button>
-      </div>
+    <section v-if="showTaskWorkspace" class="filterBar">
+      <section class="timeFocusCard">
+        <div class="timeFocusHeader">
+          <div>
+            <p class="eyebrow">Tiempo</p>
+            <h3>Una sola decision visible</h3>
+          </div>
+          <button
+            v-if="selectedTimeFilter.id !== FILTER_IDS.TODAY"
+            type="button"
+            class="ghostButton"
+            @click="resetTimeFilter"
+          >
+            Deshacer
+          </button>
+        </div>
+
+        <div class="timeFilterGrid">
+          <button
+            v-for="filter in timeFilters"
+            :key="filter.id"
+            type="button"
+            class="timeFilterTile"
+            :class="{ active: selectedTimeFilter.id === filter.id }"
+            @click="selectTimeFilter(filter.id)"
+          >
+            <span class="timeFilterLabel">{{ filter.label }}</span>
+            <small>{{ filter.description }}</small>
+            <strong>{{ filter.count }}</strong>
+          </button>
+        </div>
+
+        <transition name="timeSwap" mode="out-in">
+          <div :key="selectedTimeFilter.id" class="timeFocusBody">
+            <div class="timeFocusCopy">
+              <span class="activeFilterChip">{{ selectedTimeFilter.label }}</span>
+              <p class="activeFilterCopy">{{ selectedTimeDescription }}</p>
+            </div>
+
+            <div class="timeSignalGrid">
+              <article v-for="signal in focusSignals" :key="signal.id" class="timeSignalCard">
+                <strong>{{ signal.value }}</strong>
+                <span>{{ signal.label }}</span>
+              </article>
+            </div>
+          </div>
+        </transition>
+      </section>
 
       <label class="searchField">
         <span class="srOnly">Buscar tareas</span>
@@ -414,21 +500,28 @@ onBeforeUnmount(() => {
       </label>
     </section>
 
-    <section v-if="resolvedView === 'today'" class="laneGrid">
-      <article v-for="lane in todayBoard" :key="lane.id" class="laneCard">
-        <div class="laneHeader">
-          <h3>{{ lane.title }}</h3>
-          <span>{{ lane.items.length }}</span>
+    <section v-if="resolvedView === 'today'" class="focusBoardGrid">
+      <article class="panelCard focusListPanel">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Vista activa</p>
+            <h3>{{ selectedTimeFilter.label }}</h3>
+          </div>
+          <span class="laneCount">{{ filteredTasks.length }}</span>
         </div>
 
-        <TodoList
-          :todos="lane.items"
-          empty-message="Nada que mostrar en esta vista."
-          @toggle="toggleTask"
-          @remove="removeTask"
-          @update="updateTask"
-          @toggle-subtask="toggleSubtask"
-        />
+        <transition name="timeSwap" mode="out-in">
+          <div :key="selectedTimeFilter.id" class="focusListWrap">
+            <TodoList
+              :todos="filteredTasks"
+              empty-message="No hay tareas dentro de esta ventana de tiempo."
+              @toggle="toggleTask"
+              @remove="removeTask"
+              @update="updateTask"
+              @toggle-subtask="toggleSubtask"
+            />
+          </div>
+        </transition>
       </article>
     </section>
 
@@ -485,6 +578,10 @@ onBeforeUnmount(() => {
           @toggle-subtask="toggleSubtask"
         />
       </article>
+    </section>
+
+    <section v-else-if="resolvedView === 'dashboard'" class="dashboardGrid">
+      <ProductivityDashboard :analytics="analytics" />
     </section>
 
     <section v-else class="settingsGrid">
@@ -620,8 +717,7 @@ onBeforeUnmount(() => {
 }
 
 .topBar,
-.panelCard,
-.laneCard {
+.panelCard {
   border-radius: 28px;
   border: 1px solid var(--line);
   background: var(--surface);
@@ -729,7 +825,7 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 18px 44px 18px 18px;
+  padding: 18px 88px 18px 18px;
   border-radius: 22px;
   background: var(--surface-soft);
   text-align: center;
@@ -762,15 +858,15 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 32px;
+  min-width: 70px;
   height: 32px;
-  padding: 0;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   line-height: 1;
-  font-size: 0.9rem;
+  font-size: 0.78rem;
   font-weight: 700;
 }
 
@@ -780,10 +876,128 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.filterRow {
+.timeFocusCard {
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.timeFocusHeader,
+.timeFocusBody,
+.timeFilterGrid,
+.timeSignalGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.timeFocusHeader {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.timeFocusBody {
+  grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.95fr);
+  align-items: start;
+}
+
+.timeFocusHeader h3 {
+  margin: 0;
+  text-align: left;
+}
+
+.timeFilterGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.timeFilterTile,
+.timeSignalCard {
+  min-height: 82px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+}
+
+.timeFilterTile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px;
+  background: var(--surface-soft);
+  color: var(--text-main);
+  text-align: left;
+}
+
+.timeFilterLabel,
+.timeSignalCard span,
+.activeFilterCopy,
+.timeFilterTile small {
+  color: var(--text-muted);
+}
+
+.timeFilterTile strong,
+.timeSignalCard strong {
+  font-size: clamp(1.1rem, 4vw, 1.55rem);
+}
+
+.timeFilterTile strong {
+  margin-top: auto;
+}
+
+.timeFilterLabel {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.timeFilterTile small {
+  display: block;
+  min-height: 2.5em;
+  line-height: 1.25;
+}
+
+.timeFilterTile.active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+.timeFocusCopy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.activeFilterChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 700;
+}
+
+.activeFilterCopy {
+  margin: 0;
+}
+
+.timeSignalGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.timeSignalCard {
+  padding: 12px 14px;
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
 }
 
 .filterChip,
@@ -815,26 +1029,30 @@ onBeforeUnmount(() => {
   color: var(--text-main);
 }
 
-.laneGrid,
+.focusBoardGrid,
 .backlogGrid,
+.dashboardGrid,
 .settingsGrid {
   display: grid;
   gap: 14px;
 }
 
-.laneGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.focusBoardGrid {
+  grid-template-columns: 1fr;
 }
 
 .backlogGrid {
   grid-template-columns: 1.1fr 1fr;
 }
 
+.dashboardGrid {
+  grid-template-columns: 1fr;
+}
+
 .settingsGrid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.laneCard,
 .panelCard {
   padding: 16px;
 }
@@ -862,6 +1080,26 @@ onBeforeUnmount(() => {
   height: 34px;
   border-radius: 999px;
   background: var(--surface-soft);
+}
+
+.laneCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  font-weight: 700;
+}
+
+.focusListPanel,
+.widePanel {
+  grid-column: 1 / -1;
+}
+
+.focusListWrap {
+  min-height: 120px;
 }
 
 .insightsPanel {
@@ -934,11 +1172,25 @@ onBeforeUnmount(() => {
   filter: blur(4px);
 }
 
+.timeSwap-enter-active,
+.timeSwap-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.timeSwap-enter-from,
+.timeSwap-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 @media (max-width: 860px) {
   .topBar,
-  .laneGrid,
+  .focusBoardGrid,
   .backlogGrid,
-  .settingsGrid {
+  .settingsGrid,
+  .timeFilterGrid,
+  .timeFocusBody,
+  .timeSignalGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -950,7 +1202,6 @@ onBeforeUnmount(() => {
   }
 
   .topBar,
-  .laneCard,
   .panelCard {
     padding: 14px;
     border-radius: 20px;
@@ -960,12 +1211,18 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
+  .timeFocusCard,
+  .focusListPanel {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
   .snippetCard {
     --snippet-card-max: min(90vw, 300px);
   }
 
   .snippetBubble {
-    padding: 18px 42px 18px 16px;
+    padding: 18px 80px 18px 16px;
   }
 
   .snippetClose {

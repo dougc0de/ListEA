@@ -43,8 +43,6 @@ function onSwipeEnd(event) {
       <button type="button" class="brandButton" @click="navigateTo('today')">
         <img src="../assets/logo.png" alt="Logo de ListEA" class="brandLogo" />
         <div class="brandCopy">
-          <strong>ListEA</strong>
-          <span>Local-first que piensa contigo</span>
         </div>
       </button>
 

@@ -1,3 +1,4 @@
+import { TaskActivityLedger } from './activity';
 import { AvatarPreferences, AVATAR_SNIPPET_DURATIONS, AVATAR_TIMINGS } from './avatar';
 import { TaskFactory } from './tasks';
 
@@ -40,6 +41,7 @@ export class LocalTaskRepository {
 
       return {
         tasks: tasks.length ? tasks : this.factory.createDemoTasks(),
+        analytics: this.normalizeAnalytics(parsed.analytics),
         preferences: this.normalizePreferences(parsed.preferences),
       };
     } catch {
@@ -47,9 +49,10 @@ export class LocalTaskRepository {
     }
   }
 
-  save({ tasks, preferences }) {
+  save({ tasks, analytics, preferences }) {
     this.storage?.setItem?.(this.key, JSON.stringify({
       tasks: tasks.map(task => task.toJSON()),
+      analytics: this.serializeAnalytics(analytics),
       preferences: this.serializePreferences(preferences),
     }));
   }
@@ -57,8 +60,21 @@ export class LocalTaskRepository {
   createBootstrapState() {
     return {
       tasks: this.factory.createDemoTasks(),
+      analytics: this.normalizeAnalytics(),
       preferences: this.normalizePreferences(),
     };
+  }
+
+  normalizeAnalytics(rawAnalytics = []) {
+    if (rawAnalytics instanceof TaskActivityLedger) {
+      return rawAnalytics;
+    }
+
+    if (rawAnalytics && Array.isArray(rawAnalytics.events)) {
+      return new TaskActivityLedger(rawAnalytics.events);
+    }
+
+    return new TaskActivityLedger(rawAnalytics);
   }
 
   normalizePreferences(rawPreferences = {}) {
@@ -79,5 +95,9 @@ export class LocalTaskRepository {
       exactAlarmPermission: preferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
       avatar: new AvatarPreferences(preferences.avatar),
     };
+  }
+
+  serializeAnalytics(analytics = new TaskActivityLedger()) {
+    return this.normalizeAnalytics(analytics).toJSON();
   }
 }

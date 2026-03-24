@@ -239,7 +239,7 @@ function onSubmit() {
 
       <div class="composerActions">
         <p class="helperText">Natural si quieres, detallada si hace falta.</p>
-        <button class="submitButton" type="submit">Guardar tarea</button>
+        <button class="submitButton" type="submit">Agregar tarea</button>
       </div>
     </form>
   </section>
