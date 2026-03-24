@@ -42,7 +42,6 @@ const insightAnalyzer = new BacklogInsightAnalyzer();
 const todayBoardBuilder = new TodayBoardBuilder();
 const navigationCatalog = new NavigationCatalog();
 const contextPresenter = new TaskContextPresenter();
-const avatarIllustration = '/docs/assets/listea movimientos.png';
 
 const tasks = ref([]);
 const preferences = ref(repository.normalizePreferences());
@@ -292,14 +291,6 @@ const backlogInsights = computed(() =>
     referenceDate: new Date(),
   }),
 );
-const avatarCard = computed(() =>
-  avatarCoach.buildSnapshot({
-    tasks: openTasks.value,
-    insights: backlogInsights.value,
-    preferences: preferences.value.avatar,
-    referenceDate: new Date(),
-  }),
-);
 const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
@@ -366,34 +357,23 @@ onBeforeUnmount(() => {
 
     <AddTask v-if="resolvedView !== 'settings'" @add="addTask" />
 
-    <section v-if="avatarCard.visible && resolvedView === 'today'" class="avatarCard" :data-tone="avatarCard.tone">
-      <img :src="avatarIllustration" alt="Avatar de ListEA" class="avatarImage" />
-      <div class="avatarCopy">
-        <p class="eyebrow">Avatar</p>
-        <h3>{{ avatarCard.title }}</h3>
-        <p>{{ avatarCard.message }}</p>
-      </div>
-    </section>
-
-    <transition name="avatarSnippet">
+    <transition name="snippetPulse">
       <section
         v-if="avatarSnippet && resolvedView !== 'settings'"
-        class="avatarSnippetOverlay"
+        class="snippetOverlay"
         aria-atomic="true"
         aria-live="polite"
         role="status"
       >
-        <div class="avatarSnippetCard" :data-tone="avatarSnippet.tone">
-          <img :src="avatarIllustration" alt="Avatar de ListEA" class="avatarSnippetImage" />
-
-          <div class="avatarSnippetBubble">
-            <p class="eyebrow">Avatar</p>
+        <div class="snippetCard" :data-tone="avatarSnippet.tone">
+          <div class="snippetBubble">
+            <p class="eyebrow">Snippet</p>
             <strong>{{ avatarSnippet.title }}</strong>
-            <p class="avatarSnippetTask">{{ avatarSnippet.message }}</p>
+            <p class="snippetTask">{{ avatarSnippet.message }}</p>
           </div>
 
-          <button type="button" class="ghostButton avatarSnippetClose" @click="dismissAvatarSnippet()">
-            Cerrar
+          <button type="button" class="ghostButton snippetClose" @click="dismissAvatarSnippet()">
+            ×
           </button>
         </div>
       </section>
@@ -526,8 +506,8 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panelCard">
-        <p class="eyebrow">Avatar</p>
-        <h3>Acompania sin invadir</h3>
+        <p class="eyebrow">Snippet</p>
+        <h3>Aparece al centro cuando toca</h3>
         <div class="settingsStack">
           <label class="checkboxRow">
             <input
@@ -535,7 +515,7 @@ onBeforeUnmount(() => {
               type="checkbox"
               @change="setAvatarPreferences({ enabled: $event.target.checked })"
             />
-            <span>Mostrar avatar</span>
+            <span>Activar snippet</span>
           </label>
 
           <label class="fieldGroup">
@@ -624,7 +604,6 @@ onBeforeUnmount(() => {
 }
 
 .topBar,
-.avatarCard,
 .panelCard,
 .laneCard {
   border-radius: 28px;
@@ -693,117 +672,89 @@ onBeforeUnmount(() => {
   font-size: clamp(1.25rem, 4vw, 1.7rem);
 }
 
-.avatarCard {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 16px;
-}
-
-.avatarSnippetOverlay {
+.snippetOverlay {
   position: fixed;
   inset: 0;
   z-index: 40;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: max(16px, env(safe-area-inset-top)) 18px max(16px, env(safe-area-inset-bottom));
   pointer-events: none;
 }
 
-.avatarSnippetCard {
-  width: min(680px, 100%);
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 28px;
+.snippetCard {
+  --snippet-card-max: min(88vw, 320px);
+  width: min(100%, var(--snippet-card-max));
+  max-width: var(--snippet-card-max);
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  border-radius: 26px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 88%, white);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
   pointer-events: auto;
+  position: relative;
 }
 
-.avatarSnippetCard[data-tone='focus'] {
+.snippetCard[data-tone='focus'] {
   border-color: color-mix(in srgb, #d46a47 45%, var(--line));
 }
 
-.avatarSnippetCard[data-tone='nudge'] {
+.snippetCard[data-tone='nudge'] {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 
-.avatarSnippetCard[data-tone='coach'] {
+.snippetCard[data-tone='coach'] {
   border-color: color-mix(in srgb, #5f8d64 38%, var(--line));
 }
 
-.avatarSnippetImage {
-  width: 92px;
-  height: 92px;
-  object-fit: contain;
-  flex: 0 0 auto;
-}
-
-.avatarSnippetBubble {
+.snippetBubble {
   position: relative;
-  padding: 16px 18px;
-  border-radius: 24px;
+  width: 100%;
+  max-width: 100%;
+  padding: 18px 44px 18px 18px;
+  border-radius: 22px;
   background: var(--surface-soft);
-  text-align: left;
+  text-align: center;
 }
 
-.avatarSnippetBubble::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: -10px;
-  width: 20px;
-  height: 20px;
-  background: var(--surface-soft);
-  transform: translateY(-50%) rotate(45deg);
-  border-radius: 4px;
-}
-
-.avatarSnippetBubble strong,
-.avatarSnippetTask {
+.snippetBubble strong,
+.snippetTask {
   position: relative;
   z-index: 1;
 }
 
-.avatarSnippetBubble strong {
+.snippetBubble strong {
   display: block;
   font-size: 0.96rem;
   color: var(--accent-strong);
+  line-height: 1.2;
 }
 
-.avatarSnippetTask {
+.snippetTask {
   margin: 6px 0 0;
-  font-size: clamp(1.05rem, 3vw, 1.25rem);
+  max-width: 100%;
+  font-size: clamp(1rem, 4vw, 1.16rem);
+  line-height: 1.2;
   color: var(--text-main);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.avatarSnippetClose {
-  align-self: flex-start;
-}
-
-.avatarImage {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  flex: 0 0 auto;
-}
-
-.avatarCopy h3,
-.avatarCopy p {
-  margin: 0;
-  text-align: left;
-}
-
-.avatarCopy h3 {
-  margin-bottom: 4px;
-  font-size: 1rem;
+.snippetClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  line-height: 1;
 }
 
 .filterBar {
@@ -954,20 +905,20 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
-.avatarSnippet-enter-active .avatarSnippetCard,
-.avatarSnippet-leave-active .avatarSnippetCard {
-  transition: opacity 180ms ease, transform 180ms ease;
+.snippetPulse-enter-active .snippetCard,
+.snippetPulse-leave-active .snippetCard {
+  transition: opacity 220ms ease, transform 220ms ease, filter 220ms ease;
 }
 
-.avatarSnippet-enter-from .avatarSnippetCard,
-.avatarSnippet-leave-to .avatarSnippetCard {
+.snippetPulse-enter-from .snippetCard,
+.snippetPulse-leave-to .snippetCard {
   opacity: 0;
-  transform: translateY(14px) scale(0.98);
+  transform: translateY(12px) scale(0.96);
+  filter: blur(4px);
 }
 
 @media (max-width: 860px) {
   .topBar,
-  .avatarCard,
   .laneGrid,
   .backlogGrid,
   .settingsGrid {
@@ -982,7 +933,6 @@ onBeforeUnmount(() => {
   }
 
   .topBar,
-  .avatarCard,
   .laneCard,
   .panelCard {
     padding: 14px;
@@ -993,38 +943,17 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .avatarCard {
-    align-items: flex-start;
+  .snippetCard {
+    --snippet-card-max: min(90vw, 300px);
   }
 
-  .avatarSnippetCard {
-    grid-template-columns: 1fr;
-    justify-items: center;
-    text-align: center;
+  .snippetBubble {
+    padding: 18px 42px 18px 16px;
   }
 
-  .avatarSnippetBubble {
-    width: 100%;
-  }
-
-  .avatarSnippetBubble::before {
-    top: -10px;
-    left: 50%;
-    transform: translateX(-50%) rotate(45deg);
-  }
-
-  .avatarImage {
-    width: 56px;
-    height: 56px;
-  }
-
-  .avatarSnippetImage {
-    width: 74px;
-    height: 74px;
-  }
-
-  .avatarSnippetClose {
-    width: 100%;
+  .snippetClose {
+    top: 8px;
+    right: 8px;
   }
 
   .topCopy h1 {

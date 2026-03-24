@@ -34,8 +34,11 @@ async function isNativeNotificationsAvailable() {
   }
 }
 
-function buildReminderBody(todo) {
-  return todo.notes?.trim() ? `${todo.title} - ${todo.notes.trim()}` : todo.title;
+function buildReminderPayload(todo) {
+  return {
+    title: 'Es momento de esta tarea',
+    body: todo.title?.trim() || 'Tienes una tarea pendiente en ListEA',
+  };
 }
 
 export async function getReminderPermission() {
@@ -88,6 +91,7 @@ export async function clearAllReminderTimers() {
 
 async function scheduleNativeReminder(todo) {
   const { LocalNotifications } = await getCapacitorModules();
+  const notificationCopy = buildReminderPayload(todo);
 
   await LocalNotifications.cancel({
     notifications: [{ id: toNativeNotificationId(todo.id) }],
@@ -97,8 +101,8 @@ async function scheduleNativeReminder(todo) {
     notifications: [
       {
         id: toNativeNotificationId(todo.id),
-        title: 'Recordatorio de ListEA',
-        body: buildReminderBody(todo),
+        title: notificationCopy.title,
+        body: notificationCopy.body,
         schedule: {
           at: new Date(todo.reminderAt),
           allowWhileIdle: true,
@@ -111,8 +115,9 @@ async function scheduleNativeReminder(todo) {
 
 function triggerWebNotification(todo) {
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    new Notification('Recordatorio de ListEA', {
-      body: buildReminderBody(todo),
+    const notificationCopy = buildReminderPayload(todo);
+    new Notification(notificationCopy.title, {
+      body: notificationCopy.body,
       tag: `listea-${todo.id}`,
     });
   }
