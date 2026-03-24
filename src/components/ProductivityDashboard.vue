@@ -185,7 +185,6 @@ onBeforeUnmount(destroyCharts);
       </div>
 
       <div class="heroMeta">
-        <span class="dashboardBadge">{{ dashboard.summary.completionRate }}% cumplimiento</span>
         <p class="heroRange">{{ dashboard.range.label }}</p>
       </div>
     </article>
@@ -261,6 +260,10 @@ onBeforeUnmount(destroyCharts);
           <div class="chartHead">
             <strong>Balance</strong>
             <span>Como se cierran tus entradas</span>
+          </div>
+          <div class="completionHero">
+            <span class="completionCaption">Cumplimiento</span>
+            <strong>{{ dashboard.summary.completionRate }}%</strong>
           </div>
           <div class="chartFrame donut">
             <canvas ref="mixCanvas"></canvas>
@@ -365,24 +368,6 @@ onBeforeUnmount(destroyCharts);
   gap: 12px;
 }
 
-.dashboardBadge,
-.eventBadge,
-.modeChip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-}
-
-.dashboardBadge {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
-  color: var(--text-main);
-  font-weight: 700;
-}
-
 .dashboardCard {
   padding: 18px;
   display: grid;
@@ -410,6 +395,17 @@ onBeforeUnmount(destroyCharts);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.modeChip,
+.eventBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
 }
 
 .modeChip {
@@ -498,6 +494,26 @@ onBeforeUnmount(destroyCharts);
 .chartFrame {
   position: relative;
   min-height: 240px;
+}
+
+.completionHero {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  margin-bottom: 8px;
+}
+
+.completionCaption {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.completionHero strong {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  line-height: 1;
+  color: var(--accent-strong);
 }
 
 .chartFrame.donut {

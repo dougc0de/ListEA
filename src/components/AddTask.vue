@@ -292,7 +292,7 @@ function onSubmit() {
 }
 
 .ghostButton {
-  background: var(--surface-soft);
+  background: var(--secButton);
   color: var(--text-main);
 }
 

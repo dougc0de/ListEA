@@ -20,6 +20,7 @@
   --accent-contrast: #fffaf7;
   --line: rgba(41, 62, 86, 0.12);
   --card-shadow: 0 16px 48px rgba(28, 43, 66, 0.08);
+  --secButton:#ffc4a5df;
 }
 
 * {

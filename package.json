@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "testsprite": "testsprite-mcp-plugin",
     "cap:sync": "cap sync",
     "cap:android": "cap open android",
     "cap:ios": "cap open ios",
@@ -23,6 +24,7 @@
     "vue": "^3.5.22"
   },
   "devDependencies": {
+    "@testsprite/testsprite-mcp": "^0.0.32",
     "@vitejs/plugin-vue": "^6.0.1",
     "gh-pages": "^6.3.0",
     "vite": "npm:rolldown-vite@7.1.14",

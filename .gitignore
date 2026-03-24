@@ -12,7 +12,9 @@ dist
 dist-ssr
 *.local
 STUDY_GUIDE.md
-
+mcp.json
+.testsprite/
+testsprite_tests/
 
 # Editor directories and files
 .vscode/*
