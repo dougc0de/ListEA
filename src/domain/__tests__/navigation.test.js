@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { DrawerGestureController, NavigationCatalog } from '../navigation';
 
 describe('NavigationCatalog', () => {
-  it('disables premium menu views for free plan', () => {
-    const views = new NavigationCatalog().getMenuViews('free');
+  it('returns the simplified mobile views aligned with the PRD', () => {
+    const views = new NavigationCatalog().getMenuViews();
 
-    expect(views.find(view => view.id === 'agenda')?.disabled).toBe(true);
-    expect(views.find(view => view.id === 'settings')?.disabled).toBe(false);
+    expect(views.map(view => view.id)).toEqual(['today', 'backlog', 'settings']);
+    expect(new NavigationCatalog().getFallbackView('unknown')).toBe('today');
   });
 });
 

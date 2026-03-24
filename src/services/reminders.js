@@ -34,6 +34,10 @@ async function isNativeNotificationsAvailable() {
   }
 }
 
+function buildReminderBody(todo) {
+  return todo.notes?.trim() ? `${todo.title} - ${todo.notes.trim()}` : todo.title;
+}
+
 export async function getReminderPermission() {
   if (await isNativeNotificationsAvailable()) {
     const { LocalNotifications } = await getCapacitorModules();
@@ -93,10 +97,8 @@ async function scheduleNativeReminder(todo) {
     notifications: [
       {
         id: toNativeNotificationId(todo.id),
-        title: 'Recordatorio de List-EA',
-        body: todo.notes?.trim()
-          ? `${todo.title} · ${todo.notes.trim()}`
-          : todo.title,
+        title: 'Recordatorio de ListEA',
+        body: buildReminderBody(todo),
         schedule: {
           at: new Date(todo.reminderAt),
           allowWhileIdle: true,
@@ -107,6 +109,15 @@ async function scheduleNativeReminder(todo) {
   });
 }
 
+function triggerWebNotification(todo) {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    new Notification('Recordatorio de ListEA', {
+      body: buildReminderBody(todo),
+      tag: `listea-${todo.id}`,
+    });
+  }
+}
+
 function scheduleWebReminder(todo, onTrigger) {
   const dueAt = new Date(todo.reminderAt).getTime();
   const now = Date.now();
@@ -114,28 +125,14 @@ function scheduleWebReminder(todo, onTrigger) {
   if (Number.isNaN(dueAt)) return;
 
   if (dueAt <= now) {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('Recordatorio de List-EA', {
-        body: todo.notes?.trim()
-          ? `${todo.title} · ${todo.notes.trim()}`
-          : todo.title,
-        tag: `listea-${todo.id}`,
-      });
-    }
+    triggerWebNotification(todo);
     onTrigger(todo.id);
     return;
   }
 
   const delay = Math.min(dueAt - now, 2147483647);
   const timeoutId = window.setTimeout(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification('Recordatorio de List-EA', {
-        body: todo.notes?.trim()
-          ? `${todo.title} · ${todo.notes.trim()}`
-          : todo.title,
-        tag: `listea-${todo.id}`,
-      });
-    }
+    triggerWebNotification(todo);
     reminderTimeouts.delete(todo.id);
     onTrigger(todo.id);
   }, delay);

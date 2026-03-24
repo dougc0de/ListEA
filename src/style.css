@@ -1,5 +1,5 @@
 :root {
-  font-family: Inter, "Segoe UI", sans-serif;
+  font-family: "Manrope", "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -7,25 +7,19 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color-scheme: light;
-  --app-bg: radial-gradient(circle at top, rgba(255, 201, 125, 0.28), transparent 24%), linear-gradient(180deg, #fff8ef 0%, #fffefb 45%, #fff6f2 100%);
-  --surface: #ffffff;
-  --surface-muted: #fffdf9;
-  --surface-soft: #f8fafc;
-  --text-main: #213547;
-  --text-muted: #5b6471;
-  --accent: #ffb347;
-  --accent-strong: #af5c28;
-  --line: rgba(48, 66, 85, 0.12);
-  --hero-shadow: 0 18px 48px rgba(88, 66, 40, 0.08);
-  --nav-bg: rgba(255, 248, 239, 0.92);
-  --ads-bg: linear-gradient(135deg, #17212b 0%, #243647 100%);
-  --menu-panel-bg: #20364d;
-  --menu-panel-text: #f9fbff;
-  --menu-panel-muted: rgba(249, 251, 255, 0.76);
-  --menu-item-bg: rgba(255, 255, 255, 0.08);
-  --menu-item-active: rgba(255, 255, 255, 0.18);
-  --menu-trigger-bg: #20364d;
-  --menu-trigger-line: #ffffff;
+  --app-bg:
+    radial-gradient(circle at top, rgba(249, 183, 107, 0.28), transparent 26%),
+    linear-gradient(180deg, #fff7ef 0%, #fefcf8 44%, #eef4f7 100%);
+  --app-bg-solid: #fff8f1;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-soft: #f4f7fb;
+  --text-main: #172433;
+  --text-muted: #5d6a79;
+  --accent: #d96d31;
+  --accent-strong: #9f4517;
+  --accent-contrast: #fffaf7;
+  --line: rgba(41, 62, 86, 0.12);
+  --card-shadow: 0 16px 48px rgba(28, 43, 66, 0.08);
 }
 
 * {
@@ -40,9 +34,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  color: var(--text-main);
   background: var(--app-bg);
-  transition: background 180ms ease, color 180ms ease;
+  color: var(--text-main);
 }
 
 body,
@@ -54,25 +47,22 @@ select {
 }
 
 button {
-  border-radius: 14px;
-  border: 1px solid transparent;
-  padding: 0.8em 1.1em;
-  font-size: 0.98rem;
-  font-weight: 600;
+  padding: 0.85em 1.1em;
+  font-size: 0.96rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+  transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease, color 140ms ease;
 }
 
 button:hover {
   transform: translateY(-1px);
-  border-color: var(--line);
 }
 
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--accent) 44%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent);
   outline-offset: 2px;
 }
 
@@ -82,6 +72,7 @@ a {
 }
 
 #app {
-  margin: 0 auto;
-  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }

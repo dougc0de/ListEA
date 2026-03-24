@@ -1,33 +1,25 @@
 export class AppView {
-  constructor({ id, label, premiumOnly = false }) {
+  constructor({ id, label }) {
     this.id = id;
     this.label = label;
-    this.premiumOnly = premiumOnly;
   }
 }
 
 export class NavigationCatalog {
   constructor() {
     this.views = [
-      new AppView({ id: 'home', label: 'Inicio' }),
-      new AppView({ id: 'agenda', label: 'Agenda', premiumOnly: true }),
-      new AppView({ id: 'board', label: 'Board', premiumOnly: true }),
-      new AppView({ id: 'settings', label: 'Configuraciones' }),
+      new AppView({ id: 'today', label: 'Hoy' }),
+      new AppView({ id: 'backlog', label: 'Backlog' }),
+      new AppView({ id: 'settings', label: 'Ajustes' }),
     ];
   }
 
-  getMenuViews(planId) {
-    return this.views.filter(view => view.id !== 'home').map(view => ({
-      ...view,
-      disabled: view.premiumOnly && planId !== 'premium',
-    }));
+  getMenuViews() {
+    return this.views;
   }
 
-  getFallbackView(currentViewId, planId) {
-    const currentView = this.views.find(view => view.id === currentViewId);
-    if (!currentView) return 'home';
-    if (currentView.premiumOnly && planId !== 'premium') return 'home';
-    return currentView.id;
+  getFallbackView(currentViewId) {
+    return this.views.find(view => view.id === currentViewId)?.id ?? 'today';
   }
 }
 

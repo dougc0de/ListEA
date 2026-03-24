@@ -3,33 +3,18 @@ import { ref } from 'vue';
 import FooterPage from './components/FooterPage.vue';
 import TasksSection from './components/TasksSection.vue';
 import WebMenu from './components/WebMenu.vue';
-import WelcomeComponent from './components/WelcomeComponent.vue';
 
-const currentView = ref('home');
-const currentPlanId = ref('free');
+const currentView = ref('today');
 
 function changeView(nextView) {
   currentView.value = nextView;
 }
-
-function syncPlan(planId) {
-  currentPlanId.value = planId;
-}
 </script>
 
 <template>
-  <WebMenu
-    :current-view="currentView"
-    :current-plan-id="currentPlanId"
-    @navigate="changeView"
-  />
+  <WebMenu :current-view="currentView" @navigate="changeView" />
   <main class="appShell">
-    <WelcomeComponent @navigate="changeView" />
-    <TasksSection
-      :current-view="currentView"
-      @navigate="changeView"
-      @plan-change="syncPlan"
-    />
+    <TasksSection :current-view="currentView" @navigate="changeView" />
   </main>
   <FooterPage />
 </template>
@@ -38,7 +23,6 @@ function syncPlan(planId) {
 .appShell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 24px;
+  padding: 10px 0 18px;
 }
 </style>

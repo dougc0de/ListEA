@@ -1,374 +1,439 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { ExecutionAdvisor } from '../domain/insights';
+import { TaskContextPresenter } from '../domain/tasks';
 
 const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask']);
+
 const props = defineProps({
   todo: { type: Object, required: true },
-  isPremium: { type: Boolean, default: false },
 });
+
+const presenter = new TaskContextPresenter();
+const advisor = new ExecutionAdvisor();
 
 const isEditing = ref(false);
 const detailsOpen = ref(false);
 const editableTitle = ref(props.todo.title);
 const editableNotes = ref(props.todo.notes ?? '');
-const editableReminderAt = ref(props.todo.reminderAt ?? '');
+const editableProject = ref(props.todo.project ?? '');
+const editableArea = ref(props.todo.area ?? '');
+const editableDueAt = ref(props.todo.dueAt ? props.todo.dueAt.slice(0, 16) : '');
+const editableFollowUpAt = ref(props.todo.followUpAt ? props.todo.followUpAt.slice(0, 16) : '');
 const editablePriority = ref(props.todo.priority ?? 'medium');
+const editableStatus = ref(props.todo.status ?? 'active');
+const editableEnergy = ref(props.todo.energy ?? 'medium');
+const editableImpact = ref(props.todo.impact ?? 'medium');
+const editableEffort = ref(props.todo.effortMinutes ?? 20);
 const editableTags = ref((props.todo.tags ?? []).join(', '));
+const editableSubtasks = ref((props.todo.subtasks ?? []).map(subtask => subtask.title).join('\n'));
+const editableRecurrencePreset = ref(props.todo.recurrence?.preset ?? 'none');
+const editableRecurrenceMode = ref(props.todo.recurrence?.mode ?? 'fixed');
+const editableRecurrenceResetNotes = ref(props.todo.recurrence?.resetNotes ?? true);
 
-const subtasksSummary = computed(() => {
-  const total = props.todo.subtasks?.length ?? 0;
-  const done = props.todo.subtasks?.filter(subtask => subtask.done).length ?? 0;
-  return total ? `${done}/${total} subtareas` : 'Sin subtareas';
+const contextChips = computed(() => presenter.buildTaskContext(props.todo));
+const nextAction = computed(() => advisor.suggest(props.todo));
+const recurrenceLabel = computed(() => {
+  const labels = {
+    daily: 'Cada dia',
+    weekly: 'Cada semana',
+    monthly: 'Cada mes',
+    yearly: 'Cada ano',
+    weekdays: 'Dias laborables',
+    weekends: 'Fines de semana',
+    'every-x-days': 'Cada X dias',
+    none: 'Sin recurrencia',
+  };
+
+  return labels[props.todo.recurrence?.preset ?? 'none'] || 'Sin recurrencia';
 });
+
+const subtaskRows = computed(() =>
+  props.todo.subtasks.map(subtask => presenter.buildSubtaskContext(props.todo, subtask)),
+);
+
+function resetEditors(todo = props.todo) {
+  editableTitle.value = todo.title;
+  editableNotes.value = todo.notes ?? '';
+  editableProject.value = todo.project ?? '';
+  editableArea.value = todo.area ?? '';
+  editableDueAt.value = todo.dueAt ? todo.dueAt.slice(0, 16) : '';
+  editableFollowUpAt.value = todo.followUpAt ? todo.followUpAt.slice(0, 16) : '';
+  editablePriority.value = todo.priority ?? 'medium';
+  editableStatus.value = todo.status ?? 'active';
+  editableEnergy.value = todo.energy ?? 'medium';
+  editableImpact.value = todo.impact ?? 'medium';
+  editableEffort.value = todo.effortMinutes ?? 20;
+  editableTags.value = (todo.tags ?? []).join(', ');
+  editableSubtasks.value = (todo.subtasks ?? []).map(subtask => subtask.title).join('\n');
+  editableRecurrencePreset.value = todo.recurrence?.preset ?? 'none';
+  editableRecurrenceMode.value = todo.recurrence?.mode ?? 'fixed';
+  editableRecurrenceResetNotes.value = todo.recurrence?.resetNotes ?? true;
+}
 
 watch(
   () => props.todo,
   todo => {
-    editableTitle.value = todo.title;
-    editableNotes.value = todo.notes ?? '';
-    editableReminderAt.value = todo.reminderAt ?? '';
-    editablePriority.value = todo.priority ?? 'medium';
-    editableTags.value = (todo.tags ?? []).join(', ');
+    resetEditors(todo);
   },
   { deep: true },
 );
 
-function toggleFunction() {
-  emit('toggle', props.todo.id);
-}
-
-function removeFunction() {
-  emit('remove', props.todo.id);
-}
-
-function saveFunction() {
+function saveTask() {
   const nextTitle = editableTitle.value.trim();
   if (!nextTitle) return;
+
+  const currentSubtasksByTitle = new Map(
+    props.todo.subtasks.map(subtask => [subtask.title.toLowerCase(), subtask.done]),
+  );
 
   emit('update', {
     id: props.todo.id,
     title: nextTitle,
     notes: editableNotes.value,
-    reminderAt: editableReminderAt.value,
-    priority: props.isPremium ? editablePriority.value : 'medium',
-    tags: props.isPremium ? editableTags.value : [],
+    project: editableProject.value,
+    area: editableArea.value,
+    dueAt: editableDueAt.value,
+    followUpAt: editableFollowUpAt.value,
+    priority: editablePriority.value,
+    status: editableStatus.value,
+    energy: editableEnergy.value,
+    impact: editableImpact.value,
+    effortMinutes: Number(editableEffort.value) || 20,
+    tags: editableTags.value,
+    subtasks: editableSubtasks.value
+      .split('\n')
+      .map(item => item.trim())
+      .filter(Boolean)
+      .map(title => ({
+        title,
+        done: currentSubtasksByTitle.get(title.toLowerCase()) ?? false,
+      })),
+    recurrence: {
+      preset: editableRecurrencePreset.value,
+      interval: editableRecurrencePreset.value === 'every-x-days' ? 3 : 1,
+      mode: editableRecurrenceMode.value,
+      resetNotes: editableRecurrenceResetNotes.value,
+    },
   });
 
   isEditing.value = false;
 }
 
-function cancelFunction() {
-  editableTitle.value = props.todo.title;
-  editableNotes.value = props.todo.notes ?? '';
-  editableReminderAt.value = props.todo.reminderAt ?? '';
-  editablePriority.value = props.todo.priority ?? 'medium';
-  editableTags.value = (props.todo.tags ?? []).join(', ');
+function cancelEdit() {
+  resetEditors();
   isEditing.value = false;
 }
 </script>
 
 <template>
-  <article class="todo-item" :class="{ completed: props.todo.done }">
-    <div class="todoMain">
+  <article class="taskCard" :class="todo.status">
+    <div class="taskHeader">
       <label class="checkWrap">
         <input
           type="checkbox"
-          :checked="props.todo.done"
-          @change="toggleFunction"
-          :aria-checked="props.todo.done ? 'true' : 'false'"
-        >
-      </label>
-
-      <div class="todoContent">
-        <template v-if="isEditing">
-          <textarea
-            v-model="editableTitle"
-            class="editTitle"
-            rows="2"
-          />
-        </template>
-        <template v-else>
-          <div class="titleRow">
-            <h3 :class="{ done: props.todo.done }">
-              {{ props.todo.title }}
-            </h3>
-            <span v-if="props.isPremium" class="priorityBadge" :class="props.todo.priority">
-              {{ props.todo.priority }}
-            </span>
-          </div>
-        </template>
-
-        <p v-if="props.todo.reminderAt" class="reminderMeta">
-          Recordatorio: {{ new Date(props.todo.reminderAt).toLocaleString() }}
-        </p>
-
-        <div v-if="props.isPremium && props.todo.tags?.length" class="tagRow">
-          <span v-for="tag in props.todo.tags" :key="tag" class="tagChip">{{ tag }}</span>
-        </div>
-
-        <p v-if="props.todo.notes && !detailsOpen && !isEditing" class="snippetPreview">
-          {{ props.todo.notes }}
-        </p>
-
-        <p v-if="props.isPremium && props.todo.subtasks?.length" class="subtaskMeta">
-          {{ subtasksSummary }}
-        </p>
-      </div>
-
-      <div class="todoActions">
-        <button type="button" class="miniAction" @click="detailsOpen = !detailsOpen">
-          {{ detailsOpen ? 'Cerrar' : 'Detalle' }}
-        </button>
-        <button
-          v-if="!isEditing"
-          type="button"
-          class="miniAction"
-          @click="isEditing = true"
-        >
-          Editar
-        </button>
-        <button
-          v-else
-          type="button"
-          class="miniAction saveAction"
-          @click="saveFunction"
-        >
-          Guardar
-        </button>
-        <button
-          v-if="isEditing"
-          type="button"
-          class="miniAction"
-          @click="cancelFunction"
-        >
-          Cancelar
-        </button>
-        <button class="delete" @click="removeFunction" aria-label="Borrar tarea">
-          Eliminar
-        </button>
-      </div>
-    </div>
-
-    <div v-if="detailsOpen || isEditing" class="detailsPanel">
-      <label class="detailField wideField">
-        <span>Snippet privado</span>
-        <textarea
-          v-model="editableNotes"
-          class="detailTextarea"
-          rows="4"
-          :readonly="!isEditing"
+          :checked="todo.isCompleted()"
+          @change="emit('toggle', todo.id)"
         />
       </label>
 
-      <label class="detailField">
-        <span>Fecha y hora</span>
-        <input
-          v-model="editableReminderAt"
-          class="detailInput"
-          type="datetime-local"
-          :disabled="!isEditing"
-        >
+      <div class="taskCopy">
+        <div class="titleRow">
+          <textarea
+            v-if="isEditing"
+            v-model="editableTitle"
+            class="titleEditor"
+            rows="2"
+          />
+          <h3 v-else :class="{ completedTitle: todo.isCompleted() }">{{ todo.title }}</h3>
+          <span class="statusBadge">{{ presenter.getStatusLabel(todo.status) }}</span>
+        </div>
+
+        <div class="chipRow">
+          <span v-for="chip in contextChips" :key="chip" class="contextChip">{{ chip }}</span>
+          <span class="contextChip recurrenceChip">{{ recurrenceLabel }}</span>
+        </div>
+
+        <p v-if="todo.notes && !isEditing" class="notesPreview">{{ todo.notes }}</p>
+        <p class="advisorText">{{ nextAction }}</p>
+      </div>
+    </div>
+
+    <div class="actionRow">
+      <button type="button" class="ghostButton" @click="detailsOpen = !detailsOpen">
+        {{ detailsOpen ? 'Ocultar detalle' : 'Ver detalle' }}
+      </button>
+      <button v-if="!isEditing" type="button" class="ghostButton" @click="isEditing = true">
+        Editar
+      </button>
+      <button v-if="isEditing" type="button" class="primaryButton" @click="saveTask">
+        Guardar
+      </button>
+      <button v-if="isEditing" type="button" class="ghostButton" @click="cancelEdit">
+        Cancelar
+      </button>
+      <button type="button" class="dangerButton" @click="emit('remove', todo.id)">
+        Eliminar
+      </button>
+    </div>
+
+    <div v-if="detailsOpen || isEditing" class="detailsPanel">
+      <label class="fieldGroup wide">
+        <span>Notas</span>
+        <textarea v-model="editableNotes" class="detailField" rows="3" :readonly="!isEditing" />
       </label>
 
-      <template v-if="props.isPremium">
-        <label class="detailField">
-          <span>Prioridad</span>
-          <select
-            v-model="editablePriority"
-            class="detailInput"
-            :disabled="!isEditing"
-          >
-            <option value="high">Alta</option>
-            <option value="medium">Media</option>
-            <option value="low">Baja</option>
-          </select>
-        </label>
+      <label class="fieldGroup">
+        <span>Proyecto</span>
+        <input v-model="editableProject" class="detailField" type="text" :readonly="!isEditing" />
+      </label>
 
-        <label class="detailField wideField">
-          <span>Tags</span>
-          <input
-            v-model="editableTags"
-            class="detailInput"
-            type="text"
-            :disabled="!isEditing"
-            placeholder="trabajo, estudio"
-          >
-        </label>
+      <label class="fieldGroup">
+        <span>Area</span>
+        <input v-model="editableArea" class="detailField" type="text" :readonly="!isEditing" />
+      </label>
 
-        <div v-if="props.todo.subtasks?.length" class="detailField wideField">
-          <span>Subtareas</span>
-          <div class="subtaskList">
-            <label v-for="subtask in props.todo.subtasks" :key="subtask.id" class="subtaskItem">
-              <input
-                type="checkbox"
-                :checked="subtask.done"
-                @change="emit('toggle-subtask', { todoId: props.todo.id, subtaskId: subtask.id })"
-              >
-              <span :class="{ done: subtask.done }">{{ subtask.title }}</span>
-            </label>
-          </div>
+      <label class="fieldGroup">
+        <span>Fecha objetivo</span>
+        <input v-model="editableDueAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
+      </label>
+
+      <label class="fieldGroup">
+        <span>Follow-up</span>
+        <input v-model="editableFollowUpAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
+      </label>
+
+      <label class="fieldGroup">
+        <span>Prioridad</span>
+        <select v-model="editablePriority" class="detailField" :disabled="!isEditing">
+          <option value="high">Alta</option>
+          <option value="medium">Media</option>
+          <option value="low">Baja</option>
+        </select>
+      </label>
+
+      <label class="fieldGroup">
+        <span>Estado</span>
+        <select v-model="editableStatus" class="detailField" :disabled="!isEditing">
+          <option value="active">Activa</option>
+          <option value="blocked">Bloqueada</option>
+          <option value="waiting">En espera</option>
+        </select>
+      </label>
+
+      <label class="fieldGroup">
+        <span>Energia</span>
+        <select v-model="editableEnergy" class="detailField" :disabled="!isEditing">
+          <option value="deep">Profunda</option>
+          <option value="medium">Media</option>
+          <option value="light">Ligera</option>
+        </select>
+      </label>
+
+      <label class="fieldGroup">
+        <span>Impacto</span>
+        <select v-model="editableImpact" class="detailField" :disabled="!isEditing">
+          <option value="high">Alto</option>
+          <option value="medium">Medio</option>
+          <option value="low">Bajo</option>
+        </select>
+      </label>
+
+      <label class="fieldGroup">
+        <span>Esfuerzo (min)</span>
+        <input v-model="editableEffort" class="detailField" type="number" min="5" step="5" :readonly="!isEditing" />
+      </label>
+
+      <label class="fieldGroup wide">
+        <span>Tags</span>
+        <input v-model="editableTags" class="detailField" type="text" :readonly="!isEditing" />
+      </label>
+
+      <label class="fieldGroup">
+        <span>Recurrencia</span>
+        <select v-model="editableRecurrencePreset" class="detailField" :disabled="!isEditing">
+          <option value="none">Sin recurrencia</option>
+          <option value="daily">Cada dia</option>
+          <option value="weekly">Cada semana</option>
+          <option value="monthly">Cada mes</option>
+          <option value="yearly">Cada ano</option>
+          <option value="weekdays">Dias laborables</option>
+          <option value="weekends">Fines de semana</option>
+          <option value="every-x-days">Cada 3 dias</option>
+        </select>
+      </label>
+
+      <label class="fieldGroup">
+        <span>Base de recurrencia</span>
+        <select v-model="editableRecurrenceMode" class="detailField" :disabled="!isEditing || editableRecurrencePreset === 'none'">
+          <option value="fixed">Fecha original</option>
+          <option value="after-completion">Despues de completar</option>
+        </select>
+      </label>
+
+      <label class="checkboxRow wide">
+        <input v-model="editableRecurrenceResetNotes" type="checkbox" :disabled="!isEditing" />
+        <span>Limpiar notas transitorias en la siguiente ocurrencia</span>
+      </label>
+
+      <label v-if="isEditing" class="fieldGroup wide">
+        <span>Subtareas</span>
+        <textarea v-model="editableSubtasks" class="detailField" rows="4" />
+      </label>
+
+      <div v-else-if="subtaskRows.length" class="fieldGroup wide">
+        <span>Subtareas con contexto</span>
+        <div class="subtaskList">
+          <label v-for="row in subtaskRows" :key="row.id" class="subtaskRow">
+            <input
+              type="checkbox"
+              :checked="row.done"
+              @change="emit('toggle-subtask', { taskId: todo.id, subtaskId: row.id })"
+            />
+            <div>
+              <strong :class="{ completedTitle: row.done }">{{ row.title }}</strong>
+              <small>{{ row.context }}</small>
+            </div>
+          </label>
         </div>
-      </template>
+      </div>
     </div>
   </article>
 </template>
 
 <style scoped>
-.todo-item {
+.taskCard {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 18px;
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
   border-radius: 24px;
+  border: 1px solid var(--line);
   background: var(--surface);
-  box-shadow: 0 10px 24px rgba(29, 42, 56, 0.05);
 }
 
-.todo-item.completed {
-  border-color: color-mix(in srgb, var(--accent-strong) 28%, transparent);
-  background: var(--surface-muted);
+.taskCard.blocked {
+  border-color: color-mix(in srgb, #cf7c34 45%, var(--line));
 }
 
-.todoMain {
+.taskCard.waiting {
+  border-color: color-mix(in srgb, #4670aa 45%, var(--line));
+}
+
+.taskCard.completed {
+  opacity: 0.8;
+}
+
+.taskHeader {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
 }
 
-.checkWrap {
-  padding-top: 6px;
-}
-
-.checkWrap input {
-  width: 18px;
-  height: 18px;
-}
-
-.todoContent {
+.taskCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
   text-align: left;
 }
 
 .titleRow {
   display: flex;
-  align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
-.todoContent h3 {
+.titleRow h3 {
   margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.35;
+  font-size: 1.08rem;
   overflow-wrap: anywhere;
+}
+
+.titleEditor,
+.detailField {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+  background: var(--surface-soft);
   color: var(--text-main);
 }
 
-.done {
+.statusBadge,
+.contextChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-main);
+  font-size: 0.8rem;
+}
+
+.recurrenceChip {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notesPreview,
+.advisorText {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.advisorText {
+  font-size: 0.92rem;
+}
+
+.completedTitle {
   text-decoration: line-through;
   opacity: 0.7;
 }
 
-.priorityBadge,
-.tagChip {
-  display: inline-flex;
-  align-items: center;
+.actionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ghostButton,
+.primaryButton,
+.dangerButton {
   border-radius: 999px;
-  padding: 0.28rem 0.72rem;
-  font-size: 0.78rem;
-  text-transform: capitalize;
-}
-
-.priorityBadge {
-  background: var(--surface-soft);
-  color: var(--text-main);
-}
-
-.priorityBadge.high {
-  background: rgba(220, 80, 80, 0.16);
-}
-
-.priorityBadge.medium {
-  background: rgba(255, 179, 71, 0.18);
-}
-
-.priorityBadge.low {
-  background: rgba(79, 165, 133, 0.18);
-}
-
-.tagRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.tagChip {
-  background: var(--surface-soft);
-  color: var(--text-muted);
-}
-
-.snippetPreview,
-.reminderMeta,
-.subtaskMeta {
-  margin: 8px 0 0;
-  color: var(--text-muted);
-  overflow-wrap: anywhere;
-}
-
-.snippetPreview {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.editTitle,
-.detailTextarea,
-.detailInput {
-  width: 100%;
-  font: inherit;
-  border-radius: 14px;
   border: 1px solid var(--line);
-  padding: 12px 14px;
-  background: var(--surface-muted);
-  color: var(--text-main);
 }
 
-.todoActions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.miniAction {
+.ghostButton {
   background: var(--surface-soft);
   color: var(--text-main);
-  padding-inline: 0.9em;
 }
 
-.saveAction {
+.primaryButton {
   background: var(--accent);
-  color: var(--text-main);
+  color: var(--accent-contrast);
 }
 
-.delete {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+.dangerButton {
+  background: color-mix(in srgb, #e88d80 18%, var(--surface));
   color: var(--text-main);
-  border-color: var(--line);
 }
 
 .detailsPanel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
-  padding-top: 2px;
 }
 
-.detailField {
+.fieldGroup {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -377,49 +442,49 @@ function cancelFunction() {
   font-weight: 600;
 }
 
-.wideField {
+.wide {
   grid-column: 1 / -1;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .subtaskList {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.subtaskRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
   padding: 12px 14px;
   border-radius: 16px;
-  background: var(--surface-muted);
+  background: var(--surface-soft);
 }
 
-.subtaskItem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.subtaskRow small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
   font-weight: 500;
-  color: var(--text-main);
 }
 
-@media (max-width: 760px) {
-  .todoMain {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .todoActions {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
+@media (max-width: 720px) {
+  .taskCard {
+    padding: 16px;
+    border-radius: 20px;
   }
 
   .detailsPanel {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 540px) {
-  .todo-item {
-    padding: 16px;
-    border-radius: 20px;
-  }
-
-  .todoActions button {
+  .actionRow button {
     width: 100%;
   }
 }

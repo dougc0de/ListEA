@@ -9,365 +9,221 @@ import {
   getReminderPermission,
   scheduleReminder,
 } from '../services/reminders';
-import { BackupService, FocusSession, TemplateLibrary } from '../domain/premium';
-import { FEATURE_KEYS, FeatureAccessController, PlanRegistry } from '../domain/plans';
+import { AvatarCoach, AvatarPreferences, AVATAR_TIMINGS } from '../domain/avatar';
+import { FILTER_IDS, TaskFilterCatalog, TaskFilterService } from '../domain/filters';
+import { BacklogInsightAnalyzer } from '../domain/insights';
+import { LocalTaskRepository } from '../domain/localFirst';
 import { NavigationCatalog } from '../domain/navigation';
-import { TaskBoardBuilder, TaskFactory } from '../domain/tasks';
-import { ThemeCatalog } from '../domain/themes';
+import { RecurrenceEngine } from '../domain/recurrence';
+import { TaskContextPresenter, TaskFactory } from '../domain/tasks';
+import { TodayBoardBuilder } from '../domain/today';
 
 const props = defineProps({
-  currentView: { type: String, default: 'home' },
+  currentView: { type: String, default: 'today' },
 });
-const emit = defineEmits(['navigate', 'plan-change']);
 
-const STORAGE_KEY = 'listea-local-state-v3';
+const emit = defineEmits(['navigate']);
 
-const planRegistry = new PlanRegistry();
-const featureAccess = new FeatureAccessController(planRegistry);
-const navigationCatalog = new NavigationCatalog();
 const taskFactory = new TaskFactory();
-const taskBoardBuilder = new TaskBoardBuilder();
-const themeCatalog = new ThemeCatalog();
-const templateLibrary = new TemplateLibrary();
-const backupService = new BackupService();
-const focusSession = new FocusSession();
+const repository = new LocalTaskRepository({
+  storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  factory: taskFactory,
+});
+const recurrenceEngine = new RecurrenceEngine(taskFactory);
+const avatarCoach = new AvatarCoach();
+const filterCatalog = new TaskFilterCatalog();
+const filterService = new TaskFilterService();
+const insightAnalyzer = new BacklogInsightAnalyzer();
+const todayBoardBuilder = new TodayBoardBuilder();
+const navigationCatalog = new NavigationCatalog();
+const contextPresenter = new TaskContextPresenter();
+const avatarIllustration = '/docs/assets/listea movimientos.png';
 
-const defaultSettings = {
-  notificationsEnabled: false,
-  reminderPermission: 'default',
-  planId: 'free',
-  themeId: 'light',
-};
-
-const todos = ref([]);
-const settings = ref({ ...defaultSettings });
-const activeTab = ref('pending');
-const premiumThemesOpen = ref(false);
+const tasks = ref([]);
+const preferences = ref(repository.normalizePreferences());
+const activeFilterId = ref(FILTER_IDS.TODAY);
 const searchQuery = ref('');
 const mounted = ref(false);
-const focusRemainingMs = ref(0);
-const focusDuration = ref(25);
 
-let focusIntervalId = null;
+function sortTasksByRelevance(list) {
+  return list.slice().sort((left, right) => {
+    const leftDate = left.getRelevantDate() ? new Date(left.getRelevantDate()).getTime() : Number.MAX_SAFE_INTEGER;
+    const rightDate = right.getRelevantDate() ? new Date(right.getRelevantDate()).getTime() : Number.MAX_SAFE_INTEGER;
+    if (leftDate !== rightDate) {
+      return leftDate - rightDate;
+    }
 
-function normalizeSettings(rawSettings = {}) {
-  return {
-    notificationsEnabled: Boolean(rawSettings.notificationsEnabled),
-    reminderPermission: rawSettings.reminderPermission ?? 'default',
-    planId: rawSettings.planId === 'premium' ? 'premium' : 'free',
-    themeId: rawSettings.themeId ?? 'light',
-  };
+    const priorityWeight = { high: 0, medium: 1, low: 2 };
+    return priorityWeight[left.priority] - priorityWeight[right.priority];
+  });
 }
 
-function setTheme(themeId) {
-  const palette = themeCatalog.getPalette(themeId);
-  const canUsePremiumTheme = palette.tier === 'free' || isPremium.value;
-  const nextPalette = canUsePremiumTheme ? palette : themeCatalog.getPalette('light');
-  settings.value.themeId = nextPalette.id;
-  themeCatalog.applyPalette(nextPalette.id);
-  if (nextPalette.tier === 'premium') {
-    premiumThemesOpen.value = true;
-  }
-}
+function applySearch(list) {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return list;
 
-function persistState() {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      todos: todos.value.map(todo => todo.toJSON()),
-      settings: settings.value,
-    }),
+  return list.filter(task =>
+    task.title.toLowerCase().includes(query)
+    || task.notes.toLowerCase().includes(query)
+    || task.project.toLowerCase().includes(query)
+    || task.area.toLowerCase().includes(query)
+    || task.tags.some(tag => tag.toLowerCase().includes(query)),
   );
 }
 
 function loadState() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const state = repository.load();
+  tasks.value = state.tasks;
+  preferences.value = state.preferences;
+}
 
-  if (!raw) {
-    todos.value = [
-      taskFactory.create({
-        title: 'Primer ejemplo',
-        notes: 'Puedes editar esta tarea, agregar un snippet o fijar un recordatorio.',
-      }),
-    ];
+function persistState() {
+  repository.save({
+    tasks: tasks.value,
+    preferences: preferences.value,
+  });
+}
+
+function addTask(payload) {
+  const task = taskFactory.create(payload);
+  if (!task.title) return;
+
+  tasks.value = [task, ...tasks.value];
+}
+
+function toggleTask(id) {
+  const task = tasks.value.find(item => item.id === id);
+  if (!task) return;
+
+  if (task.isCompleted()) {
+    task.reopen();
     return;
   }
 
-  try {
-    const parsed = JSON.parse(raw);
-    todos.value = Array.isArray(parsed.todos)
-      ? parsed.todos.map((todo, index) => taskFactory.normalize(todo, index)).filter(todo => todo.title)
-      : [];
-
-    settings.value = normalizeSettings(parsed.settings);
-  } catch {
-    todos.value = [];
-    settings.value = { ...defaultSettings };
+  task.complete();
+  const nextOccurrence = recurrenceEngine.createNextOccurrence(task, task.completedAt);
+  if (nextOccurrence) {
+    tasks.value = [nextOccurrence, ...tasks.value];
   }
 }
 
-function addTodo(payload) {
-  const title = typeof payload === 'string' ? payload.trim() : payload?.title?.trim();
-  if (!title) return;
-
-  todos.value.unshift(taskFactory.create(payload));
-  activeTab.value = 'pending';
+function updateTask(payload) {
+  const task = tasks.value.find(item => item.id === payload.id);
+  if (!task) return;
+  task.applyPatch(payload);
 }
 
-function toggleTodo(id) {
-  const todo = todos.value.find(item => item.id === id);
-  if (!todo) return;
+function toggleSubtask({ taskId, subtaskId }) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
 
-  todo.done = !todo.done;
-  todo.updatedAt = new Date().toISOString();
-
-  if (todo.done) {
-    todo.reminderSent = true;
-  } else if (todo.reminderAt) {
-    todo.reminderSent = false;
-  }
-}
-
-function removeTodo(id) {
-  cancelReminder(id);
-  todos.value = todos.value.filter(todo => todo.id !== id);
-}
-
-function updateTodo(payload) {
-  const todo = todos.value.find(item => item.id === payload.id);
-  if (!todo) return;
-
-  if (typeof payload.title === 'string' && payload.title.trim()) {
-    todo.title = payload.title.trim();
-  }
-
-  if (typeof payload.notes === 'string') {
-    todo.notes = payload.notes;
-  }
-
-  if (typeof payload.reminderAt === 'string') {
-    const reminderChanged = payload.reminderAt !== todo.reminderAt;
-    todo.reminderAt = payload.reminderAt;
-    if (reminderChanged) {
-      todo.reminderSent = false;
-    }
-  }
-
-  if (typeof payload.priority === 'string' && canUse(FEATURE_KEYS.TAGS)) {
-    todo.priority = payload.priority;
-  }
-
-  if (payload.tags !== undefined && canUse(FEATURE_KEYS.TAGS)) {
-    todo.tags = taskFactory.normalizeTags(payload.tags);
-  }
-
-  todo.updatedAt = new Date().toISOString();
-}
-
-function toggleSubtask({ todoId, subtaskId }) {
-  if (!canUse(FEATURE_KEYS.SUBTASKS)) return;
-  const todo = todos.value.find(item => item.id === todoId);
-  if (!todo) return;
-
-  const subtask = todo.subtasks.find(item => item.id === subtaskId);
+  const subtask = task.subtasks.find(item => item.id === subtaskId);
   if (!subtask) return;
 
   subtask.done = !subtask.done;
-  todo.updatedAt = new Date().toISOString();
+  task.updatedAt = new Date().toISOString();
+}
+
+async function removeTask(id) {
+  await cancelReminder(id);
+  tasks.value = tasks.value.filter(task => task.id !== id);
+}
+
+function setAvatarPreferences(patch) {
+  preferences.value.avatar = new AvatarPreferences({
+    ...preferences.value.avatar,
+    ...patch,
+  });
+}
+
+async function enableNotificationsFlow() {
+  const permission = await enableReminders();
+  preferences.value.reminderPermission = permission;
+  preferences.value.notificationsEnabled = permission === 'granted';
+}
+
+async function disableNotificationsFlow() {
+  preferences.value.notificationsEnabled = false;
+  await clearAllReminderTimers();
+  await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
 }
 
 function markReminderSent(id) {
-  const todo = todos.value.find(item => item.id === id);
-  if (!todo) return;
-  todo.reminderSent = true;
-  todo.updatedAt = new Date().toISOString();
+  const task = tasks.value.find(item => item.id === id);
+  if (!task) return;
+  task.applyPatch({ reminderSent: true });
 }
 
 async function syncReminders() {
-  for (const todo of todos.value) {
-    await cancelReminder(todo.id);
+  await clearAllReminderTimers();
+  await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
 
-    if (!settings.value.notificationsEnabled) continue;
-    if (!todo.reminderAt || todo.done || todo.reminderSent) continue;
-
-    await scheduleReminder(todo.toJSON(), markReminderSent);
-  }
-}
-
-async function enableNotifications() {
-  if (settings.value.reminderPermission === 'granted') {
-    settings.value.notificationsEnabled = true;
+  if (!preferences.value.notificationsEnabled) {
     return;
   }
 
-  const permission = await enableReminders();
-  settings.value.reminderPermission = permission;
-  settings.value.notificationsEnabled = permission === 'granted';
-}
+  for (const task of tasks.value) {
+    if (task.isCompleted()) continue;
+    const reminderAt = avatarCoach.getReminderAt(task, preferences.value.avatar);
+    if (!reminderAt || task.reminderSent) continue;
 
-async function disableNotifications() {
-  settings.value.notificationsEnabled = false;
-  await clearAllReminderTimers();
-
-  for (const todo of todos.value) {
-    await cancelReminder(todo.id);
+    await scheduleReminder({
+      ...task.toJSON(),
+      reminderAt,
+    }, markReminderSent);
   }
 }
 
-function canUse(featureKey) {
-  return featureAccess.canUse(settings.value.planId, featureKey);
-}
-
-function applyTemplate(templateId) {
-  const template = templateLibrary.getById(templateId);
-  if (!template || !canUse(FEATURE_KEYS.TEMPLATES)) return;
-
-  addTodo({
-    title: template.title,
-    notes: template.notes,
-    reminderAt: '',
-    priority: template.priority,
-    tags: template.tags,
-    subtasks: template.subtasks,
-    templateId: template.id,
-  });
-}
-
-function exportBackup() {
-  if (!canUse(FEATURE_KEYS.BACKUP_EXPORT)) return;
-  const snapshot = backupService.buildSnapshot({
-    todos: todos.value.map(todo => todo.toJSON()),
-    settings: settings.value,
-  });
-  backupService.download('listea-backup.json', snapshot);
-}
-
-function startFocus(minutes) {
-  if (!canUse(FEATURE_KEYS.FOCUS_MODE)) return;
-
-  focusDuration.value = minutes;
-  focusSession.start(minutes);
-  updateFocusClock();
-
-  if (focusIntervalId) {
-    clearInterval(focusIntervalId);
-  }
-
-  focusIntervalId = window.setInterval(() => {
-    updateFocusClock();
-
-    if (!focusSession.isRunning() || focusSession.getRemainingMs() === 0) {
-      stopFocus();
-    }
-  }, 1000);
-}
-
-function stopFocus() {
-  focusSession.stop();
-  focusRemainingMs.value = 0;
-
-  if (focusIntervalId) {
-    clearInterval(focusIntervalId);
-    focusIntervalId = null;
-  }
-}
-
-function updateFocusClock() {
-  focusRemainingMs.value = focusSession.getRemainingMs();
-}
-
-function setPlan(planId) {
-  settings.value.planId = planId;
-  premiumThemesOpen.value = planId === 'premium';
-  emit('plan-change', planId);
-
-  if (!isPremium.value && themeCatalog.getPalette(settings.value.themeId).tier === 'premium') {
-    setTheme('light');
-  } else {
-    setTheme(settings.value.themeId);
-  }
-}
-
-const isPremium = computed(() => settings.value.planId === 'premium');
-const availablePlans = computed(() => planRegistry.getAllPlans());
-const premiumTemplates = computed(() => templateLibrary.getAll());
-const freePalettes = computed(() => themeCatalog.getFreePalettes());
-const premiumPalettes = computed(() => themeCatalog.getPremiumPalettes());
-
-const pendingTodos = computed(() => todos.value.filter(todo => !todo.done));
-const completedTodos = computed(() => todos.value.filter(todo => todo.done));
-
-const filteredBaseTodos = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase();
-  const base = activeTab.value === 'completed' ? completedTodos.value : pendingTodos.value;
-
-  if (!query) return base;
-
-  return base.filter(todo =>
-    todo.title.toLowerCase().includes(query) ||
-    todo.notes.toLowerCase().includes(query) ||
-    todo.tags.some(tag => tag.toLowerCase().includes(query)),
-  );
-});
-
-const upcomingTodos = computed(() =>
-  pendingTodos.value
-    .filter(todo => todo.reminderAt)
-    .sort((a, b) => new Date(a.reminderAt) - new Date(b.reminderAt))
-    .slice(0, 4),
-);
-
-const agendaGroups = computed(() => {
-  const groups = new Map();
-
-  pendingTodos.value
+const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
+const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
+const completedTasks = computed(() =>
+  tasks.value
+    .filter(task => task.isCompleted())
     .slice()
-    .sort((a, b) => {
-      const left = a.reminderAt ? new Date(a.reminderAt).getTime() : new Date(a.createdAt).getTime();
-      const right = b.reminderAt ? new Date(b.reminderAt).getTime() : new Date(b.createdAt).getTime();
-      return left - right;
-    })
-    .forEach(todo => {
-      const baseDate = todo.reminderAt || todo.createdAt;
-      const key = new Date(baseDate).toLocaleDateString();
-      const current = groups.get(key) ?? [];
-      current.push(todo);
-      groups.set(key, current);
-    });
-
-  return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
-});
-
-const boardColumns = computed(() => taskBoardBuilder.build(pendingTodos.value));
-const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView, settings.value.planId));
-const focusFormatted = computed(() => {
-  const totalSeconds = Math.ceil(focusRemainingMs.value / 1000);
-  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
-  const seconds = String(totalSeconds % 60).padStart(2, '0');
-  return `${minutes}:${seconds}`;
-});
-
-watch(
-  [todos, settings],
-  async () => {
-    if (!mounted.value) return;
-    persistState();
-    setTheme(settings.value.themeId);
-    await syncReminders();
-  },
-  { deep: true },
+    .sort((left, right) => new Date(right.completedAt) - new Date(left.completedAt))
+    .slice(0, 6),
 );
-
-watch(
-  () => settings.value.planId,
-  planId => {
-    emit('plan-change', planId);
-  },
-  { immediate: true },
+const activeFilters = computed(() => [
+  ...filterCatalog.getPrimaryFilters(),
+  ...filterCatalog.getDynamicFilters(openTasks.value),
+]);
+const filteredTasks = computed(() => {
+  const filtered = filterService.apply(openTasks.value, activeFilterId.value, {
+    referenceDate: new Date(),
+  });
+  return sortTasksByRelevance(applySearch(filtered));
+});
+const todayBoard = computed(() =>
+  todayBoardBuilder.build(filteredTasks.value, {
+    referenceDate: new Date(),
+  }),
 );
+const backlogInsights = computed(() =>
+  insightAnalyzer.analyze(openTasks.value, {
+    referenceDate: new Date(),
+  }),
+);
+const avatarCard = computed(() =>
+  avatarCoach.buildSnapshot({
+    tasks: openTasks.value,
+    insights: backlogInsights.value,
+    preferences: preferences.value.avatar,
+    referenceDate: new Date(),
+  }),
+);
+const summary = computed(() => ({
+  pending: openTasks.value.length,
+  overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
+  today: filterService.apply(openTasks.value, FILTER_IDS.TODAY, { referenceDate: new Date() }).length,
+}));
+const summaryCards = computed(() => [
+  { id: 'pending', label: 'Abiertas', value: summary.value.pending },
+  { id: 'today', label: 'Para hoy', value: summary.value.today },
+  { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
+]);
 
 watch(
-  resolvedView,
+  () => resolvedView.value,
   nextView => {
     if (nextView !== props.currentView) {
       emit('navigate', nextView);
@@ -375,10 +231,19 @@ watch(
   },
 );
 
+watch(
+  [tasks, preferences],
+  async () => {
+    if (!mounted.value) return;
+    persistState();
+    await syncReminders();
+  },
+  { deep: true },
+);
+
 onMounted(async () => {
   loadState();
-  settings.value.reminderPermission = await getReminderPermission();
-  setTheme(settings.value.themeId);
+  preferences.value.reminderPermission = await getReminderPermission();
   mounted.value = true;
   persistState();
   await syncReminders();
@@ -386,717 +251,453 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearAllReminderTimers();
-  stopFocus();
 });
 </script>
 
 <template>
-  <section class="tasksSection">
-    <div class="heroCard">
-      <div class="heroCopy">
-        <p class="eyebrow">{{ isPremium ? 'Premium workspace' : 'Privado, local y mantenible' }}</p>
-        <h2>Con modalidad Local-first no dependes de la nube.</h2>
-        <p class="heroText">
-          Crea tareas, editalas, agrega snippets y mucho mas.
-        </p>
+  <section class="tasksShell">
+    <section v-if="resolvedView !== 'settings'" class="topBar">
+      <div class="topCopy">
+        <p class="eyebrow">Captura y ejecuta</p>
+        <h1>Tu lista empieza en el input, no en una portada.</h1>
       </div>
-
-      <div class="heroStats">
-        <div class="statCard">
-          <span>{{ pendingTodos.length }}</span>
-          <p>Pendientes</p>
-        </div>
-        <div class="statCard">
-          <span>{{ completedTodos.length }}</span>
-          <p>Completadas</p>
-        </div>
+      <div class="topStats">
+        <article v-for="card in summaryCards" :key="card.id" class="statCard">
+          <strong>{{ card.value }}</strong>
+          <span>{{ card.label }}</span>
+        </article>
       </div>
-    </div>
+    </section>
 
-    <AddTask
-      v-if="resolvedView !== 'settings'"
-      :is-premium="isPremium"
-      :templates="premiumTemplates"
-      @add="addTodo"
-      @apply-template="applyTemplate"
-    />
+    <AddTask v-if="resolvedView !== 'settings'" @add="addTask" />
 
-    <div v-if="isPremium && resolvedView === 'home'" class="premiumCommandBar">
-      <div class="focusPanel">
-        <p class="settingsLabel">Focus mode</p>
-        <strong>{{ focusFormatted === '00:00' ? `${focusDuration} min` : focusFormatted }}</strong>
-        <div class="focusActions">
-          <button type="button" class="miniAction" @click="startFocus(25)">25m</button>
-          <button type="button" class="miniAction" @click="startFocus(50)">50m</button>
-          <button type="button" class="miniAction" @click="stopFocus">Stop</button>
-        </div>
+    <section v-if="avatarCard.visible && resolvedView === 'today'" class="avatarCard" :data-tone="avatarCard.tone">
+      <img :src="avatarIllustration" alt="Avatar de ListEA" class="avatarImage" />
+      <div class="avatarCopy">
+        <p class="eyebrow">Avatar</p>
+        <h3>{{ avatarCard.title }}</h3>
+        <p>{{ avatarCard.message }}</p>
       </div>
-    </div>
+    </section>
 
-    <div v-if="resolvedView === 'home'" class="toolbar">
-      <div class="tabs" role="tablist" aria-label="Vistas de tareas">
+    <section v-if="resolvedView !== 'settings'" class="filterBar">
+      <div class="filterRow">
         <button
-          class="tabButton"
-          :class="{ active: activeTab === 'pending' }"
+          v-for="filter in activeFilters"
+          :key="filter.id"
           type="button"
-          @click="activeTab = 'pending'"
+          class="filterChip"
+          :class="{ active: activeFilterId === filter.id }"
+          @click="activeFilterId = filter.id"
         >
-          Por hacer
-        </button>
-        <button
-          class="tabButton"
-          :class="{ active: activeTab === 'completed' }"
-          type="button"
-          @click="activeTab = 'completed'"
-        >
-          Hechas
+          {{ filter.label }}
         </button>
       </div>
 
       <label class="searchField">
-        <span class="sr-only">Buscar tareas</span>
-        <input
-          v-model="searchQuery"
-          type="search"
-          placeholder="Buscar por texto, tags o snippet"
-        >
+        <span class="srOnly">Buscar tareas</span>
+        <input v-model="searchQuery" type="search" placeholder="Buscar por tarea, proyecto, area o tag" />
       </label>
-    </div>
+    </section>
 
-    <div v-if="resolvedView === 'home'" class="contentStage">
-      <div class="listScroll">
+    <section v-if="resolvedView === 'today'" class="laneGrid">
+      <article v-for="lane in todayBoard" :key="lane.id" class="laneCard">
+        <div class="laneHeader">
+          <h3>{{ lane.title }}</h3>
+          <span>{{ lane.items.length }}</span>
+        </div>
+
         <TodoList
-          :todos="filteredBaseTodos"
-          :empty-message="activeTab === 'completed' ? 'No hay tareas completadas todavia.' : 'No hay tareas pendientes. Agrega una nueva.'"
-          :is-premium="isPremium"
-          @toggle="toggleTodo"
-          @remove="removeTodo"
-          @update="updateTodo"
+          :todos="lane.items"
+          empty-message="Nada que mostrar en esta vista."
+          @toggle="toggleTask"
+          @remove="removeTask"
+          @update="updateTask"
           @toggle-subtask="toggleSubtask"
         />
-      </div>
-    </div>
-    <div v-else-if="resolvedView === 'agenda'" class="agendaGrid">
-      <article v-for="group in agendaGroups" :key="group.label" class="agendaCard">
-        <p class="settingsLabel">{{ group.label }}</p>
-        <div class="agendaItems">
-          <div v-for="todo in group.items" :key="todo.id" class="agendaItem">
-            <div class="agendaCopy">
-              <strong>{{ todo.title }}</strong>
-              <small>{{ todo.reminderAt ? 'Con recordatorio' : 'Sin hora fijada' }}</small>
-            </div>
-            <span>{{ todo.reminderAt ? new Date(todo.reminderAt).toLocaleTimeString() : 'Pendiente' }}</span>
+      </article>
+    </section>
+
+    <section v-else-if="resolvedView === 'backlog'" class="backlogGrid">
+      <article class="panelCard insightsPanel">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Backlog inteligente</p>
+            <h3>Senales que conviene resolver primero</h3>
           </div>
         </div>
-      </article>
-      <p v-if="!agendaGroups.length" class="emptyPremium">No hay tareas para mostrar en agenda.</p>
-    </div>
 
-    <div v-else-if="resolvedView === 'board'" class="boardGrid">
-      <article class="boardColumn">
-        <p class="settingsLabel">Alta</p>
-        <div v-if="boardColumns.high.length" class="boardItems">
-          <div v-for="todo in boardColumns.high" :key="todo.id" class="boardItem">{{ todo.title }}</div>
+        <div v-if="backlogInsights.length" class="insightList">
+          <article v-for="insight in backlogInsights" :key="insight.id" class="insightCard">
+            <strong>{{ insight.title }}</strong>
+            <p>{{ insight.message }}</p>
+          </article>
         </div>
-        <p v-else class="emptyPremium">Sin tareas</p>
+        <p v-else class="emptyText">No hay alertas relevantes en el backlog.</p>
       </article>
-      <article class="boardColumn">
-        <p class="settingsLabel">Media</p>
-        <div v-if="boardColumns.medium.length" class="boardItems">
-          <div v-for="todo in boardColumns.medium" :key="todo.id" class="boardItem">{{ todo.title }}</div>
-        </div>
-        <p v-else class="emptyPremium">Sin tareas</p>
-      </article>
-      <article class="boardColumn">
-        <p class="settingsLabel">Baja</p>
-        <div v-if="boardColumns.low.length" class="boardItems">
-          <div v-for="todo in boardColumns.low" :key="todo.id" class="boardItem">{{ todo.title }}</div>
-        </div>
-        <p v-else class="emptyPremium">Sin tareas</p>
-      </article>
-    </div>
 
-    <div v-else class="settingsPanel">
-      <article class="settingsCard">
-        <div>
-          <p class="settingsLabel">Testing</p>
-          <h3>Plan activo</h3>
-          <p class="settingsText">
-            Cambia entre gratis y premium para validar ambos flujos antes del lanzamiento.
-          </p>
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Tareas activas</p>
+            <h3>Ordenadas por fecha y prioridad</h3>
+          </div>
         </div>
 
-        <div class="pillRow">
+        <TodoList
+          :todos="filteredTasks"
+          empty-message="No hay tareas activas para este filtro."
+          @toggle="toggleTask"
+          @remove="removeTask"
+          @update="updateTask"
+          @toggle-subtask="toggleSubtask"
+        />
+      </article>
+
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Completadas recientes</p>
+            <h3>Cierre visible sin perder control</h3>
+          </div>
+        </div>
+
+        <TodoList
+          :todos="completedTasks"
+          empty-message="Todavia no hay tareas completadas."
+          @toggle="toggleTask"
+          @remove="removeTask"
+          @update="updateTask"
+          @toggle-subtask="toggleSubtask"
+        />
+      </article>
+    </section>
+
+    <section v-else class="settingsGrid">
+      <article class="panelCard">
+        <p class="eyebrow">Local-first</p>
+        <h3>Primero local, luego sincronizacion</h3>
+        <p class="panelText">
+          Todo se guarda primero en el dispositivo. La interfaz no depende de red para crear, editar o completar tareas.
+        </p>
+      </article>
+
+      <article class="panelCard">
+        <p class="eyebrow">Notificaciones</p>
+        <h3>Recordatorios moviles con control del usuario</h3>
+        <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
+        <div class="buttonRow">
           <button
-            v-for="plan in availablePlans"
-            :key="plan.id"
+            v-if="!preferences.notificationsEnabled"
             type="button"
-            class="pillButton"
-            :class="{ active: settings.planId === plan.id }"
-            @click="setPlan(plan.id)"
-          >
-            {{ plan.name }}
-          </button>
-        </div>
-      </article>
-
-      <article class="settingsCard">
-        <div>
-          <p class="settingsLabel">Recordatorios</p>
-          <h3>Notificaciones locales</h3>
-          <p class="settingsText">
-            Piden permiso al usuario y quedan asociadas solo a este dispositivo para mantener la experiencia privada.
-          </p>
-        </div>
-
-        <div class="settingsActions">
-          <button
-            v-if="!settings.notificationsEnabled"
-            type="button"
-            class="primaryAction"
-            @click="enableNotifications"
+            class="primaryButton"
+            @click="enableNotificationsFlow"
           >
             Activar recordatorios
           </button>
           <button
             v-else
             type="button"
-            class="secondaryAction"
-            @click="disableNotifications"
+            class="ghostButton"
+            @click="disableNotificationsFlow"
           >
             Desactivar recordatorios
           </button>
-          <p class="permissionStatus">Estado: {{ settings.reminderPermission }}</p>
         </div>
       </article>
 
-      <article class="settingsCard">
-        <div>
-          <p class="settingsLabel">Apariencia</p>
-          <h3>{{ isPremium ? 'Paletas premium' : 'Modo gratis' }}</h3>
-          <p class="settingsText">
-            {{ isPremium ? 'Elige entre ocho paletas premium.' : 'Gratis incluye un modo dia y un modo noche mas atractivo.' }}
-          </p>
-        </div>
+      <article class="panelCard">
+        <p class="eyebrow">Avatar</p>
+        <h3>Acompania sin invadir</h3>
+        <div class="settingsStack">
+          <label class="checkboxRow">
+            <input
+              :checked="preferences.avatar.enabled"
+              type="checkbox"
+              @change="setAvatarPreferences({ enabled: $event.target.checked })"
+            />
+            <span>Mostrar avatar</span>
+          </label>
 
-        <div v-if="!isPremium" class="themeToggle">
-          <span>Day</span>
-          <button
-            type="button"
-            class="themeSwitch"
-            :class="{ night: settings.themeId === 'night' }"
-            @click="setTheme(settings.themeId === 'night' ? 'light' : 'night')"
-            aria-label="Cambiar modo de color"
-          >
-            <span class="themeThumb"></span>
-          </button>
-          <span>Night</span>
-        </div>
-
-        <div v-else class="premiumThemesBlock">
-          <button
-            type="button"
-            class="themeDisclosure"
-            :class="{ active: premiumThemesOpen }"
-            @click="premiumThemesOpen = !premiumThemesOpen"
-          >
-            <div>
-              <strong>Ver paletas premium</strong>
-              <small>Haz click para desplegar las 8 opciones</small>
-            </div>
-            <span>{{ premiumThemesOpen ? 'Ocultar' : 'Abrir' }}</span>
-          </button>
-
-          <div v-if="premiumThemesOpen" class="paletteGrid">
-            <button
-              v-for="palette in premiumPalettes"
-              :key="palette.id"
-              type="button"
-              class="paletteCard"
-              :class="{ active: settings.themeId === palette.id }"
-              @click="setTheme(palette.id)"
+          <label class="fieldGroup">
+            <span>Momento de aparicion</span>
+            <select
+              class="detailField"
+              :value="preferences.avatar.timing"
+              @change="setAvatarPreferences({ timing: $event.target.value })"
             >
-              <strong>{{ palette.name }}</strong>
-              <small>{{ palette.mode }}</small>
-            </button>
-          </div>
-        </div>
+              <option :value="AVATAR_TIMINGS.NEVER">Nunca</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_10">10 min antes</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_5">5 min antes</option>
+              <option :value="AVATAR_TIMINGS.ON_TIME">Justo a tiempo</option>
+              <option :value="AVATAR_TIMINGS.AFTER_10">10 min despues</option>
+            </select>
+          </label>
 
-        <div v-if="isPremium" class="freePaletteRow">
-          <button
-            v-for="palette in freePalettes"
-            :key="palette.id"
-            type="button"
-            class="pillButton"
-            :class="{ active: settings.themeId === palette.id }"
-            @click="setTheme(palette.id)"
-          >
-            {{ palette.name }}
-          </button>
-        </div>
-      </article>
-
-      <article class="settingsCard">
-        <div>
-          <p class="settingsLabel">Privacidad</p>
-          <h3>Modo local-first</h3>
-          <p class="settingsText">
-            Tus tareas, snippets y recordatorios se conservan en este dispositivo para darte control, rapidez y privacidad.
-          </p>
+          <label class="checkboxRow">
+            <input
+              :checked="preferences.avatar.importantOnly"
+              type="checkbox"
+              @change="setAvatarPreferences({ importantOnly: $event.target.checked })"
+            />
+            <span>Solo para tareas importantes</span>
+          </label>
         </div>
       </article>
 
-      <article v-if="!isPremium" class="settingsCard">
-        <div>
-          <p class="settingsLabel">Monetizacion</p>
-          <h3>{{ isPremium ? 'Experiencia sin anuncios' : 'Zona de anuncios cuidada' }}</h3>
-          <p class="settingsText">
-            {{ isPremium ? 'Premium elimina la franja de anuncios y deja mas espacio para trabajar.' : 'La app reserva una franja inferior no invasiva para anuncios de la version gratis.' }}
-          </p>
-        </div>
-      </article>
-
-      <article v-if="isPremium" class="settingsCard">
-        <div>
-          <p class="settingsLabel">Premium</p>
-          <h3>Exportacion</h3>
-          <p class="settingsText">Genera un snapshot local para probar respaldo premium.</p>
-        </div>
-        <button type="button" class="primaryAction" @click="exportBackup">
-          Exportar backup
-        </button>
-      </article>
-
-      <article class="settingsCard fullWidth">
-        <div>
-          <p class="settingsLabel">Proximos recordatorios</p>
-          <h3>Agenda inmediata</h3>
-        </div>
-
-        <ul v-if="upcomingTodos.length" class="upcomingList">
-          <li v-for="todo in upcomingTodos" :key="todo.id">
-            <strong>{{ todo.title }}</strong>
-            <span>{{ new Date(todo.reminderAt).toLocaleString() }}</span>
-          </li>
-        </ul>
-        <p v-else class="settingsText">No hay recordatorios programados.</p>
-      </article>
-    </div>
-
-    <aside v-if="!canUse(FEATURE_KEYS.NO_ADS)" class="adsSection" aria-label="Zona reservada para anuncios">
-      <div class="adsMeta">
-        <p class="settingsLabel">Ads inteligente</p>
-        <h3>Espacio inferior listo para monetizacion</h3>
-        <p class="settingsText">
-          Este bloque esta separado del flujo de tareas para no interrumpir creacion, edicion ni marcado de pendientes.
+      <article class="panelCard">
+        <p class="eyebrow">Contexto de subtareas</p>
+        <h3>Siempre visible</h3>
+        <p class="panelText">
+          Cada subtarea conserva padre, proyecto, estado, prioridad y fecha relevante en la tarjeta principal.
         </p>
-      </div>
-      <div class="adsPlaceholder">
-        <span>Banner adaptable 320x100 a 728x120</span>
-        <small>Recomendado para AdMob o proveedor equivalente en la app movil.</small>
-      </div>
-    </aside>
+        <p class="panelText">{{ contextPresenter.getPriorityLabel('high') }} se usa como referencia de lenguaje consistente.</p>
+      </article>
+    </section>
   </section>
 </template>
 
 <style scoped>
-.tasksSection {
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto 40px;
-  padding: 0 0 24px;
+.tasksShell {
+  width: min(960px, calc(100% - 24px));
+  margin: 0 auto 24px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
-.heroCard,
-.premiumCommandBar,
-.agendaCard,
-.boardColumn,
-.settingsCard {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: var(--hero-shadow);
-}
-
-.heroCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr);
-  gap: 18px;
-  padding: 24px;
+.topBar,
+.avatarCard,
+.panelCard,
+.laneCard {
   border-radius: 28px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.topBar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr);
+  gap: 14px;
+  padding: 16px 18px;
   background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 26%, transparent), transparent 30%),
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%),
     var(--surface);
 }
 
-.heroCopy h2 {
+.topCopy h1,
+.eyebrow {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  text-align: left;
+}
+
+.topCopy h1 {
+  max-width: 16ch;
+  font-size: clamp(1.2rem, 4vw, 1.7rem);
   line-height: 1.05;
-  text-align: left;
-  color: var(--text-main);
-}
-
-.heroText,
-.eyebrow {
-  margin: 0;
-  text-align: left;
 }
 
 .eyebrow {
-  color: var(--accent-strong);
-  font-size: 0.85rem;
-  font-weight: 700;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 12px;
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
-.heroText {
-  margin-top: 12px;
-  max-width: 62ch;
+.panelText,
+.avatarCopy p,
+.emptyText {
   color: var(--text-muted);
 }
 
-.heroStats {
+.topStats {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  align-self: stretch;
 }
 
 .statCard {
-  padding: 18px;
-  border-radius: 24px;
-  background: var(--surface-muted);
-  border: 1px solid var(--line);
-  text-align: left;
-}
-
-.statCard span {
-  display: block;
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  font-weight: 800;
-  color: var(--text-main);
-}
-
-.statCard p {
-  margin: 6px 0 0;
-  color: var(--text-muted);
-}
-
-.premiumCommandBar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 18px 20px;
-  border-radius: 24px;
-}
-
-.premiumViews,
-.tabs,
-.pillRow,
-.freePaletteRow {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.focusPanel {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  color: var(--text-main);
-}
-
-.focusPanel strong {
-  font-size: 1.8rem;
-}
-
-.focusActions {
-  display: flex;
-  gap: 8px;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.tabButton,
-.pillButton,
-.miniAction {
-  background: var(--surface-soft);
-  color: var(--text-main);
-  border: 1px solid var(--line);
-}
-
-.tabButton.active,
-.pillButton.active {
-  background: var(--accent);
-}
-
-.searchField {
-  flex: 1;
-  max-width: 360px;
-}
-
-.searchField input {
-  width: 100%;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: var(--surface-muted);
-  color: var(--text-main);
-}
-
-.contentStage,
-.listScroll {
-  min-height: 260px;
-}
-
-.agendaGrid,
-.boardGrid,
-.settingsPanel {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.agendaCard,
-.boardColumn,
-.settingsCard {
-  padding: 20px;
-  border-radius: 24px;
-  text-align: left;
-}
-
-.agendaItems,
-.boardItems {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.agendaItem,
-.boardItem {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: var(--surface-soft);
-  color: var(--text-main);
-}
-
-.agendaCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.agendaCopy small {
-  color: var(--text-muted);
-}
-
-.settingsLabel {
-  margin: 0 0 4px;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-strong);
-  font-weight: 700;
-}
-
-.settingsCard h3,
-.adsMeta h3 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: var(--text-main);
-}
-
-.settingsText,
-.permissionStatus,
-.emptyPremium,
-.adsMeta .settingsText {
-  margin: 10px 0 0;
-  color: var(--text-muted);
-}
-
-.settingsActions {
-  margin-top: 18px;
-}
-
-.primaryAction {
-  background: var(--accent);
-  color: var(--text-main);
-}
-
-.secondaryAction {
-  background: var(--surface-soft);
-  color: var(--text-main);
-}
-
-.themeToggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 18px;
-  color: var(--text-main);
-  font-weight: 600;
-}
-
-.premiumThemesBlock {
-  margin-top: 22px;
-}
-
-.themeDisclosure {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: var(--surface-soft);
-  color: var(--text-main);
-  border: 1px solid var(--line);
-  text-align: left;
-}
-
-.themeDisclosure.active {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface-soft));
-}
-
-.themeDisclosure small {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-muted);
-}
-
-.themeSwitch {
-  position: relative;
-  width: 76px;
-  height: 40px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #f8c76a 0%, #92b7ff 100%);
-  padding: 4px;
-}
-
-.themeSwitch.night {
-  background: linear-gradient(90deg, #20314d 0%, #728ef0 100%);
-}
-
-.themeThumb {
-  display: block;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #ffffff;
-  transform: translateX(0);
-  transition: transform 160ms ease;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
-}
-
-.themeSwitch.night .themeThumb {
-  transform: translateX(36px);
-}
-
-.paletteGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.paletteCard {
-  padding: 14px;
-  border-radius: 18px;
-  text-align: left;
-  background: var(--surface-soft);
-  color: var(--text-main);
-}
-
-.paletteCard.active {
-  background: var(--accent);
-}
-
-.paletteCard small {
-  display: block;
-  margin-top: 6px;
-  text-transform: uppercase;
-  opacity: 0.7;
-}
-
-.freePaletteRow {
-  margin-top: 18px;
-}
-
-.fullWidth {
-  grid-column: 1 / -1;
-}
-
-.upcomingList {
-  list-style: none;
-  padding: 0;
-  margin: 18px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.upcomingList li {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: var(--surface-soft);
-  color: var(--text-main);
-}
-
-.adsSection {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr);
-  gap: 18px;
-  align-items: center;
-  padding: 20px;
-  border-radius: 28px;
-  background: var(--ads-bg);
-  color: white;
-}
-
-.adsMeta h3,
-.adsMeta .settingsText,
-.adsMeta .settingsLabel {
-  color: white;
-}
-
-.adsPlaceholder {
-  min-height: min(28vh, 220px);
-  max-height: 320px;
-  border-radius: 22px;
-  border: 1px dashed rgba(255, 255, 255, 0.28);
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 2px;
+  min-height: 76px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.statCard strong {
+  font-size: clamp(1.25rem, 4vw, 1.7rem);
+}
+
+.avatarCard {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.avatarImage {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.avatarCopy h3,
+.avatarCopy p {
+  margin: 0;
+  text-align: left;
+}
+
+.avatarCopy h3 {
+  margin-bottom: 4px;
+  font-size: 1rem;
+}
+
+.filterBar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.filterRow {
+  display: flex;
   gap: 8px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.04);
+  flex-wrap: wrap;
 }
 
-.adsPlaceholder span,
-.adsPlaceholder small {
+.filterChip,
+.ghostButton,
+.primaryButton {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.filterChip,
+.ghostButton {
+  background: var(--surface-soft);
+  color: var(--text-main);
+}
+
+.filterChip.active,
+.primaryButton {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.searchField input,
+.detailField {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  background: var(--surface-soft);
+  color: var(--text-main);
+}
+
+.laneGrid,
+.backlogGrid,
+.settingsGrid {
+  display: grid;
+  gap: 14px;
+}
+
+.laneGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.backlogGrid {
+  grid-template-columns: 1.1fr 1fr;
+}
+
+.settingsGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.laneCard,
+.panelCard {
+  padding: 16px;
+}
+
+.laneHeader,
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.laneHeader h3,
+.sectionHeader h3 {
+  margin: 0;
+  text-align: left;
+}
+
+.laneHeader span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.insightsPanel {
+  grid-column: 1 / -1;
+}
+
+.insightList {
+  display: grid;
+  gap: 12px;
+}
+
+.insightCard {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.insightCard strong,
+.insightCard p {
   display: block;
+  text-align: left;
 }
 
-.sr-only {
+.insightCard p {
+  margin: 6px 0 0;
+}
+
+.buttonRow,
+.settingsStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.checkboxRow,
+.fieldGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+
+.fieldGroup {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.srOnly {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1108,56 +709,45 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
-@media (max-width: 920px) {
-  .heroCard,
-  .premiumCommandBar,
-  .agendaGrid,
-  .boardGrid,
-  .settingsPanel,
-  .adsSection {
+@media (max-width: 860px) {
+  .topBar,
+  .avatarCard,
+  .laneGrid,
+  .backlogGrid,
+  .settingsGrid {
     grid-template-columns: 1fr;
-  }
-
-  .focusPanel {
-    align-items: flex-start;
   }
 }
 
 @media (max-width: 640px) {
-  .tasksSection {
-    width: min(100% - 20px, 1120px);
+  .tasksShell {
+    width: min(100% - 20px, 960px);
+    gap: 12px;
   }
 
-  .heroCard {
-    padding: 18px;
-    border-radius: 22px;
+  .topBar,
+  .avatarCard,
+  .laneCard,
+  .panelCard {
+    padding: 14px;
+    border-radius: 20px;
   }
 
-  .heroStats {
+  .topStats {
     grid-template-columns: 1fr;
   }
 
-  .toolbar {
-    align-items: stretch;
+  .avatarCard {
+    align-items: flex-start;
   }
 
-  .tabs {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+  .avatarImage {
+    width: 56px;
+    height: 56px;
   }
 
-  .searchField {
+  .topCopy h1 {
     max-width: none;
-  }
-
-  .paletteGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .adsPlaceholder {
-    min-height: 160px;
-    max-height: 220px;
   }
 }
 </style>

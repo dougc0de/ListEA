@@ -1,32 +1,19 @@
 <template>
-  <footer class="footerpage">
-    <p>© 2026 DA. Enterprise, LLC. Datos guardados localmente en este dispositivo.</p>
+  <footer class="footerShell">
+    <p>ListEA guarda primero en este dispositivo y sincroniza despues cuando corresponda.</p>
   </footer>
 </template>
 
 <style scoped>
-:global(html, body, #app) {
-  height: 100%;
-  margin: 0;
-}
-
-:global(#app) {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.footerpage {
+.footerShell {
   margin-top: auto;
-  background: var(--text-main);
-  color: var(--surface);
-  padding: 14px 18px;
+  padding: 18px 20px 28px;
+  color: var(--text-muted);
 }
 
-.footerpage p {
+.footerShell p {
   margin: 0;
   text-align: center;
   font-size: 0.88rem;
-  font-weight: 600;
 }
 </style>
