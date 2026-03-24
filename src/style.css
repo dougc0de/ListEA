@@ -23,6 +23,41 @@
   --secButton:#ffc4a5df;
 }
 
+:root[data-palette='warm'] {
+  --accent: #d96d31;
+  --accent-strong: #9f4517;
+  --accent-contrast: #fffaf7;
+  --secButton: #ffc4a5df;
+}
+
+:root[data-palette='ocean'] {
+  --accent: #2677a6;
+  --accent-strong: #0e4d70;
+  --accent-contrast: #f4fbff;
+  --secButton: rgba(160, 213, 240, 0.9);
+}
+
+:root[data-palette='forest'] {
+  --accent: #3d7b4f;
+  --accent-strong: #245334;
+  --accent-contrast: #f7fff8;
+  --secButton: rgba(182, 222, 187, 0.92);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --app-bg:
+    radial-gradient(circle at top, rgba(255, 183, 107, 0.12), transparent 26%),
+    linear-gradient(180deg, #161b22 0%, #10161d 48%, #0b1016 100%);
+  --app-bg-solid: #131920;
+  --surface: rgba(21, 29, 39, 0.96);
+  --surface-soft: #1b2530;
+  --text-main: #eef4fb;
+  --text-muted: #9fb0c2;
+  --line: rgba(167, 190, 217, 0.14);
+  --card-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -37,6 +72,7 @@ body {
   min-height: 100vh;
   background: var(--app-bg);
   color: var(--text-main);
+  transition: background 180ms ease, color 180ms ease;
 }
 
 body,

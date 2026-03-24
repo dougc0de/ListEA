@@ -6,6 +6,8 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   notificationsEnabled: false,
   reminderPermission: 'default',
   exactAlarmPermission: 'prompt',
+  themeMode: 'light',
+  colorPalette: 'warm',
   avatar: new AvatarPreferences({
     enabled: false,
     reminderTiming: AVATAR_TIMINGS.BEFORE_10,
@@ -84,6 +86,8 @@ export class LocalTaskRepository {
       notificationsEnabled: Boolean(rawPreferences.notificationsEnabled),
       reminderPermission: rawPreferences.reminderPermission ?? DEFAULT_PREFERENCES.reminderPermission,
       exactAlarmPermission: rawPreferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
+      themeMode: rawPreferences.themeMode ?? DEFAULT_PREFERENCES.themeMode,
+      colorPalette: rawPreferences.colorPalette ?? DEFAULT_PREFERENCES.colorPalette,
       avatar,
     };
   }
@@ -93,6 +97,8 @@ export class LocalTaskRepository {
       notificationsEnabled: Boolean(preferences.notificationsEnabled),
       reminderPermission: preferences.reminderPermission ?? DEFAULT_PREFERENCES.reminderPermission,
       exactAlarmPermission: preferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
+      themeMode: preferences.themeMode ?? DEFAULT_PREFERENCES.themeMode,
+      colorPalette: preferences.colorPalette ?? DEFAULT_PREFERENCES.colorPalette,
       avatar: new AvatarPreferences(preferences.avatar),
     };
   }

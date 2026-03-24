@@ -6,6 +6,7 @@ import { DASHBOARD_GRANULARITY, TaskActivityDashboard } from '../domain/activity
 const props = defineProps({
   analytics: { type: Object, required: true },
 });
+const emit = defineEmits(['clear-analytics']);
 
 const dashboardService = new TaskActivityDashboard();
 const viewMode = ref('day');
@@ -222,7 +223,12 @@ onBeforeUnmount(destroyCharts);
           <p class="eyebrow">Periodo</p>
           <h3>Filtra por ritmo real</h3>
         </div>
-        <p class="controlCopy">{{ rangeHelper }}</p>
+        <div class="controlActions">
+          <p class="controlCopy">{{ rangeHelper }}</p>
+          <button type="button" class="ghostButton" @click="emit('clear-analytics')">
+            Limpiar estadisticas
+          </button>
+        </div>
       </div>
 
       <div class="modeRow">
@@ -417,6 +423,12 @@ onBeforeUnmount(destroyCharts);
   align-items: end;
 }
 
+.controlActions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
 .controlHeader h3 {
   text-align: left;
 }
@@ -428,7 +440,8 @@ onBeforeUnmount(destroyCharts);
 }
 
 .modeChip,
-.eventBadge {
+.eventBadge,
+.ghostButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -439,6 +452,11 @@ onBeforeUnmount(destroyCharts);
 }
 
 .modeChip {
+  background: var(--surface-soft);
+  color: var(--text-main);
+}
+
+.ghostButton {
   background: var(--surface-soft);
   color: var(--text-main);
 }
@@ -614,6 +632,10 @@ onBeforeUnmount(destroyCharts);
 
   .heroMeta {
     align-items: flex-start;
+  }
+
+  .controlActions {
+    justify-items: start;
   }
 }
 

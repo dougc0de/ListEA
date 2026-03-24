@@ -149,6 +149,10 @@ export class TaskActivityLedger {
     this.events = this.events.slice(this.events.length - limit);
   }
 
+  clear() {
+    this.events = [];
+  }
+
   toJSON() {
     return this.events.map(event => event.toJSON());
   }

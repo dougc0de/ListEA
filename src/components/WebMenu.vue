@@ -13,7 +13,6 @@ const drawerGesture = new DrawerGestureController();
 const menuOpen = ref(false);
 const menuRoot = ref(null);
 const views = computed(() => navigationCatalog.getMenuViews());
-const primaryViews = computed(() => views.value.slice(0, 2));
 
 function toggleMenu() {
   menuOpen.value = !menuOpen.value;
@@ -98,20 +97,6 @@ onBeforeUnmount(() => {
         {{ view.label }}
       </button>
     </nav>
-
-    <nav class="quickNav" aria-label="Navegacion principal">
-      <button
-        v-for="view in primaryViews"
-        :key="`quick-${view.id}`"
-        type="button"
-        class="quickNavItem"
-        :class="{ active: currentView === view.id }"
-        @click="navigateTo(view.id)"
-      >
-        {{ view.label }}
-      </button>
-    </nav>
-
     <div v-if="menuOpen" class="overlay" @click="closeMenu"></div>
 
     <div
@@ -250,28 +235,6 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
 
-.quickNav {
-  width: min(960px, calc(100% - 24px));
-  margin: 0 auto 10px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.quickNavItem {
-  min-height: 44px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: var(--surface-soft);
-  color: var(--text-main);
-  font-weight: 700;
-}
-
-.quickNavItem.active {
-  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-}
-
 .overlay {
   position: fixed;
   inset: 0;
@@ -291,11 +254,6 @@ onBeforeUnmount(() => {
 @media (max-width: 640px) {
   .menuBar {
     width: min(100% - 20px, 960px);
-  }
-
-  .quickNav {
-    width: min(100% - 20px, 960px);
-    margin-bottom: 8px;
   }
 
   .drawer {

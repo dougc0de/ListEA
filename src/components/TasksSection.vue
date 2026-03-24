@@ -59,6 +59,15 @@ const mounted = ref(false);
 const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
 const backlogCompletedOpen = ref(true);
+const THEME_MODES = Object.freeze({
+  LIGHT: 'light',
+  DARK: 'dark',
+});
+const COLOR_PALETTES = Object.freeze({
+  WARM: 'warm',
+  OCEAN: 'ocean',
+  FOREST: 'forest',
+});
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
@@ -179,11 +188,40 @@ async function removeTask(id) {
   tasks.value = tasks.value.filter(task => task.id !== id);
 }
 
+async function clearTaskField() {
+  await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
+  await clearAllReminderTimers();
+  tasks.value = [];
+  searchQuery.value = '';
+  activeFilterId.value = FILTER_IDS.TODAY;
+  showUiFeedback('Campo de tareas limpiado. Las estadisticas se conservaron.', 'success');
+}
+
+function clearAnalytics() {
+  analytics.value = repository.normalizeAnalytics();
+  showUiFeedback('Estadisticas reiniciadas.', 'success');
+}
+
 function setAvatarPreferences(patch) {
   preferences.value.avatar = new AvatarPreferences({
     ...preferences.value.avatar,
     ...patch,
   });
+}
+
+function setAppearancePreferences(patch) {
+  preferences.value = {
+    ...preferences.value,
+    ...patch,
+  };
+}
+
+function applyAppearancePreferences() {
+  if (typeof document === 'undefined') return;
+
+  const root = document.documentElement;
+  root.dataset.theme = preferences.value.themeMode ?? THEME_MODES.LIGHT;
+  root.dataset.palette = preferences.value.colorPalette ?? COLOR_PALETTES.WARM;
 }
 
 function selectTimeFilter(filterId) {
@@ -466,11 +504,20 @@ watch(
   { deep: true },
 );
 
+watch(
+  () => [preferences.value.themeMode, preferences.value.colorPalette],
+  () => {
+    applyAppearancePreferences();
+  },
+  { immediate: true },
+);
+
 onMounted(async () => {
   loadState();
   preferences.value.reminderPermission = await getReminderPermission();
   preferences.value.exactAlarmPermission = await getExactAlarmPermission();
   mounted.value = true;
+  applyAppearancePreferences();
   persistState();
   await syncReminders();
   syncAvatarSnippet();
@@ -539,7 +586,7 @@ onBeforeUnmount(() => {
     </transition>
 
     <section v-if="showTaskWorkspace" class="filterBar">
-      <section class="timeFocusCard">
+      <section v-if="resolvedView === 'today'" class="timeFocusCard">
         <div class="timeFocusHeader">
           <div>
             <p class="eyebrow">Tiempo</p>
@@ -591,7 +638,12 @@ onBeforeUnmount(() => {
             <p class="eyebrow">Activa</p>
             <h3>{{ selectedTimeFilter.label }}</h3>
           </div>
-          <span class="laneCount">{{ filteredTasks.length }}</span>
+          <div class="headerActions">
+            <button type="button" class="ghostButton" @click="clearTaskField">
+              Limpiar campo de tareas
+            </button>
+            <span class="laneCount">{{ filteredTasks.length }}</span>
+          </div>
         </div>
 
         <transition name="timeSwap" mode="out-in">
@@ -614,7 +666,12 @@ onBeforeUnmount(() => {
             <p class="eyebrow">Completadas</p>
             <h3>Completadas recientes / Completed</h3>
           </div>
-          <span class="laneCount">{{ completedTasks.length }}</span>
+          <div class="headerActions">
+            <button type="button" class="ghostButton" @click="clearTaskField">
+              Limpiar campo de tareas
+            </button>
+            <span class="laneCount">{{ completedTasks.length }}</span>
+          </div>
         </div>
 
         <TodoList
@@ -632,7 +689,7 @@ onBeforeUnmount(() => {
       <article class="panelCard insightsPanel">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Backlog</p>
+            <p class="eyebrow">Agenda</p>
             <h3>Highlighted insights</h3>
           </div>
         </div>
@@ -652,6 +709,11 @@ onBeforeUnmount(() => {
             <p class="eyebrow">Agenda</p>
             <h3>Pending tasks list</h3>
           </div>
+          <div class="headerActions">
+            <button type="button" class="ghostButton" @click="clearTaskField">
+              Limpiar campo de tareas
+            </button>
+          </div>
         </div>
 
         <TodoList
@@ -666,15 +728,20 @@ onBeforeUnmount(() => {
 
       <article class="panelCard">
         <div class="sectionHeader">
-          <button
-            type="button"
-            class="sectionToggle"
-            :aria-expanded="backlogCompletedOpen ? 'true' : 'false'"
-            @click="backlogCompletedOpen = !backlogCompletedOpen"
-          >
-            <span class="eyebrow">Completadas recientes</span>
-            <span class="sectionToggleTitle">Recently Completed</span>
-          </button>
+          <div class="headerToggleWrap">
+            <button
+              type="button"
+              class="sectionToggle"
+              :aria-expanded="backlogCompletedOpen ? 'true' : 'false'"
+              @click="backlogCompletedOpen = !backlogCompletedOpen"
+            >
+              <span class="eyebrow">Completadas recientes</span>
+              <span class="sectionToggleTitle">Recently Completed</span>
+            </button>
+            <button type="button" class="ghostButton" @click="clearTaskField">
+              Limpiar campo de tareas
+            </button>
+          </div>
           <span class="laneCount">{{ completedTasks.length }}</span>
         </div>
 
@@ -693,7 +760,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="resolvedView === 'dashboard'" class="dashboardGrid">
-      <ProductivityDashboard :analytics="analytics" />
+      <ProductivityDashboard :analytics="analytics" @clear-analytics="clearAnalytics" />
     </section>
 
     <section v-else class="settingsGrid">
@@ -802,6 +869,37 @@ onBeforeUnmount(() => {
               @change="setAvatarPreferences({ importantOnly: $event.target.checked })"
             />
             <span>Solo para tareas importantes</span>
+          </label>
+        </div>
+      </article>
+
+      <article class="panelCard">
+        <p class="eyebrow">Apariencia</p>
+        <h3>Dia, noche y paleta de color</h3>
+        <div class="settingsStack">
+          <label class="fieldGroup">
+            <span>Modo</span>
+            <select
+              class="detailField"
+              :value="preferences.themeMode"
+              @change="setAppearancePreferences({ themeMode: $event.target.value })"
+            >
+              <option :value="THEME_MODES.LIGHT">Dia</option>
+              <option :value="THEME_MODES.DARK">Noche</option>
+            </select>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Paleta</span>
+            <select
+              class="detailField"
+              :value="preferences.colorPalette"
+              @change="setAppearancePreferences({ colorPalette: $event.target.value })"
+            >
+              <option :value="COLOR_PALETTES.WARM">Arena</option>
+              <option :value="COLOR_PALETTES.OCEAN">Oceano</option>
+              <option :value="COLOR_PALETTES.FOREST">Bosque</option>
+            </select>
           </label>
         </div>
       </article>
@@ -1171,6 +1269,14 @@ onBeforeUnmount(() => {
   gap: 12px;
   align-items: center;
   margin-bottom: 14px;
+}
+
+.headerActions,
+.headerToggleWrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .sectionToggle {
