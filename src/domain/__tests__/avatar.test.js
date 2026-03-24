@@ -29,4 +29,20 @@ describe('AvatarCoach', () => {
 
     expect(reminderAt).toBe('2026-03-23T14:50:00.000Z');
   });
+
+  it('selects the next due task for the avatar snippet in UI', () => {
+    const factory = new TaskFactory();
+    const tasks = [
+      factory.create({ title: 'Preparar reunion', dueAt: '2026-03-23T15:00:00.000Z' }),
+      factory.create({ title: 'Enviar resumen', dueAt: '2026-03-23T17:00:00.000Z' }),
+    ];
+
+    const dueTask = new AvatarCoach().getDueSnippetTask(
+      tasks,
+      new AvatarPreferences({ snippetTiming: AVATAR_TIMINGS.ON_TIME }),
+      new Date('2026-03-23T15:05:00.000Z'),
+    );
+
+    expect(dueTask?.title).toBe('Preparar reunion');
+  });
 });

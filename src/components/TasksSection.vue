@@ -9,7 +9,12 @@ import {
   getReminderPermission,
   scheduleReminder,
 } from '../services/reminders';
-import { AvatarCoach, AvatarPreferences, AVATAR_TIMINGS } from '../domain/avatar';
+import {
+  AvatarCoach,
+  AvatarPreferences,
+  AVATAR_SNIPPET_DURATIONS,
+  AVATAR_TIMINGS,
+} from '../domain/avatar';
 import { FILTER_IDS, TaskFilterCatalog, TaskFilterService } from '../domain/filters';
 import { BacklogInsightAnalyzer } from '../domain/insights';
 import { LocalTaskRepository } from '../domain/localFirst';
@@ -44,6 +49,10 @@ const preferences = ref(repository.normalizePreferences());
 const activeFilterId = ref(FILTER_IDS.TODAY);
 const searchQuery = ref('');
 const mounted = ref(false);
+const avatarSnippet = ref(null);
+
+let avatarSnippetTimerId = 0;
+let avatarSnippetHideTimerId = 0;
 
 function sortTasksByRelevance(list) {
   return list.slice().sort((left, right) => {
@@ -134,6 +143,86 @@ function setAvatarPreferences(patch) {
     ...preferences.value.avatar,
     ...patch,
   });
+}
+
+function clearAvatarSnippetTimer() {
+  if (!avatarSnippetTimerId || typeof window === 'undefined') return;
+  window.clearTimeout(avatarSnippetTimerId);
+  avatarSnippetTimerId = 0;
+}
+
+function clearAvatarSnippetHideTimer() {
+  if (!avatarSnippetHideTimerId || typeof window === 'undefined') return;
+  window.clearTimeout(avatarSnippetHideTimerId);
+  avatarSnippetHideTimerId = 0;
+}
+
+function dismissAvatarSnippet({ reschedule = true } = {}) {
+  clearAvatarSnippetHideTimer();
+  avatarSnippet.value = null;
+
+  if (reschedule) {
+    syncAvatarSnippet();
+  }
+}
+
+function showAvatarSnippet(task) {
+  if (!task) return;
+
+  const shownAt = new Date().toISOString();
+  task.applyPatch({ avatarSnippetShownAt: shownAt });
+  avatarSnippet.value = avatarCoach.buildTaskSnippet(task, preferences.value.avatar, new Date(shownAt));
+
+  clearAvatarSnippetHideTimer();
+  const durationMs = preferences.value.avatar.getSnippetDurationMs();
+  if (durationMs === null || typeof window === 'undefined') return;
+
+  avatarSnippetHideTimerId = window.setTimeout(() => {
+    avatarSnippetHideTimerId = 0;
+    dismissAvatarSnippet();
+  }, durationMs);
+}
+
+function syncAvatarSnippet() {
+  clearAvatarSnippetTimer();
+
+  const canRenderSnippet = mounted.value
+    && resolvedView.value !== 'settings'
+    && preferences.value.avatar.enabled
+    && preferences.value.avatar.snippetEnabled;
+
+  if (!canRenderSnippet) {
+    clearAvatarSnippetHideTimer();
+    avatarSnippet.value = null;
+    return;
+  }
+
+  if (avatarSnippet.value) {
+    const currentTask = tasks.value.find(task => task.id === avatarSnippet.value.taskId);
+    if (currentTask && !currentTask.isCompleted()) {
+      return;
+    }
+
+    clearAvatarSnippetHideTimer();
+    avatarSnippet.value = null;
+  }
+
+  const dueTask = avatarCoach.getDueSnippetTask(tasks.value, preferences.value.avatar, new Date());
+  if (dueTask) {
+    showAvatarSnippet(dueTask);
+    return;
+  }
+
+  const nextSnippet = avatarCoach.getNextSnippetTask(tasks.value, preferences.value.avatar, new Date());
+  if (!nextSnippet || typeof window === 'undefined') {
+    return;
+  }
+
+  const delay = Math.max(nextSnippet.scheduledTime - Date.now(), 0);
+  avatarSnippetTimerId = window.setTimeout(() => {
+    avatarSnippetTimerId = 0;
+    syncAvatarSnippet();
+  }, Math.min(delay, 2147483647));
 }
 
 async function enableNotificationsFlow() {
@@ -228,6 +317,8 @@ watch(
     if (nextView !== props.currentView) {
       emit('navigate', nextView);
     }
+
+    syncAvatarSnippet();
   },
 );
 
@@ -237,6 +328,7 @@ watch(
     if (!mounted.value) return;
     persistState();
     await syncReminders();
+    syncAvatarSnippet();
   },
   { deep: true },
 );
@@ -247,10 +339,13 @@ onMounted(async () => {
   mounted.value = true;
   persistState();
   await syncReminders();
+  syncAvatarSnippet();
 });
 
 onBeforeUnmount(() => {
   clearAllReminderTimers();
+  clearAvatarSnippetTimer();
+  clearAvatarSnippetHideTimer();
 });
 </script>
 
@@ -279,6 +374,30 @@ onBeforeUnmount(() => {
         <p>{{ avatarCard.message }}</p>
       </div>
     </section>
+
+    <transition name="avatarSnippet">
+      <section
+        v-if="avatarSnippet && resolvedView !== 'settings'"
+        class="avatarSnippetOverlay"
+        aria-atomic="true"
+        aria-live="polite"
+        role="status"
+      >
+        <div class="avatarSnippetCard" :data-tone="avatarSnippet.tone">
+          <img :src="avatarIllustration" alt="Avatar de ListEA" class="avatarSnippetImage" />
+
+          <div class="avatarSnippetBubble">
+            <p class="eyebrow">Avatar</p>
+            <strong>{{ avatarSnippet.title }}</strong>
+            <p class="avatarSnippetTask">{{ avatarSnippet.message }}</p>
+          </div>
+
+          <button type="button" class="ghostButton avatarSnippetClose" @click="dismissAvatarSnippet()">
+            Cerrar
+          </button>
+        </div>
+      </section>
+    </transition>
 
     <section v-if="resolvedView !== 'settings'" class="filterBar">
       <div class="filterRow">
@@ -420,17 +539,55 @@ onBeforeUnmount(() => {
           </label>
 
           <label class="fieldGroup">
-            <span>Momento de aparicion</span>
+            <span>Momento del recordatorio</span>
             <select
               class="detailField"
-              :value="preferences.avatar.timing"
-              @change="setAvatarPreferences({ timing: $event.target.value })"
+              :value="preferences.avatar.reminderTiming"
+              @change="setAvatarPreferences({ reminderTiming: $event.target.value })"
             >
               <option :value="AVATAR_TIMINGS.NEVER">Nunca</option>
               <option :value="AVATAR_TIMINGS.BEFORE_10">10 min antes</option>
               <option :value="AVATAR_TIMINGS.BEFORE_5">5 min antes</option>
               <option :value="AVATAR_TIMINGS.ON_TIME">Justo a tiempo</option>
               <option :value="AVATAR_TIMINGS.AFTER_10">10 min despues</option>
+            </select>
+          </label>
+
+          <label class="checkboxRow">
+            <input
+              :checked="preferences.avatar.snippetEnabled"
+              type="checkbox"
+              @change="setAvatarPreferences({ snippetEnabled: $event.target.checked })"
+            />
+            <span>Mostrar snippet en pantalla</span>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Momento del snippet</span>
+            <select
+              class="detailField"
+              :value="preferences.avatar.snippetTiming"
+              @change="setAvatarPreferences({ snippetTiming: $event.target.value })"
+            >
+              <option :value="AVATAR_TIMINGS.NEVER">Nunca</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_10">10 min antes</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_5">5 min antes</option>
+              <option :value="AVATAR_TIMINGS.ON_TIME">Justo a tiempo</option>
+              <option :value="AVATAR_TIMINGS.AFTER_10">10 min despues</option>
+            </select>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Duracion del snippet</span>
+            <select
+              class="detailField"
+              :value="preferences.avatar.snippetDuration"
+              @change="setAvatarPreferences({ snippetDuration: $event.target.value })"
+            >
+              <option :value="AVATAR_SNIPPET_DURATIONS.SHORT">Corta</option>
+              <option :value="AVATAR_SNIPPET_DURATIONS.MEDIUM">Media</option>
+              <option :value="AVATAR_SNIPPET_DURATIONS.LONG">Larga</option>
+              <option :value="AVATAR_SNIPPET_DURATIONS.STICKY">Hasta cerrarlo</option>
             </select>
           </label>
 
@@ -541,6 +698,94 @@ onBeforeUnmount(() => {
   gap: 12px;
   align-items: center;
   padding: 12px 16px;
+}
+
+.avatarSnippetOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  pointer-events: none;
+}
+
+.avatarSnippetCard {
+  width: min(680px, 100%);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 28px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 88%, white);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+  pointer-events: auto;
+}
+
+.avatarSnippetCard[data-tone='focus'] {
+  border-color: color-mix(in srgb, #d46a47 45%, var(--line));
+}
+
+.avatarSnippetCard[data-tone='nudge'] {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.avatarSnippetCard[data-tone='coach'] {
+  border-color: color-mix(in srgb, #5f8d64 38%, var(--line));
+}
+
+.avatarSnippetImage {
+  width: 92px;
+  height: 92px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.avatarSnippetBubble {
+  position: relative;
+  padding: 16px 18px;
+  border-radius: 24px;
+  background: var(--surface-soft);
+  text-align: left;
+}
+
+.avatarSnippetBubble::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -10px;
+  width: 20px;
+  height: 20px;
+  background: var(--surface-soft);
+  transform: translateY(-50%) rotate(45deg);
+  border-radius: 4px;
+}
+
+.avatarSnippetBubble strong,
+.avatarSnippetTask {
+  position: relative;
+  z-index: 1;
+}
+
+.avatarSnippetBubble strong {
+  display: block;
+  font-size: 0.96rem;
+  color: var(--accent-strong);
+}
+
+.avatarSnippetTask {
+  margin: 6px 0 0;
+  font-size: clamp(1.05rem, 3vw, 1.25rem);
+  color: var(--text-main);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.avatarSnippetClose {
+  align-self: flex-start;
 }
 
 .avatarImage {
@@ -709,6 +954,17 @@ onBeforeUnmount(() => {
   border: 0;
 }
 
+.avatarSnippet-enter-active .avatarSnippetCard,
+.avatarSnippet-leave-active .avatarSnippetCard {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.avatarSnippet-enter-from .avatarSnippetCard,
+.avatarSnippet-leave-to .avatarSnippetCard {
+  opacity: 0;
+  transform: translateY(14px) scale(0.98);
+}
+
 @media (max-width: 860px) {
   .topBar,
   .avatarCard,
@@ -741,9 +997,34 @@ onBeforeUnmount(() => {
     align-items: flex-start;
   }
 
+  .avatarSnippetCard {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .avatarSnippetBubble {
+    width: 100%;
+  }
+
+  .avatarSnippetBubble::before {
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+  }
+
   .avatarImage {
     width: 56px;
     height: 56px;
+  }
+
+  .avatarSnippetImage {
+    width: 74px;
+    height: 74px;
+  }
+
+  .avatarSnippetClose {
+    width: 100%;
   }
 
   .topCopy h1 {

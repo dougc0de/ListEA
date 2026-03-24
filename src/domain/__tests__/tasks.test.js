@@ -53,4 +53,19 @@ describe('TaskContextPresenter', () => {
     expect(subtask.context).toContain('Producto');
     expect(subtask.context).toContain('Alta prioridad');
   });
+
+  it('resets the avatar snippet state when the due date changes', () => {
+    const factory = new TaskFactory();
+    const task = factory.create({
+      title: 'Preparar onboarding',
+      dueAt: '2026-03-24T16:30:00.000Z',
+      avatarSnippetShownAt: '2026-03-24T16:20:00.000Z',
+    });
+
+    task.applyPatch({
+      dueAt: '2026-03-24T18:00:00.000Z',
+    });
+
+    expect(task.avatarSnippetShownAt).toBe('');
+  });
 });

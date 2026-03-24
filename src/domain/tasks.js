@@ -142,6 +142,7 @@ export class TaskEntity {
     this.updatedAt = task.updatedAt;
     this.completedAt = task.completedAt;
     this.reminderSent = task.reminderSent;
+    this.avatarSnippetShownAt = task.avatarSnippetShownAt;
     this.recurrence = task.recurrence;
   }
 
@@ -173,6 +174,7 @@ export class TaskEntity {
     this.completedAt = '';
     this.updatedAt = normalizeDateTime(updatedAt);
     this.reminderSent = false;
+    this.avatarSnippetShownAt = '';
   }
 
   applyPatch(patch = {}, timestamp = new Date().toISOString()) {
@@ -218,6 +220,7 @@ export class TaskEntity {
     if (patch.dueAt !== undefined) {
       this.dueAt = normalizeDateTime(patch.dueAt);
       this.reminderSent = false;
+      this.avatarSnippetShownAt = '';
     }
 
     if (patch.followUpAt !== undefined) {
@@ -238,6 +241,10 @@ export class TaskEntity {
 
     if (patch.reminderSent !== undefined) {
       this.reminderSent = Boolean(patch.reminderSent);
+    }
+
+    if (patch.avatarSnippetShownAt !== undefined) {
+      this.avatarSnippetShownAt = normalizeDateTime(patch.avatarSnippetShownAt);
     }
 
     this.updatedAt = normalizeDateTime(timestamp);
@@ -263,6 +270,7 @@ export class TaskEntity {
       updatedAt: this.updatedAt,
       completedAt: this.completedAt,
       reminderSent: this.reminderSent,
+      avatarSnippetShownAt: this.avatarSnippetShownAt,
       recurrence: this.recurrence.toJSON(),
     };
   }
@@ -295,6 +303,7 @@ export class TaskFactory {
       updatedAt: normalizeDateTime(payload.updatedAt) || now,
       completedAt: normalizeDateTime(payload.completedAt),
       reminderSent: Boolean(payload.reminderSent),
+      avatarSnippetShownAt: normalizeDateTime(payload.avatarSnippetShownAt),
       recurrence: TaskFactory.normalizeRecurrence(payload.recurrence),
     });
   }

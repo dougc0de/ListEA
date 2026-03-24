@@ -6,6 +6,13 @@ export const AVATAR_TIMINGS = Object.freeze({
   AFTER_10: 'after-10',
 });
 
+export const AVATAR_SNIPPET_DURATIONS = Object.freeze({
+  SHORT: 'short',
+  MEDIUM: 'medium',
+  LONG: 'long',
+  STICKY: 'sticky',
+});
+
 const TIMING_OFFSETS = {
   [AVATAR_TIMINGS.NEVER]: null,
   [AVATAR_TIMINGS.BEFORE_10]: -10,
@@ -14,19 +21,74 @@ const TIMING_OFFSETS = {
   [AVATAR_TIMINGS.AFTER_10]: 10,
 };
 
+const SNIPPET_DURATION_MS = {
+  [AVATAR_SNIPPET_DURATIONS.SHORT]: 6000,
+  [AVATAR_SNIPPET_DURATIONS.MEDIUM]: 10000,
+  [AVATAR_SNIPPET_DURATIONS.LONG]: 16000,
+  [AVATAR_SNIPPET_DURATIONS.STICKY]: null,
+};
+
 export class AvatarPreferences {
-  constructor({
-    enabled = true,
-    timing = AVATAR_TIMINGS.BEFORE_10,
-    importantOnly = false,
-  } = {}) {
+  constructor(rawPreferences = {}) {
+    const {
+      enabled = true,
+      timing,
+      reminderTiming,
+      importantOnly = false,
+      snippetEnabled = true,
+      snippetTiming,
+      snippetDuration = AVATAR_SNIPPET_DURATIONS.MEDIUM,
+    } = rawPreferences;
+    const hasLegacyTiming = Object.prototype.hasOwnProperty.call(rawPreferences, 'timing');
+    const fallbackTiming = this.normalizeTiming(hasLegacyTiming ? timing : AVATAR_TIMINGS.BEFORE_10);
+
     this.enabled = Boolean(enabled);
-    this.timing = Object.values(AVATAR_TIMINGS).includes(timing) ? timing : AVATAR_TIMINGS.BEFORE_10;
+    this.reminderTiming = this.normalizeTiming(reminderTiming, fallbackTiming);
+    this.timing = this.reminderTiming;
     this.importantOnly = Boolean(importantOnly);
+    this.snippetEnabled = Boolean(snippetEnabled);
+    this.snippetTiming = this.normalizeTiming(
+      snippetTiming,
+      hasLegacyTiming ? fallbackTiming : AVATAR_TIMINGS.ON_TIME,
+    );
+    this.snippetDuration = this.normalizeSnippetDuration(snippetDuration);
+  }
+
+  normalizeTiming(value, fallback = AVATAR_TIMINGS.BEFORE_10) {
+    return Object.values(AVATAR_TIMINGS).includes(value) ? value : fallback;
+  }
+
+  normalizeSnippetDuration(value) {
+    return Object.values(AVATAR_SNIPPET_DURATIONS).includes(value)
+      ? value
+      : AVATAR_SNIPPET_DURATIONS.MEDIUM;
   }
 
   getOffsetMinutes() {
-    return TIMING_OFFSETS[this.timing];
+    return this.getReminderOffsetMinutes();
+  }
+
+  getReminderOffsetMinutes() {
+    return TIMING_OFFSETS[this.reminderTiming];
+  }
+
+  getSnippetOffsetMinutes() {
+    return TIMING_OFFSETS[this.snippetTiming];
+  }
+
+  getSnippetDurationMs() {
+    return SNIPPET_DURATION_MS[this.snippetDuration];
+  }
+
+  toJSON() {
+    return {
+      enabled: this.enabled,
+      reminderTiming: this.reminderTiming,
+      importantOnly: this.importantOnly,
+      snippetEnabled: this.snippetEnabled,
+      snippetTiming: this.snippetTiming,
+      snippetDuration: this.snippetDuration,
+    };
   }
 }
 
@@ -95,21 +157,104 @@ export class AvatarCoach {
   }
 
   getReminderAt(task, preferences = new AvatarPreferences()) {
-    if (!preferences.enabled || preferences.timing === AVATAR_TIMINGS.NEVER || !task.dueAt) {
+    if (!this.isTaskSchedulable(task, preferences)) {
       return '';
     }
 
-    if (preferences.importantOnly && task.priority !== 'high' && task.impact !== 'high') {
-      return '';
-    }
-
-    const offsetMinutes = preferences.getOffsetMinutes();
+    const offsetMinutes = preferences.getReminderOffsetMinutes();
     if (offsetMinutes === null) {
       return '';
     }
 
-    const reminderDate = new Date(task.dueAt);
-    reminderDate.setMinutes(reminderDate.getMinutes() + offsetMinutes);
-    return reminderDate.toISOString();
+    return this.applyOffset(task.dueAt, offsetMinutes);
+  }
+
+  getSnippetAt(task, preferences = new AvatarPreferences()) {
+    if (!this.isTaskSchedulable(task, preferences) || !preferences.snippetEnabled) {
+      return '';
+    }
+
+    const offsetMinutes = preferences.getSnippetOffsetMinutes();
+    if (offsetMinutes === null) {
+      return '';
+    }
+
+    return this.applyOffset(task.dueAt, offsetMinutes);
+  }
+
+  buildTaskSnippet(task, preferences = new AvatarPreferences(), referenceDate = new Date()) {
+    if (!task) {
+      return {
+        visible: false,
+        taskId: '',
+        title: '',
+        message: '',
+        scheduledAt: '',
+        tone: 'nudge',
+      };
+    }
+
+    return {
+      visible: true,
+      taskId: task.id,
+      title: 'Es momento de esta tarea',
+      message: task.title,
+      scheduledAt: this.getSnippetAt(task, preferences),
+      tone: this.getSnippetTone(task, referenceDate),
+    };
+  }
+
+  getDueSnippetTask(tasks, preferences = new AvatarPreferences(), referenceDate = new Date()) {
+    return this.getSnippetQueue(tasks, preferences).find(
+      candidate => !candidate.task.avatarSnippetShownAt && candidate.scheduledTime <= referenceDate.getTime(),
+    )?.task ?? null;
+  }
+
+  getNextSnippetTask(tasks, preferences = new AvatarPreferences(), referenceDate = new Date()) {
+    return this.getSnippetQueue(tasks, preferences).find(
+      candidate => !candidate.task.avatarSnippetShownAt && candidate.scheduledTime > referenceDate.getTime(),
+    ) ?? null;
+  }
+
+  getSnippetQueue(tasks, preferences = new AvatarPreferences()) {
+    return tasks
+      .filter(task => this.isTaskSchedulable(task, preferences))
+      .map(task => ({
+        task,
+        scheduledAt: this.getSnippetAt(task, preferences),
+      }))
+      .filter(candidate => candidate.scheduledAt)
+      .map(candidate => ({
+        ...candidate,
+        scheduledTime: new Date(candidate.scheduledAt).getTime(),
+      }))
+      .filter(candidate => !Number.isNaN(candidate.scheduledTime))
+      .sort((left, right) => left.scheduledTime - right.scheduledTime);
+  }
+
+  isTaskSchedulable(task, preferences = new AvatarPreferences()) {
+    if (!preferences.enabled || !task?.dueAt || task.status === 'completed') {
+      return false;
+    }
+
+    if (preferences.importantOnly && task.priority !== 'high' && task.impact !== 'high') {
+      return false;
+    }
+
+    return true;
+  }
+
+  applyOffset(dueAt, offsetMinutes) {
+    const scheduledDate = new Date(dueAt);
+    scheduledDate.setMinutes(scheduledDate.getMinutes() + offsetMinutes);
+    return scheduledDate.toISOString();
+  }
+
+  getSnippetTone(task, referenceDate = new Date()) {
+    if (!task?.dueAt) {
+      return 'coach';
+    }
+
+    return new Date(task.dueAt).getTime() < referenceDate.getTime() ? 'focus' : 'nudge';
   }
 }

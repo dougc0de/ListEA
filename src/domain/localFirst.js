@@ -1,4 +1,4 @@
-import { AvatarPreferences, AVATAR_TIMINGS } from './avatar';
+import { AvatarPreferences, AVATAR_SNIPPET_DURATIONS, AVATAR_TIMINGS } from './avatar';
 import { TaskFactory } from './tasks';
 
 export const DEFAULT_PREFERENCES = Object.freeze({
@@ -6,8 +6,11 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   reminderPermission: 'default',
   avatar: new AvatarPreferences({
     enabled: true,
-    timing: AVATAR_TIMINGS.BEFORE_10,
+    reminderTiming: AVATAR_TIMINGS.BEFORE_10,
     importantOnly: false,
+    snippetEnabled: true,
+    snippetTiming: AVATAR_TIMINGS.ON_TIME,
+    snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
   }),
 });
 
