@@ -59,6 +59,7 @@ const mounted = ref(false);
 const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
 const backlogCompletedOpen = ref(true);
+const focusListPanelRef = ref(null);
 const THEME_MODES = Object.freeze({
   LIGHT: 'light',
   DARK: 'dark',
@@ -216,6 +217,18 @@ function setAppearancePreferences(patch) {
   };
 }
 
+function scrollToFocusContent() {
+  if (typeof window === 'undefined') return;
+
+  const panel = focusListPanelRef.value;
+  if (!panel) return;
+
+  panel.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+}
+
 function applyAppearancePreferences() {
   if (typeof document === 'undefined') return;
 
@@ -226,10 +239,12 @@ function applyAppearancePreferences() {
 
 function selectTimeFilter(filterId) {
   activeFilterId.value = filterId;
+  scrollToFocusContent();
 }
 
 function resetTimeFilter() {
   activeFilterId.value = FILTER_IDS.TODAY;
+  scrollToFocusContent();
 }
 
 function clearUiFeedbackTimer() {
@@ -483,6 +498,10 @@ const summaryCards = computed(() => [
   { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
 ]);
 
+function formatTaskCount(value) {
+  return `${value} ${value === 1 ? 'tarea' : 'tareas'}`;
+}
+
 watch(
   () => resolvedView.value,
   nextView => {
@@ -586,45 +605,6 @@ onBeforeUnmount(() => {
     </transition>
 
     <section v-if="showTaskWorkspace" class="filterBar">
-      <section v-if="resolvedView === 'today'" class="timeFocusCard">
-        <div class="timeFocusHeader">
-          <div>
-            <p class="eyebrow">Tiempo</p>
-            <h3>Una sola decision visible</h3>
-          </div>
-          <button
-            v-if="selectedTimeFilter.id !== FILTER_IDS.TODAY"
-            type="button"
-            class="ghostButton"
-            @click="resetTimeFilter"
-          >
-            Deshacer
-          </button>
-        </div>
-
-        <div class="timeFilterGrid">
-          <button
-            v-for="filter in timeFilters"
-            :key="filter.id"
-            type="button"
-            class="timeFilterTile"
-            :class="{ active: selectedTimeFilter.id === filter.id }"
-            @click="selectTimeFilter(filter.id)"
-          >
-            <span class="timeFilterLabel">{{ filter.label }}</span>
-            <strong>{{ filter.count }}</strong>
-          </button>
-        </div>
-
-        <transition name="timeSwap" mode="out-in">
-          <div :key="selectedTimeFilter.id" class="timeFocusBody">
-            <div class="timeFocusCopy">
-              <span class="activeFilterChip">{{ selectedTimeFilter.label }}</span>
-            </div>
-          </div>
-        </transition>
-      </section>
-
       <label class="searchField">
         <span class="srOnly">Buscar tareas</span>
         <input v-model="searchQuery" type="search" placeholder="Buscar por tarea, proyecto, area o tag" />
@@ -632,7 +612,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-if="resolvedView === 'today'" class="focusBoardGrid">
-      <article class="panelCard focusListPanel">
+      <article ref="focusListPanelRef" class="panelCard focusListPanel">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Activa</p>
@@ -642,8 +622,22 @@ onBeforeUnmount(() => {
             <button type="button" class="ghostButton" @click="clearTaskField">
               Limpiar campo de tareas
             </button>
-            <span class="laneCount">{{ filteredTasks.length }}</span>
+            <span class="laneCount">{{ formatTaskCount(filteredTasks.length) }}</span>
           </div>
+        </div>
+
+        <div class="focusFilterBar">
+          <button
+            v-for="filter in timeFilters"
+            :key="filter.id"
+            type="button"
+            class="timeFilterTile focusFilterTile"
+            :class="{ active: selectedTimeFilter.id === filter.id }"
+            @click="selectTimeFilter(filter.id)"
+          >
+            <span class="timeFilterLabel">{{ filter.label }}</span>
+            <strong>{{ filter.count }}</strong>
+          </button>
         </div>
 
         <transition name="timeSwap" mode="out-in">
@@ -670,7 +664,7 @@ onBeforeUnmount(() => {
             <button type="button" class="ghostButton" @click="clearTaskField">
               Limpiar campo de tareas
             </button>
-            <span class="laneCount">{{ completedTasks.length }}</span>
+            <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
           </div>
         </div>
 
@@ -742,7 +736,7 @@ onBeforeUnmount(() => {
               Limpiar campo de tareas
             </button>
           </div>
-          <span class="laneCount">{{ completedTasks.length }}</span>
+          <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
         </div>
 
         <div v-if="backlogCompletedOpen">
@@ -1115,34 +1109,6 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.timeFocusCard {
-  padding: 16px;
-  border-radius: 24px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--card-shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.timeFocusHeader,
-.timeFocusBody,
-.timeFilterGrid {
-  display: grid;
-  gap: 10px;
-}
-
-.timeFocusHeader {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
-.timeFocusHeader h3 {
-  margin: 0;
-  text-align: left;
-}
-
 .timeFilterGrid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -1185,24 +1151,6 @@ onBeforeUnmount(() => {
 .timeFilterTile.active {
   background: color-mix(in srgb, var(--accent) 16%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
-}
-
-.timeFocusCopy {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.activeFilterChip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 700;
 }
 
 .filterChip,
@@ -1322,9 +1270,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   min-width: 40px;
   height: 40px;
+  padding: 0 14px;
   border-radius: 999px;
   background: var(--surface-soft);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .focusListPanel,
@@ -1334,6 +1284,29 @@ onBeforeUnmount(() => {
 
 .focusListWrap {
   min-height: 120px;
+}
+
+.focusFilterBar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.focusFilterTile {
+  min-height: 62px;
+  gap: 6px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, var(--line));
+}
+
+.focusFilterTile .timeFilterLabel {
+  font-size: 0.86rem;
+}
+
+.focusFilterTile strong {
+  font-size: 1rem;
 }
 
 .insightsPanel {
@@ -1426,8 +1399,7 @@ onBeforeUnmount(() => {
   .focusBoardGrid,
   .backlogGrid,
   .settingsGrid,
-  .timeFilterGrid,
-  .timeFocusBody {
+  .timeFilterGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -1444,14 +1416,47 @@ onBeforeUnmount(() => {
     border-radius: 20px;
   }
 
-  .topStats {
-    grid-template-columns: 1fr;
-  }
-
-  .timeFocusCard,
   .focusListPanel {
     padding: 14px;
     border-radius: 20px;
+  }
+
+  .sectionHeader {
+    align-items: stretch;
+  }
+
+  .headerActions,
+  .headerToggleWrap {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .laneCount {
+    align-self: center;
+    justify-self: center;
+  }
+
+  .focusFilterBar {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .focusFilterTile {
+    min-height: 52px;
+    padding: 9px 12px;
+    border-radius: 16px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .focusFilterTile .timeFilterLabel {
+    font-size: 0.82rem;
+  }
+
+  .focusFilterTile strong {
+    margin-top: 0;
+    font-size: 0.95rem;
   }
 
   .snippetCard {
