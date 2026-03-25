@@ -10,7 +10,7 @@ export class NavigationCatalog {
     this.views = [
       new AppView({ id: 'today', label: 'Hoy' }),
       new AppView({ id: 'backlog', label: 'Agenda' }),
-      new AppView({ id: 'dashboard', label: 'Dashboard' }),
+      new AppView({ id: 'dashboard', label: 'Panel' }),
       new AppView({ id: 'settings', label: 'Ajustes' }),
     ];
   }

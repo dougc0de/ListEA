@@ -41,7 +41,7 @@ const customRangeError = computed(() => {
     return '';
   }
 
-  return startDate > endDate ? 'Invalid date range' : '';
+  return startDate > endDate ? 'Rango de fechas invalido' : '';
 });
 
 const dashboard = computed(() => {
@@ -91,7 +91,7 @@ const rangeHelper = computed(() => {
     return 'Ajusta fechas para mirar solo el tramo que te importa.';
   }
 
-  return 'Lectura diaria de lo que cerraste o descartaste recientemente.';
+  return '';
 });
 
 function formatEventDate(value) {
@@ -205,8 +205,8 @@ onBeforeUnmount(destroyCharts);
   <section class="dashboardPage">
     <article class="heroCard">
       <div class="heroCopy">
-        <p class="eyebrow">Dashboard</p>
-        <h2>Un panel claro para revisar avance sin perderte entre tareas.</h2>
+        <p class="eyebrow">Panel</p>
+        <h2>Panel de revisión</h2>
         <p class="heroText">
           Todo sale del historial local-first: tareas completadas, tareas eliminadas y el tramo de tiempo que quieras mirar.
         </p>
@@ -393,7 +393,7 @@ onBeforeUnmount(destroyCharts);
 .heroRange,
 .controlCopy,
 .emptyText {
-  margin: 0;
+  margin-top: 1rem;
 }
 
 .heroMeta {

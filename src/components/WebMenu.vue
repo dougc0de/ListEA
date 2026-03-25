@@ -143,6 +143,8 @@ onBeforeUnmount(() => {
 }
 
 .brandLogo {
+  margin: 1rem;
+  margin-left: 2rem;
   width: 44px;
   height: 44px;
   border-radius: 14px;

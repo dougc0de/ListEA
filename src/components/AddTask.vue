@@ -109,7 +109,7 @@ function onSubmit() {
   recurrenceError.value = '';
 
   if (!nextTitle) {
-    titleError.value = 'Title required / Titulo requerido';
+    titleError.value = 'Titulo requerido';
     advancedOpen.value = true;
     return;
   }
@@ -170,12 +170,12 @@ function onSubmit() {
       </div>
 
       <form class="composerForm" @submit.prevent="onSubmit">
-        <p class="fieldLabel">Title</p>
+        <p class="fieldLabel">Titulo</p>
         <textarea
           ref="titleField"
           v-model="title"
           class="primaryField"
-          aria-label="Title"
+          aria-label="Titulo"
           autofocus
           :aria-invalid="titleError ? 'true' : 'false'"
           rows="3"
@@ -201,7 +201,7 @@ function onSubmit() {
           </label>
 
           <label class="fieldGroup">
-            <span>Project</span>
+            <span>Proyecto</span>
             <input v-model="project" class="detailField" type="text" placeholder="Trabajo" />
           </label>
 
@@ -274,7 +274,7 @@ function onSubmit() {
           </label>
 
           <label v-if="recurrencePreset !== 'none'" class="fieldGroup">
-            <span>Recurrence interval</span>
+            <span>Intervalo de recurrencia</span>
             <input v-model="recurrenceInterval" class="detailField" type="number" min="1" step="1" @input="recurrenceError = ''" />
           </label>
 
@@ -317,6 +317,7 @@ function onSubmit() {
 }
 
 .launcherButtonOnly {
+  margin: 0.5rem;
   width: clamp(180px, 50%, 320px);
   align-self: center;
   align-items: center;

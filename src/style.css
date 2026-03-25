@@ -1,5 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap');
+
 :root {
-  font-family: "Manrope", "Segoe UI", sans-serif;
+  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
@@ -24,24 +26,124 @@
 }
 
 :root[data-palette='warm'] {
+  --app-bg:
+    radial-gradient(circle at top, rgba(249, 183, 107, 0.28), transparent 26%),
+    linear-gradient(180deg, #fff7ef 0%, #fefcf8 44%, #eef4f7 100%);
+  --app-bg-solid: #fff8f1;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-soft: #f4f7fb;
+  --text-main: #172433;
+  --text-muted: #5d6a79;
   --accent: #d96d31;
   --accent-strong: #9f4517;
   --accent-contrast: #fffaf7;
+  --line: rgba(41, 62, 86, 0.12);
+  --card-shadow: 0 16px 48px rgba(28, 43, 66, 0.08);
   --secButton: #ffc4a5df;
 }
 
 :root[data-palette='ocean'] {
+  --app-bg:
+    radial-gradient(circle at top right, rgba(64, 187, 222, 0.22), transparent 24%),
+    linear-gradient(180deg, #f1fbff 0%, #f7fdff 42%, #e8f2fb 100%);
+  --app-bg-solid: #f1faff;
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-soft: #ecf6fb;
+  --text-main: #113246;
+  --text-muted: #5a7484;
   --accent: #2677a6;
   --accent-strong: #0e4d70;
   --accent-contrast: #f4fbff;
+  --line: rgba(21, 84, 116, 0.12);
+  --card-shadow: 0 18px 46px rgba(18, 81, 113, 0.1);
   --secButton: rgba(160, 213, 240, 0.9);
 }
 
 :root[data-palette='forest'] {
+  --app-bg:
+    radial-gradient(circle at top left, rgba(112, 179, 124, 0.2), transparent 26%),
+    linear-gradient(180deg, #f5fbf5 0%, #f9fdf8 46%, #edf4ef 100%);
+  --app-bg-solid: #f5fbf5;
+  --surface: rgba(255, 255, 255, 0.93);
+  --surface-soft: #eef5ef;
+  --text-main: #193024;
+  --text-muted: #5f7568;
   --accent: #3d7b4f;
   --accent-strong: #245334;
   --accent-contrast: #f7fff8;
+  --line: rgba(39, 82, 52, 0.12);
+  --card-shadow: 0 16px 44px rgba(38, 78, 49, 0.1);
   --secButton: rgba(182, 222, 187, 0.92);
+}
+
+:root[data-palette='berry'] {
+  --app-bg:
+    radial-gradient(circle at top, rgba(197, 107, 158, 0.2), transparent 25%),
+    linear-gradient(180deg, #fff6fb 0%, #fefafd 44%, #f3edf5 100%);
+  --app-bg-solid: #fff7fb;
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-soft: #f7eef4;
+  --text-main: #301b2a;
+  --text-muted: #746070;
+  --accent: #9f4d7a;
+  --accent-strong: #6f2e53;
+  --accent-contrast: #fff8fc;
+  --line: rgba(104, 44, 80, 0.12);
+  --card-shadow: 0 16px 44px rgba(109, 53, 85, 0.1);
+  --secButton: rgba(234, 189, 215, 0.92);
+}
+
+:root[data-palette='aurora'] {
+  --app-bg:
+    radial-gradient(circle at top left, rgba(78, 112, 255, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(68, 214, 201, 0.18), transparent 22%),
+    linear-gradient(180deg, #f6f9ff 0%, #fbfcff 42%, #edf5ff 100%);
+  --app-bg-solid: #f5f8ff;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-soft: #eef3ff;
+  --text-main: #1b2552;
+  --text-muted: #65709b;
+  --accent: #4f6ef7;
+  --accent-strong: #2644bb;
+  --accent-contrast: #f7f9ff;
+  --line: rgba(48, 73, 173, 0.12);
+  --card-shadow: 0 18px 48px rgba(62, 87, 184, 0.1);
+  --secButton: rgba(190, 223, 245, 0.92);
+}
+
+:root[data-palette='noir'] {
+  --app-bg:
+    radial-gradient(circle at top, rgba(126, 141, 167, 0.14), transparent 25%),
+    linear-gradient(180deg, #eef2f7 0%, #f6f8fb 42%, #e7ecf3 100%);
+  --app-bg-solid: #eef2f7;
+  --surface: rgba(255, 255, 255, 0.88);
+  --surface-soft: #e9edf4;
+  --text-main: #17202c;
+  --text-muted: #677382;
+  --accent: #5b6678;
+  --accent-strong: #2f3948;
+  --accent-contrast: #f8fafc;
+  --line: rgba(49, 60, 76, 0.12);
+  --card-shadow: 0 18px 44px rgba(44, 54, 67, 0.12);
+  --secButton: rgba(193, 203, 217, 0.9);
+}
+
+:root[data-palette='sunset'] {
+  --app-bg:
+    radial-gradient(circle at top left, rgba(236, 130, 92, 0.22), transparent 24%),
+    radial-gradient(circle at top right, rgba(244, 190, 106, 0.18), transparent 26%),
+    linear-gradient(180deg, #fff7f3 0%, #fffaf7 44%, #f7efe8 100%);
+  --app-bg-solid: #fff7f3;
+  --surface: rgba(255, 255, 255, 0.92);
+  --surface-soft: #fbefe7;
+  --text-main: #33211d;
+  --text-muted: #7e655f;
+  --accent: #d95a4e;
+  --accent-strong: #97352f;
+  --accent-contrast: #fff9f7;
+  --line: rgba(124, 56, 48, 0.12);
+  --card-shadow: 0 18px 46px rgba(146, 74, 55, 0.1);
+  --secButton: rgba(244, 190, 162, 0.92);
 }
 
 :root[data-theme='dark'] {

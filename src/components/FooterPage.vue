@@ -1,6 +1,6 @@
 <template>
   <footer class="footerShell">
-    <p>ListEA guarda primero en este dispositivo y sincroniza despues cuando corresponda.</p>
+    <p>&copy; 2026 DA, LLC. Todos los derechos reservados.</p>
   </footer>
 </template>
 

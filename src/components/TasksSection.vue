@@ -60,6 +60,7 @@ const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
 const backlogCompletedOpen = ref(true);
 const focusListPanelRef = ref(null);
+const paletteSelectorOpen = ref(false);
 const THEME_MODES = Object.freeze({
   LIGHT: 'light',
   DARK: 'dark',
@@ -68,7 +69,20 @@ const COLOR_PALETTES = Object.freeze({
   WARM: 'warm',
   OCEAN: 'ocean',
   FOREST: 'forest',
+  BERRY: 'berry',
+  AURORA: 'aurora',
+  NOIR: 'noir',
+  SUNSET: 'sunset',
 });
+const paletteOptions = [
+  { id: COLOR_PALETTES.WARM, label: 'Arena', description: 'Calida y cercana' },
+  { id: COLOR_PALETTES.OCEAN, label: 'Oceano', description: 'Limpia y serena' },
+  { id: COLOR_PALETTES.FOREST, label: 'Bosque', description: 'Natural y sobria' },
+  { id: COLOR_PALETTES.BERRY, label: 'Baya', description: 'Suave y elegante' },
+  { id: COLOR_PALETTES.AURORA, label: 'Aurora', description: 'Fresca y luminosa' },
+  { id: COLOR_PALETTES.NOIR, label: 'Noir', description: 'Tech y premium' },
+  { id: COLOR_PALETTES.SUNSET, label: 'Atardecer', description: 'Vibrante y moderna' },
+];
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
@@ -217,6 +231,29 @@ function setAppearancePreferences(patch) {
   };
 }
 
+function togglePremium(enabled) {
+  const nextPreferences = {
+    ...preferences.value,
+    premiumEnabled: enabled,
+  };
+
+  if (!enabled) {
+    nextPreferences.colorPalette = COLOR_PALETTES.WARM;
+    paletteSelectorOpen.value = false;
+  }
+
+  preferences.value = nextPreferences;
+}
+
+function togglePaletteSelector() {
+  if (!preferences.value.premiumEnabled) return;
+  paletteSelectorOpen.value = !paletteSelectorOpen.value;
+}
+
+function selectColorPalette(paletteId) {
+  setAppearancePreferences({ colorPalette: paletteId });
+}
+
 function scrollToFocusContent() {
   if (typeof window === 'undefined') return;
 
@@ -234,7 +271,9 @@ function applyAppearancePreferences() {
 
   const root = document.documentElement;
   root.dataset.theme = preferences.value.themeMode ?? THEME_MODES.LIGHT;
-  root.dataset.palette = preferences.value.colorPalette ?? COLOR_PALETTES.WARM;
+  root.dataset.palette = preferences.value.premiumEnabled
+    ? (preferences.value.colorPalette ?? COLOR_PALETTES.WARM)
+    : COLOR_PALETTES.WARM;
 }
 
 function selectTimeFilter(filterId) {
@@ -554,8 +593,7 @@ onBeforeUnmount(() => {
   <section class="tasksShell">
     <section v-if="showTaskWorkspace" class="topBar">
       <div class="topCopy">
-        <p class="eyebrow">Captura y ejecuta</p>
-        <h1>Todo empieza con lo que anotas hoy.</h1>
+        <p class="eyebrow">Todo empieza con lo que anotas.</p>
       </div>
       <div class="topStats">
         <article v-for="card in summaryCards" :key="card.id" class="statCard">
@@ -658,7 +696,7 @@ onBeforeUnmount(() => {
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Completadas</p>
-            <h3>Completadas recientes / Completed</h3>
+            <h3>Completadas recientes</h3>
           </div>
           <div class="headerActions">
             <button type="button" class="ghostButton" @click="clearTaskField">
@@ -670,7 +708,7 @@ onBeforeUnmount(() => {
 
         <TodoList
           :todos="completedTasks"
-          empty-message="No recently completed. Todavia no hay tareas completadas."
+          empty-message="Todavia no hay tareas completadas."
           @toggle="toggleTask"
           @remove="removeTask"
           @update="updateTask"
@@ -684,7 +722,7 @@ onBeforeUnmount(() => {
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Agenda</p>
-            <h3>Highlighted insights</h3>
+            <h3>Senales que conviene resolver primero</h3>
           </div>
         </div>
 
@@ -694,14 +732,14 @@ onBeforeUnmount(() => {
             <p>{{ insight.message }}</p>
           </article>
         </div>
-        <p v-else class="emptyText">No backlog data. No hay alertas relevantes en el backlog.</p>
+        <p v-else class="emptyText">No hay alertas relevantes en la agenda.</p>
       </article>
 
       <article class="panelCard">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Agenda</p>
-            <h3>Pending tasks list</h3>
+            <h3>Tareas activas ordenadas por fecha y prioridad</h3>
           </div>
           <div class="headerActions">
             <button type="button" class="ghostButton" @click="clearTaskField">
@@ -730,7 +768,7 @@ onBeforeUnmount(() => {
               @click="backlogCompletedOpen = !backlogCompletedOpen"
             >
               <span class="eyebrow">Completadas recientes</span>
-              <span class="sectionToggleTitle">Recently Completed</span>
+              <span class="sectionToggleTitle">Completadas recientes</span>
             </button>
             <button type="button" class="ghostButton" @click="clearTaskField">
               Limpiar campo de tareas
@@ -740,10 +778,10 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="backlogCompletedOpen">
-          <p class="panelText recentCompletedLabel">Recently completed tasks list</p>
+          <p class="panelText recentCompletedLabel">Lista reciente de tareas completadas</p>
           <TodoList
             :todos="completedTasks"
-            empty-message="No recently completed. Todavia no hay tareas completadas."
+            empty-message="Todavia no hay tareas completadas."
             @toggle="toggleTask"
             @remove="removeTask"
             @update="updateTask"
@@ -770,7 +808,7 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Notificaciones</p>
         <h3>Recordatorios moviles con control del usuario</h3>
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
-        <p class="panelText">Reminders: {{ preferences.notificationsEnabled ? 'On' : 'Off' }}</p>
+        <p class="panelText">Recordatorios: {{ preferences.notificationsEnabled ? 'activados' : 'desactivados' }}</p>
         <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
         <div class="settingsStack">
           <label class="checkboxRow">
@@ -868,6 +906,24 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panelCard">
+        <p class="eyebrow">Premium</p>
+        <h3>Funciones visuales premium</h3>
+        <div class="settingsStack">
+          <label class="checkboxRow">
+            <input
+              :checked="preferences.premiumEnabled"
+              type="checkbox"
+              @change="togglePremium($event.target.checked)"
+            />
+            <span>Activar modo premium</span>
+          </label>
+          <p class="panelText">
+            Activa esta opcion para probar paletas exclusivas sin afectar tareas, estadisticas o recordatorios.
+          </p>
+        </div>
+      </article>
+
+      <article class="panelCard">
         <p class="eyebrow">Apariencia</p>
         <h3>Dia, noche y paleta de color</h3>
         <div class="settingsStack">
@@ -885,15 +941,36 @@ onBeforeUnmount(() => {
 
           <label class="fieldGroup">
             <span>Paleta</span>
-            <select
-              class="detailField"
-              :value="preferences.colorPalette"
-              @change="setAppearancePreferences({ colorPalette: $event.target.value })"
-            >
-              <option :value="COLOR_PALETTES.WARM">Arena</option>
-              <option :value="COLOR_PALETTES.OCEAN">Oceano</option>
-              <option :value="COLOR_PALETTES.FOREST">Bosque</option>
-            </select>
+            <p v-if="!preferences.premiumEnabled" class="panelText">
+              Las paletas exclusivas se habilitan al activar el modo premium.
+            </p>
+            <div v-else class="palettePickerStack">
+              <button
+                type="button"
+                class="paletteToggleButton"
+                :aria-expanded="paletteSelectorOpen ? 'true' : 'false'"
+                @click="togglePaletteSelector"
+              >
+                <span>Cambiar paleta de colores</span>
+                <strong>{{ paletteOptions.find(palette => palette.id === preferences.colorPalette)?.label ?? 'Arena' }}</strong>
+              </button>
+
+              <div v-if="paletteSelectorOpen" class="paletteGrid">
+                <button
+                  v-for="palette in paletteOptions"
+                  :key="palette.id"
+                  type="button"
+                  class="paletteCard"
+                  :class="{ active: preferences.colorPalette === palette.id }"
+                  :data-palette="palette.id"
+                  @click="selectColorPalette(palette.id)"
+                >
+                  <span class="paletteSwatch"></span>
+                  <strong>{{ palette.label }}</strong>
+                  <small>{{ palette.description }}</small>
+                </button>
+              </div>
+            </div>
           </label>
         </div>
       </article>
@@ -945,7 +1022,9 @@ onBeforeUnmount(() => {
 }
 
 .topCopy h1 {
-  max-width: 16ch;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  max-width: 20ch;
   font-size: clamp(1.2rem, 4vw, 1.7rem);
   line-height: 1.05;
 }
@@ -1346,6 +1425,101 @@ onBeforeUnmount(() => {
   margin: 0 0 14px;
 }
 
+.paletteGrid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.palettePickerStack {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+}
+
+.paletteToggleButton {
+  width: 100%;
+  min-height: 58px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text-main);
+  text-align: left;
+}
+
+.paletteToggleButton strong {
+  color: var(--accent-strong);
+}
+
+.paletteCard {
+  min-height: 102px;
+  padding: 12px;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text-main);
+  text-align: left;
+}
+
+.paletteCard strong,
+.paletteCard small {
+  display: block;
+}
+
+.paletteCard small {
+  color: var(--text-muted);
+}
+
+.paletteCard.active {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.paletteSwatch {
+  width: 100%;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 40%, white));
+}
+
+.paletteCard[data-palette='warm'] .paletteSwatch {
+  background: linear-gradient(135deg, #d96d31, #f2b27a);
+}
+
+.paletteCard[data-palette='ocean'] .paletteSwatch {
+  background: linear-gradient(135deg, #2677a6, #7ed0eb);
+}
+
+.paletteCard[data-palette='forest'] .paletteSwatch {
+  background: linear-gradient(135deg, #3d7b4f, #92c89a);
+}
+
+.paletteCard[data-palette='berry'] .paletteSwatch {
+  background: linear-gradient(135deg, #9f4d7a, #e3a2cb);
+}
+
+.paletteCard[data-palette='aurora'] .paletteSwatch {
+  background: linear-gradient(135deg, #5b7cff, #74e0d6);
+}
+
+.paletteCard[data-palette='noir'] .paletteSwatch {
+  background: linear-gradient(135deg, #5b6678, #aab4c7);
+}
+
+.paletteCard[data-palette='sunset'] .paletteSwatch {
+  background: linear-gradient(135deg, #d95a4e, #f5b36a);
+}
+
 .checkboxRow,
 .fieldGroup {
   display: flex;
@@ -1439,6 +1613,10 @@ onBeforeUnmount(() => {
   .focusFilterBar {
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .paletteGrid {
+    grid-template-columns: 1fr;
   }
 
   .focusFilterTile {
