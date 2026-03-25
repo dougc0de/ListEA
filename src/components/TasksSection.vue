@@ -193,20 +193,39 @@ function toggleSubtask({ taskId, subtaskId }) {
   tasks.value = [...tasks.value];
 }
 
-async function removeTask(id) {
-  const task = tasks.value.find(item => item.id === id);
-  if (task) {
-    analytics.value.recordDeleted(task);
-    showUiFeedback(`Tarea "${task.title}" eliminada.`, 'success');
+async function removeTasksByIds(ids, { trackAnalytics = true, showItemFeedback = true } = {}) {
+  const idSet = new Set(ids);
+  const removedTasks = tasks.value.filter(task => idSet.has(task.id));
+  if (!removedTasks.length) return;
+
+  if (trackAnalytics) {
+    removedTasks.forEach(task => {
+      analytics.value.recordDeleted(task);
+      if (showItemFeedback) {
+        showUiFeedback(`Tarea "${task.title}" eliminada.`, 'success');
+      }
+    });
   }
-  await cancelReminder(id);
-  tasks.value = tasks.value.filter(task => task.id !== id);
+
+  await Promise.all(removedTasks.map(task => cancelReminder(task.id)));
+  tasks.value = tasks.value.filter(task => !idSet.has(task.id));
+}
+
+async function removeTask(id) {
+  await removeTasksByIds([id], {
+    trackAnalytics: true,
+    showItemFeedback: true,
+  });
 }
 
 async function clearTaskField() {
-  await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
+  const currentIds = tasks.value.map(task => task.id);
+  await removeTasksByIds(currentIds, {
+    // Vaciar la vista no debe contaminar metricas de eliminacion.
+    trackAnalytics: false,
+    showItemFeedback: false,
+  });
   await clearAllReminderTimers();
-  tasks.value = [];
   searchQuery.value = '';
   activeFilterId.value = FILTER_IDS.TODAY;
   showUiFeedback('Campo de tareas limpiado. Las estadisticas se conservaron.', 'success');
