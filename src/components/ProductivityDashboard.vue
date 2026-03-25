@@ -19,9 +19,19 @@ const mixCanvas = ref(null);
 let trendChart;
 let mixChart;
 
+function formatDateInputValue(value) {
+  const date = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const today = new Date();
-const todayInputValue = today.toISOString().slice(0, 10);
-const weekAgoInputValue = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6).toISOString().slice(0, 10);
+const todayInputValue = formatDateInputValue(today);
+const weekAgoInputValue = formatDateInputValue(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6));
 
 if (!customStart.value) customStart.value = weekAgoInputValue;
 if (!customEnd.value) customEnd.value = todayInputValue;

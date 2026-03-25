@@ -12,8 +12,31 @@ function trimLabel(value) {
   return `${value ?? ''}`.trim();
 }
 
+function parseCalendarDate(value) {
+  if (value instanceof Date) {
+    return new Date(value);
+  }
+
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+  }
+
+  return new Date(value);
+}
+
+function formatDateKey(value) {
+  const nextDate = value instanceof Date ? new Date(value) : parseCalendarDate(value);
+  const year = nextDate.getFullYear();
+  const month = `${nextDate.getMonth() + 1}`.padStart(2, '0');
+  const day = `${nextDate.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function startOfDay(value) {
-  const nextDate = value instanceof Date ? new Date(value) : new Date(value);
+  const nextDate = parseCalendarDate(value);
   nextDate.setHours(0, 0, 0, 0);
   return nextDate;
 }
@@ -64,10 +87,10 @@ function formatRangeLabel(startDate, endDate, locale = 'es-MX') {
 
 function buildBucketKey(value, granularity) {
   if (granularity === DASHBOARD_GRANULARITY.WEEK) {
-    return startOfWeek(value).toISOString().slice(0, 10);
+    return formatDateKey(startOfWeek(value));
   }
 
-  return startOfDay(value).toISOString().slice(0, 10);
+  return formatDateKey(startOfDay(value));
 }
 
 export const ACTIVITY_TYPES = Object.freeze({
@@ -169,8 +192,8 @@ export class TaskActivityRange {
     this.granularity = Object.values(DASHBOARD_GRANULARITY).includes(granularity)
       ? granularity
       : DASHBOARD_GRANULARITY.DAY;
-    this.startDate = startDate instanceof Date ? new Date(startDate) : new Date(startDate);
-    this.endDate = endDate instanceof Date ? new Date(endDate) : new Date(endDate);
+    this.startDate = parseCalendarDate(startDate);
+    this.endDate = parseCalendarDate(endDate);
     this.bucketCount = bucketCount;
     this.locale = locale;
   }
@@ -181,7 +204,7 @@ export class TaskActivityRange {
         const bucketStart = addWeeks(this.startDate, index);
         const bucketEnd = endOfWeek(bucketStart);
         return {
-          key: bucketStart.toISOString().slice(0, 10),
+          key: formatDateKey(bucketStart),
           label: formatWeekLabel(bucketStart, bucketEnd, this.locale),
           completed: 0,
           deleted: 0,
@@ -193,7 +216,7 @@ export class TaskActivityRange {
     return Array.from({ length: this.bucketCount }, (_, index) => {
       const bucketDate = addDays(this.startDate, index);
       return {
-        key: bucketDate.toISOString().slice(0, 10),
+        key: formatDateKey(bucketDate),
         label: formatDayLabel(bucketDate, this.locale),
         completed: 0,
         deleted: 0,
