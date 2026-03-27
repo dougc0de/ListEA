@@ -80,7 +80,7 @@ const paletteOptions = [
   { id: COLOR_PALETTES.FOREST, label: 'Bosque', description: 'Natural y sobria' },
   { id: COLOR_PALETTES.BERRY, label: 'Baya', description: 'Suave y elegante' },
   { id: COLOR_PALETTES.AURORA, label: 'Aurora', description: 'Fresca y luminosa' },
-  { id: COLOR_PALETTES.NOIR, label: 'Noir', description: 'Tech y premium' },
+  { id: COLOR_PALETTES.NOIR, label: 'Noir', description: 'Tecnologica y premium' },
   { id: COLOR_PALETTES.SUNSET, label: 'Atardecer', description: 'Vibrante y moderna' },
 ];
 
@@ -257,7 +257,7 @@ function togglePremium(enabled) {
   };
 
   if (!enabled) {
-    nextPreferences.colorPalette = COLOR_PALETTES.WARM;
+    nextPreferences.colorPalette = COLOR_PALETTES.OCEAN;
     paletteSelectorOpen.value = false;
   }
 
@@ -291,8 +291,8 @@ function applyAppearancePreferences() {
   const root = document.documentElement;
   root.dataset.theme = preferences.value.themeMode ?? THEME_MODES.LIGHT;
   root.dataset.palette = preferences.value.premiumEnabled
-    ? (preferences.value.colorPalette ?? COLOR_PALETTES.WARM)
-    : COLOR_PALETTES.WARM;
+    ? (preferences.value.colorPalette ?? COLOR_PALETTES.OCEAN)
+    : COLOR_PALETTES.OCEAN;
 }
 
 function selectTimeFilter(filterId) {
@@ -527,7 +527,7 @@ const filteredTasks = computed(() => {
 const agendaTasks = computed(() => sortTasksByRelevance(applySearch(openTasks.value)));
 const focusEmptyMessage = computed(() => {
   if (selectedTimeFilter.value?.id === FILTER_IDS.OVERDUE) {
-    return 'No overdue tasks. No hay tareas vencidas.';
+    return 'No hay tareas vencidas.';
   }
 
   if (selectedTimeFilter.value?.id === FILTER_IDS.NO_DATE) {
@@ -578,7 +578,7 @@ watch(
     await syncReminders();
     syncAvatarSnippet();
   },
-  { deep: true },
+  { deep: true, flush: 'sync' },
 );
 
 watch(
@@ -649,7 +649,7 @@ onBeforeUnmount(() => {
       >
         <div class="snippetCard" :data-tone="avatarSnippet.tone">
           <div class="snippetBubble">
-            <p class="eyebrow">Snippet</p>
+            <p class="eyebrow">Aviso</p>
             <strong>{{ avatarSnippet.title }}</strong>
             <p class="snippetTask">{{ avatarSnippet.message }}</p>
           </div>
@@ -811,7 +811,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="resolvedView === 'dashboard'" class="dashboardGrid">
-      <ProductivityDashboard :analytics="analytics" @clear-analytics="clearAnalytics" />
+      <ProductivityDashboard :analytics="analytics" :tasks="tasks" @clear-analytics="clearAnalytics" />
     </section>
 
     <section v-else class="settingsGrid">
@@ -863,7 +863,7 @@ onBeforeUnmount(() => {
       </article>
 
       <article class="panelCard">
-        <p class="eyebrow">Snippet</p>
+        <p class="eyebrow">Avisos</p>
         <h3>Aparece al centro cuando toca</h3>
         <div class="settingsStack">
           <label class="checkboxRow">
@@ -872,7 +872,7 @@ onBeforeUnmount(() => {
               type="checkbox"
               @change="setAvatarPreferences({ enabled: $event.target.checked })"
             />
-            <span>Activar snippet</span>
+            <span>Activar avisos</span>
           </label>
 
           <label class="checkboxRow">
@@ -881,11 +881,11 @@ onBeforeUnmount(() => {
               type="checkbox"
               @change="setAvatarPreferences({ snippetEnabled: $event.target.checked })"
             />
-            <span>Mostrar snippet en pantalla</span>
+            <span>Mostrar avisos en pantalla</span>
           </label>
 
           <label class="fieldGroup">
-            <span>Momento del snippet</span>
+            <span>Momento del aviso</span>
             <select
               class="detailField"
               :value="preferences.avatar.snippetTiming"
@@ -900,7 +900,7 @@ onBeforeUnmount(() => {
           </label>
 
           <label class="fieldGroup">
-            <span>Duracion del snippet</span>
+            <span>Duracion del aviso</span>
             <select
               class="detailField"
               :value="preferences.avatar.snippetDuration"
@@ -971,7 +971,7 @@ onBeforeUnmount(() => {
                 @click="togglePaletteSelector"
               >
                 <span>Cambiar paleta de colores</span>
-                <strong>{{ paletteOptions.find(palette => palette.id === preferences.colorPalette)?.label ?? 'Arena' }}</strong>
+                <strong>{{ paletteOptions.find(palette => palette.id === preferences.colorPalette)?.label ?? 'Oceano' }}</strong>
               </button>
 
               <div v-if="paletteSelectorOpen" class="paletteGrid">

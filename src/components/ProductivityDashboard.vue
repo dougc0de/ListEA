@@ -2,9 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Chart from 'chart.js/auto';
 import { DASHBOARD_GRANULARITY, TaskActivityDashboard } from '../domain/activity';
+import { downloadDashboardPdfReport } from '../services/dashboardReportPdf';
 
 const props = defineProps({
   analytics: { type: Object, required: true },
+  tasks: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['clear-analytics']);
 
@@ -13,8 +15,23 @@ const viewMode = ref('day');
 const customGranularity = ref(DASHBOARD_GRANULARITY.DAY);
 const customStart = ref('');
 const customEnd = ref('');
+const isExportingPdf = ref(false);
+const selectedActivityCategory = ref('completed');
 const trendCanvas = ref(null);
 const mixCanvas = ref(null);
+const visibleCategories = ref({
+  completed: true,
+  deleted: true,
+  overdue: true,
+  incomplete: true,
+});
+
+const categoryCatalog = [
+  { id: 'completed', label: 'Completadas', color: '#1f6f9d' },
+  { id: 'deleted', label: 'Eliminadas', color: '#d97d50' },
+  { id: 'overdue', label: 'Vencidas', color: '#b34b3b' },
+  { id: 'incomplete', label: 'Incompletas', color: '#4c7d60' },
+];
 
 let trendChart;
 let mixChart;
@@ -47,16 +64,14 @@ const customRangeError = computed(() => {
 
   const startDate = parseDateInput(customStart.value);
   const endDate = parseDateInput(customEnd.value);
-  if (!startDate || !endDate) {
-    return '';
-  }
-
-  return startDate > endDate ? 'Rango de fechas invalido' : '';
+  if (!startDate || !endDate) return '';
+  return startDate > endDate ? 'Rango de fechas invalido.' : '';
 });
 
 const dashboard = computed(() => {
   if (viewMode.value === 'week') {
     return dashboardService.build(props.analytics, {
+      tasks: props.tasks,
       referenceDate: new Date(),
       granularity: DASHBOARD_GRANULARITY.WEEK,
       weeks: 6,
@@ -74,6 +89,7 @@ const dashboard = computed(() => {
       : customEnd.value || customStart.value || todayInputValue;
 
     return dashboardService.build(props.analytics, {
+      tasks: props.tasks,
       referenceDate: new Date(),
       granularity: customGranularity.value,
       startDate: resolvedStart,
@@ -82,6 +98,7 @@ const dashboard = computed(() => {
   }
 
   return dashboardService.build(props.analytics, {
+    tasks: props.tasks,
     referenceDate: new Date(),
     granularity: DASHBOARD_GRANULARITY.DAY,
     days: 7,
@@ -101,7 +118,50 @@ const rangeHelper = computed(() => {
     return 'Ajusta fechas para mirar solo el tramo que te importa.';
   }
 
-  return '';
+  return 'Puedes elegir que bloques ver en el panel con los selectores de abajo.';
+});
+
+const summaryCards = computed(() => categoryCatalog
+  .map(category => ({
+    ...category,
+    value: dashboard.value.summary[category.id] ?? 0,
+    visible: visibleCategories.value[category.id],
+  }))
+  .filter(card => card.visible));
+
+const mixChartCategories = computed(() => categoryCatalog
+  .filter(category => visibleCategories.value[category.id])
+  .map(category => ({
+    id: category.id,
+    label: category.label,
+    value: dashboard.value.summary[category.id] ?? 0,
+    color: category.color,
+  })));
+
+const trendDatasets = computed(() => {
+  const datasets = [];
+
+  if (visibleCategories.value.completed) {
+    datasets.push({
+      label: 'Completadas',
+      data: dashboard.value.series.map(bucket => bucket.completed),
+      backgroundColor: '#1f6f9d',
+      borderRadius: 12,
+      borderSkipped: false,
+    });
+  }
+
+  if (visibleCategories.value.deleted) {
+    datasets.push({
+      label: 'Eliminadas',
+      data: dashboard.value.series.map(bucket => bucket.deleted),
+      backgroundColor: '#d97d50',
+      borderRadius: 12,
+      borderSkipped: false,
+    });
+  }
+
+  return datasets;
 });
 
 function formatEventDate(value) {
@@ -123,6 +183,141 @@ function eventLabel(type) {
   return type === 'deleted' ? 'Eliminada' : 'Completada';
 }
 
+function parseDashboardDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function resolveTaskReferenceDate(task) {
+  const relevantDate = task?.getRelevantDate?.() || task?.dueAt || task?.followUpAt || task?.createdAt;
+  if (!relevantDate) return null;
+
+  const date = new Date(relevantDate);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getSafeTimestamp(value) {
+  return value instanceof Date && !Number.isNaN(value.getTime())
+    ? value.getTime()
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function isWithinCurrentRange(value) {
+  if (!value) return false;
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const startDate = parseDashboardDate(dashboard.value.range.startDate);
+  const endDate = parseDashboardDate(dashboard.value.range.endDate);
+  if (!startDate || !endDate) return false;
+
+  return date >= startDate && date <= endDate;
+}
+
+function buildEventItem(event, badge) {
+  return {
+    id: event.id,
+    title: event.title || 'Tarea sin titulo',
+    meta: formatEventDate(event.happenedAt),
+    badge,
+  };
+}
+
+function buildTaskItem(task, badge) {
+  const referenceDate = resolveTaskReferenceDate(task);
+  const projectLabel = task?.project ? `Proyecto: ${task.project}` : 'Sin proyecto';
+  const dateLabel = referenceDate ? formatEventDate(referenceDate) : 'Sin fecha';
+
+  return {
+    id: task?.id || `${badge}-${task?.title || 'task'}`,
+    title: task?.title || 'Tarea sin titulo',
+    meta: `${projectLabel} - ${dateLabel}`,
+    badge,
+  };
+}
+
+const activityGroups = computed(() => {
+  const referenceDate = new Date();
+  const analyticsEvents = Array.isArray(props.analytics?.events) ? props.analytics.events : [];
+
+  const completedItems = analyticsEvents
+    .filter(event => ['completed', 'deleted_after_completion'].includes(event.type) && isWithinCurrentRange(event.happenedAt))
+    .sort((left, right) => new Date(right.happenedAt) - new Date(left.happenedAt))
+    .map(event => buildEventItem(event, 'Completada'));
+
+  const deletedItems = analyticsEvents
+    .filter(event => event.type === 'deleted' && isWithinCurrentRange(event.happenedAt))
+    .sort((left, right) => new Date(right.happenedAt) - new Date(left.happenedAt))
+    .map(event => buildEventItem(event, 'Eliminada'));
+
+  const activeTasks = props.tasks.filter(task => !(task?.isCompleted?.() || task?.status === 'completed'));
+
+  const overdueItems = activeTasks
+    .filter(task => {
+      const dueDate = task?.dueAt ? new Date(task.dueAt) : null;
+      const referenceTaskDate = resolveTaskReferenceDate(task);
+      return dueDate
+        && !Number.isNaN(dueDate.getTime())
+        && dueDate < referenceDate
+        && isWithinCurrentRange(referenceTaskDate);
+    })
+    .sort((left, right) => getSafeTimestamp(resolveTaskReferenceDate(left)) - getSafeTimestamp(resolveTaskReferenceDate(right)))
+    .map(task => buildTaskItem(task, 'Vencida'));
+
+  const incompleteItems = activeTasks
+    .filter(task => {
+      const referenceTaskDate = resolveTaskReferenceDate(task);
+      if (!isWithinCurrentRange(referenceTaskDate)) return false;
+
+      const dueDate = task?.dueAt ? new Date(task.dueAt) : null;
+      if (dueDate && !Number.isNaN(dueDate.getTime()) && dueDate < referenceDate) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((left, right) => getSafeTimestamp(resolveTaskReferenceDate(left)) - getSafeTimestamp(resolveTaskReferenceDate(right)))
+    .map(task => buildTaskItem(task, 'Incompleta'));
+
+  return [
+    {
+      id: 'completed',
+      label: 'Completadas',
+      description: 'Tareas que fueron hechas con exito.',
+      items: completedItems,
+    },
+    {
+      id: 'deleted',
+      label: 'Eliminadas',
+      description: 'Tareas que fueron eliminadas antes de ejecutarse, por lo que no llegaron a cumplirse.',
+      items: deletedItems,
+    },
+    {
+      id: 'overdue',
+      label: 'Vencidas',
+      description: 'Tareas que ya pasaron su fecha objetivo y siguen pendientes.',
+      items: overdueItems,
+    },
+    {
+      id: 'incomplete',
+      label: 'Incompletas',
+      description: 'Tareas que siguen activas dentro del rango, pero aun no han sido resueltas.',
+      items: incompleteItems,
+    },
+  ];
+});
+
+const visibleActivityGroups = computed(() =>
+  activityGroups.value.filter(group => visibleCategories.value[group.id]),
+);
+
+const currentActivityGroup = computed(() =>
+  visibleActivityGroups.value.find(group => group.id === selectedActivityCategory.value)
+  ?? visibleActivityGroups.value[0]
+  ?? null,
+);
+
 function destroyCharts() {
   trendChart?.destroy();
   mixChart?.destroy();
@@ -131,81 +326,95 @@ function destroyCharts() {
 }
 
 function renderCharts() {
-  if (!trendCanvas.value || !mixCanvas.value) return;
-
   destroyCharts();
+  if (trendCanvas.value && trendDatasets.value.length) {
+    trendChart = new Chart(trendCanvas.value, {
+      type: 'bar',
+      data: {
+        labels: dashboard.value.series.map(bucket => bucket.label),
+        datasets: trendDatasets.value,
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: 'circle' },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0 },
+          },
+        },
+      },
+    });
+  }
 
-  trendChart = new Chart(trendCanvas.value, {
-    type: 'bar',
-    data: {
-      labels: dashboard.value.series.map(bucket => bucket.label),
-      datasets: [
-        {
-          label: 'Completadas',
-          data: dashboard.value.series.map(bucket => bucket.completed),
-          backgroundColor: '#de6f4d',
-          borderRadius: 12,
-          borderSkipped: false,
-        },
-        {
-          label: 'Eliminadas',
-          data: dashboard.value.series.map(bucket => bucket.deleted),
-          backgroundColor: '#f0b074',
-          borderRadius: 12,
-          borderSkipped: false,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { boxWidth: 12, usePointStyle: true, pointStyle: 'circle' },
+  if (mixCanvas.value && mixChartCategories.value.length) {
+    mixChart = new Chart(mixCanvas.value, {
+      type: 'doughnut',
+      data: {
+        labels: mixChartCategories.value.map(item => item.label),
+        datasets: [
+          {
+            data: mixChartCategories.value.map(item => item.value),
+            backgroundColor: mixChartCategories.value.map(item => item.color),
+            borderWidth: 0,
+            hoverOffset: 6,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 12, usePointStyle: true, pointStyle: 'circle' },
+          },
         },
       },
-      scales: {
-        x: {
-          grid: { display: false },
-        },
-        y: {
-          beginAtZero: true,
-          ticks: { precision: 0 },
-        },
-      },
-    },
-  });
+    });
+  }
+}
 
-  mixChart = new Chart(mixCanvas.value, {
-    type: 'doughnut',
-    data: {
-      labels: ['Completadas', 'Eliminadas'],
-      datasets: [
-        {
-          data: [dashboard.value.summary.completed, dashboard.value.summary.deleted],
-          backgroundColor: ['#de6f4d', '#f0b074'],
-          borderWidth: 0,
-          hoverOffset: 6,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '72%',
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { boxWidth: 12, usePointStyle: true, pointStyle: 'circle' },
-        },
-      },
-    },
-  });
+function toggleCategory(categoryId) {
+  visibleCategories.value = {
+    ...visibleCategories.value,
+    [categoryId]: !visibleCategories.value[categoryId],
+  };
+}
+
+async function exportPdfReport() {
+  if (isExportingPdf.value) return;
+
+  isExportingPdf.value = true;
+  try {
+    await downloadDashboardPdfReport({
+      dashboard: dashboard.value,
+      tasks: props.tasks,
+      analytics: props.analytics,
+      visibleCategoryLabels: mixChartCategories.value.map(item => item.label),
+    });
+  } finally {
+    isExportingPdf.value = false;
+  }
 }
 
 watch(dashboard, renderCharts, { deep: true });
-watch([viewMode, customGranularity, customStart, customEnd], renderCharts);
+watch([viewMode, customGranularity, customStart, customEnd, visibleCategories], renderCharts, { deep: true });
+watch(visibleActivityGroups, groups => {
+  if (!groups.some(group => group.id === selectedActivityCategory.value)) {
+    selectedActivityCategory.value = groups[0]?.id ?? '';
+  }
+}, { deep: true, immediate: true });
 
 onMounted(renderCharts);
 onBeforeUnmount(destroyCharts);
@@ -216,14 +425,10 @@ onBeforeUnmount(destroyCharts);
     <article class="heroCard">
       <div class="heroCopy">
         <p class="eyebrow">Panel</p>
-        <h2>Panel de revisión</h2>
+        <h2>Panel de revision</h2>
         <p class="heroText">
-          Todo sale del historial local-first: tareas completadas, tareas eliminadas y el tramo de tiempo que quieras mirar.
+          Todo sale del historial local-first y de tus tareas activas.
         </p>
-      </div>
-
-      <div class="heroMeta">
-        <p class="heroRange">{{ dashboard.range.label }}</p>
       </div>
     </article>
 
@@ -235,9 +440,14 @@ onBeforeUnmount(destroyCharts);
         </div>
         <div class="controlActions">
           <p class="controlCopy">{{ rangeHelper }}</p>
-          <button type="button" class="ghostButton" @click="emit('clear-analytics')">
-            Limpiar estadisticas
-          </button>
+          <div class="actionButtons">
+            <button type="button" class="ghostButton" :disabled="isExportingPdf" @click="exportPdfReport">
+              {{ isExportingPdf ? 'Generando PDF...' : 'Descargar reporte PDF' }}
+            </button>
+            <button type="button" class="ghostButton" @click="emit('clear-analytics')">
+              Limpiar estadisticas
+            </button>
+          </div>
         </div>
       </div>
 
@@ -275,18 +485,20 @@ onBeforeUnmount(destroyCharts);
 
       <p v-if="customRangeError" class="rangeError">{{ customRangeError }}</p>
 
+      <div class="visibilityPanel">
+        <p class="visibilityCopy">Selecciona o deselecciona los bloques que quieres ver en tu panel.</p>
+        <div class="visibilityRow">
+          <label v-for="category in categoryCatalog" :key="category.id" class="toggleChip">
+            <input type="checkbox" :checked="visibleCategories[category.id]" @change="toggleCategory(category.id)" />
+            <span>{{ category.label }}</span>
+          </label>
+        </div>
+      </div>
+
       <div class="summaryRow">
-        <article class="summaryCard">
-          <span>Cumplidas</span>
-          <strong>{{ dashboard.summary.completed }}</strong>
-        </article>
-        <article class="summaryCard">
-          <span>Eliminadas</span>
-          <strong>{{ dashboard.summary.deleted }}</strong>
-        </article>
-        <article class="summaryCard">
-          <span>Gestionadas</span>
-          <strong>{{ dashboard.summary.handled }}</strong>
+        <article v-for="card in summaryCards" :key="card.id" class="summaryCard">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
         </article>
       </div>
 
@@ -294,49 +506,69 @@ onBeforeUnmount(destroyCharts);
         <article class="chartCard">
           <div class="chartHead">
             <strong>{{ trendLabel }}</strong>
-            <span>Completadas vs eliminadas</span>
+            <span>Completadas y eliminadas por periodo</span>
           </div>
-          <div class="chartFrame">
+          <div v-if="trendDatasets.length" class="chartFrame">
             <canvas ref="trendCanvas"></canvas>
           </div>
+          <p v-else class="emptyText">Activa Completadas o Eliminadas para mostrar esta grafica.</p>
         </article>
 
         <article class="chartCard compact">
           <div class="chartHead">
             <strong>Balance</strong>
-            <span>Como se cierran tus entradas</span>
+            <span>Distribucion de categorias visibles</span>
           </div>
           <div class="completionHero">
             <span class="completionCaption">Cumplimiento</span>
             <strong>{{ dashboard.summary.completionRate }}%</strong>
           </div>
-          <div class="chartFrame donut">
+          <div v-if="mixChartCategories.length" class="chartFrame donut">
             <canvas ref="mixCanvas"></canvas>
           </div>
+          <p v-else class="emptyText">Activa al menos una categoria para mostrar la distribucion.</p>
         </article>
       </div>
 
       <article class="activityCard">
         <div class="activityHead">
-          <strong>Actividad reciente del rango</strong>
-          <span>{{ dashboard.recentEvents.length }} eventos visibles</span>
+          <strong>Actividad del rango por categoria</strong>
+          <span>{{ currentActivityGroup?.items.length ?? 0 }} tareas visibles</span>
         </div>
 
-        <div v-if="dashboard.recentEvents.length" class="eventList">
+        <div v-if="visibleActivityGroups.length" class="activitySegments">
+          <button
+            v-for="group in visibleActivityGroups"
+            :key="group.id"
+            type="button"
+            class="activitySegment"
+            :class="{ active: currentActivityGroup?.id === group.id }"
+            @click="selectedActivityCategory = group.id"
+          >
+            <span>{{ group.label }}</span>
+            <strong>{{ group.items.length }}</strong>
+          </button>
+        </div>
+
+        <p v-if="currentActivityGroup?.description" class="activityDescription">
+          <strong>{{ currentActivityGroup.label }}:</strong> {{ currentActivityGroup.description }}
+        </p>
+
+        <div v-if="currentActivityGroup?.items.length" class="eventList">
           <article
-            v-for="event in dashboard.recentEvents"
-            :key="event.id"
+            v-for="item in currentActivityGroup.items"
+            :key="item.id"
             class="eventItem"
-            :data-tone="eventTone(event.type)"
+            :data-tone="currentActivityGroup.id === 'deleted' ? 'warn' : 'good'"
           >
             <div class="eventCopy">
-              <strong>{{ event.title || 'Tarea sin titulo' }}</strong>
-              <p>{{ formatEventDate(event.happenedAt) }}</p>
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.meta }}</p>
             </div>
-            <span class="eventBadge">{{ eventLabel(event.type) }}</span>
+            <span class="eventBadge">{{ item.badge }}</span>
           </article>
         </div>
-        <p v-else class="emptyText">No hay actividad guardada en este tramo de tiempo.</p>
+        <p v-else class="emptyText">No hay tareas en esta categoria dentro del rango actual.</p>
       </article>
     </article>
   </section>
@@ -389,29 +621,24 @@ onBeforeUnmount(destroyCharts);
 }
 
 .heroText,
-.heroRange,
 .controlCopy,
 .summaryCard span,
 .chartHead span,
 .eventCopy p,
 .emptyText,
-.rangeError {
+.rangeError,
+.visibilityCopy {
   color: var(--text-muted);
 }
 
 .heroText,
-.heroRange,
 .controlCopy,
 .emptyText {
-  margin-top: 1rem;
+  margin-top: 0;
 }
 
-.heroMeta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
+.heroText {
+  margin-top: 0.5rem;
 }
 
 .dashboardCard {
@@ -422,8 +649,13 @@ onBeforeUnmount(destroyCharts);
 
 .controlHeader,
 .summaryRow,
-.chartGrid,
 .customControls {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.chartGrid {
   display: grid;
   gap: 12px;
 }
@@ -439,12 +671,20 @@ onBeforeUnmount(destroyCharts);
   justify-items: end;
 }
 
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .controlHeader h3 {
   text-align: left;
 }
 
 .modeRow {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -469,6 +709,12 @@ onBeforeUnmount(destroyCharts);
 .ghostButton {
   background: var(--surface-soft);
   color: var(--text-main);
+}
+
+.ghostButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
 }
 
 .modeChip.active {
@@ -498,8 +744,38 @@ onBeforeUnmount(destroyCharts);
   color: var(--text-main);
 }
 
+.visibilityPanel {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 78%, white);
+}
+
+.visibilityCopy {
+  margin: 0 0 10px;
+  text-align: left;
+}
+
+.visibilityRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toggleChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
 .summaryRow {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  flex-wrap: wrap;
 }
 
 .rangeError {
@@ -525,6 +801,7 @@ onBeforeUnmount(destroyCharts);
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 130px;
 }
 
 .summaryCard strong {
@@ -594,6 +871,48 @@ onBeforeUnmount(destroyCharts);
   gap: 10px;
 }
 
+.activityDescription {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.activityDescription strong {
+  color: var(--text-main);
+}
+
+.activitySegments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.activitySegment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 86%, white);
+  color: var(--text-main);
+}
+
+.activitySegment strong {
+  color: var(--accent-strong);
+}
+
+.activitySegment.active {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--line));
+}
+
 .eventItem {
   align-items: center;
   justify-content: space-between;
@@ -640,12 +959,12 @@ onBeforeUnmount(destroyCharts);
     grid-template-columns: 1fr;
   }
 
-  .heroMeta {
-    align-items: flex-start;
-  }
-
   .controlActions {
     justify-items: start;
+  }
+
+  .actionButtons {
+    justify-content: flex-start;
   }
 }
 
@@ -660,6 +979,15 @@ onBeforeUnmount(destroyCharts);
   .activityHead {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .toggleChip {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .activitySegment {
+    width: 100%;
   }
 }
 </style>

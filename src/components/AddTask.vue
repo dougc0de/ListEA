@@ -35,16 +35,37 @@ const parsedSubtasks = computed(() =>
 );
 
 const capturePreview = computed(() => interpreter.interpret(title.value));
+const priorityLabels = Object.freeze({
+  high: 'alta',
+  medium: 'media',
+  low: 'baja',
+});
+const recurrenceLabels = Object.freeze({
+  none: 'Sin recurrencia',
+  daily: 'Cada dia',
+  weekly: 'Cada semana',
+  monthly: 'Cada mes',
+  yearly: 'Cada ano',
+  weekdays: 'Dias laborables',
+  weekends: 'Fines de semana',
+  'every-x-days': 'Cada 3 dias',
+});
 
 const previewItems = computed(() => {
   const items = [];
   if (capturePreview.value.dueAt) items.push(`Fecha detectada: ${new Date(capturePreview.value.dueAt).toLocaleString()}`);
   if (capturePreview.value.project || capturePreview.value.area) {
-    items.push(`Area: ${capturePreview.value.project || capturePreview.value.area}`);
+    items.push(`Area detectada: ${capturePreview.value.project || capturePreview.value.area}`);
   }
-  if (capturePreview.value.tags.length) items.push(`Tags: ${capturePreview.value.tags.join(', ')}`);
-  if (capturePreview.value.priority !== 'medium') items.push(`Prioridad sugerida: ${capturePreview.value.priority}`);
-  if (capturePreview.value.recurrence.preset !== 'none') items.push(`Recurrencia: ${capturePreview.value.recurrence.preset}`);
+  if (capturePreview.value.tags.length) items.push(`Etiquetas: ${capturePreview.value.tags.join(', ')}`);
+  if (capturePreview.value.priority !== 'medium') {
+    const label = priorityLabels[capturePreview.value.priority] ?? capturePreview.value.priority;
+    items.push(`Prioridad sugerida: ${label}`);
+  }
+  if (capturePreview.value.recurrence.preset !== 'none') {
+    const recurrenceLabel = recurrenceLabels[capturePreview.value.recurrence.preset] ?? capturePreview.value.recurrence.preset;
+    items.push(`Recurrencia: ${recurrenceLabel}`);
+  }
   return items;
 });
 
@@ -109,7 +130,7 @@ function onSubmit() {
   recurrenceError.value = '';
 
   if (!nextTitle) {
-    titleError.value = 'Titulo requerido';
+    titleError.value = 'Titulo requerido.';
     advancedOpen.value = true;
     return;
   }
@@ -150,7 +171,7 @@ function onSubmit() {
       class="launcherButtonOnly"
       @click="openComposer"
     >
-      Agregar tarea 📝
+      Agregar tarea
     </button>
 
     <section v-else key="composer" class="composerCard">
@@ -211,7 +232,7 @@ function onSubmit() {
           </label>
 
           <label class="fieldGroup">
-            <span>Follow-up</span>
+            <span>Seguimiento</span>
             <input v-model="followUpAt" class="detailField" type="datetime-local" />
           </label>
 
@@ -245,7 +266,7 @@ function onSubmit() {
           </label>
 
           <label class="fieldGroup wide">
-            <span>Tags</span>
+            <span>Etiquetas</span>
             <input v-model="tags" class="detailField" type="text" placeholder="ventas, cliente, rapido" />
           </label>
 

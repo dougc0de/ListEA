@@ -96,6 +96,7 @@ function buildBucketKey(value, granularity) {
 export const ACTIVITY_TYPES = Object.freeze({
   COMPLETED: 'completed',
   DELETED: 'deleted',
+  DELETED_AFTER_COMPLETION: 'deleted_after_completion',
 });
 
 export const DASHBOARD_GRANULARITY = Object.freeze({
@@ -156,8 +157,9 @@ export class TaskActivityLedger {
   }
 
   recordDeleted(task, happenedAt = new Date().toISOString()) {
+    const type = task?.isCompleted?.() ? ACTIVITY_TYPES.DELETED_AFTER_COMPLETION : ACTIVITY_TYPES.DELETED;
     this.events.push(new TaskActivityEvent({
-      type: ACTIVITY_TYPES.DELETED,
+      type,
       taskId: task?.id,
       title: task?.title,
       project: task?.project,
@@ -179,6 +181,31 @@ export class TaskActivityLedger {
   toJSON() {
     return this.events.map(event => event.toJSON());
   }
+}
+
+function isTaskCompleted(task) {
+  if (!task) return false;
+  if (typeof task.isCompleted === 'function') return task.isCompleted();
+  return task.status === 'completed';
+}
+
+function resolveTaskDate(task) {
+  if (!task) return null;
+
+  const relevant = typeof task.getRelevantDate === 'function'
+    ? task.getRelevantDate()
+    : (task.dueAt || task.followUpAt || task.createdAt);
+  if (!relevant) return null;
+
+  const parsed = new Date(relevant);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveDueDate(task) {
+  const dueAt = task?.dueAt;
+  if (!dueAt) return null;
+  const parsed = new Date(dueAt);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 export class TaskActivityRange {
@@ -291,8 +318,12 @@ export class TaskActivityDashboard {
     const series = range.createBuckets();
     const bucketsByKey = new Map(series.map(bucket => [bucket.key, bucket]));
     const visibleEvents = [];
+    const sourceTasks = Array.isArray(options.tasks) ? options.tasks : [];
     let completed = 0;
     let deleted = 0;
+    let overdue = 0;
+    let incomplete = 0;
+    const referenceDate = options.referenceDate instanceof Date ? options.referenceDate : new Date();
 
     events.forEach(event => {
       const happenedAt = new Date(event.happenedAt);
@@ -309,11 +340,31 @@ export class TaskActivityDashboard {
         if (event.type === ACTIVITY_TYPES.DELETED) {
           bucket.deleted += 1;
         }
+        if (event.type === ACTIVITY_TYPES.DELETED_AFTER_COMPLETION) {
+          bucket.completed += 1;
+        }
         bucket.total += 1;
       }
 
-      if (event.type === ACTIVITY_TYPES.COMPLETED) completed += 1;
+      if (event.type === ACTIVITY_TYPES.COMPLETED || event.type === ACTIVITY_TYPES.DELETED_AFTER_COMPLETION) {
+        completed += 1;
+      }
       if (event.type === ACTIVITY_TYPES.DELETED) deleted += 1;
+    });
+
+    sourceTasks.forEach(task => {
+      if (isTaskCompleted(task)) return;
+
+      const taskDate = resolveTaskDate(task);
+      if (!taskDate) return;
+      if (taskDate < range.startDate || taskDate > range.endDate) return;
+
+      const dueDate = resolveDueDate(task);
+      if (dueDate && dueDate < referenceDate) {
+        overdue += 1;
+      } else {
+        incomplete += 1;
+      }
     });
 
     const handled = completed + deleted;
@@ -323,6 +374,8 @@ export class TaskActivityDashboard {
       summary: {
         completed,
         deleted,
+        overdue,
+        incomplete,
         handled,
         completionRate,
       },

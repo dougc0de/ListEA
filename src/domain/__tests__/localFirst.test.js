@@ -89,4 +89,21 @@ describe('LocalTaskRepository', () => {
     expect(state.analytics.events[0].type).toBe(ACTIVITY_TYPES.DELETED);
     expect(state.analytics.events[0].title).toBe('Limpiar backlog');
   });
+
+  it('respects an intentionally empty persisted task list', () => {
+    const storage = {
+      getItem() {
+        return JSON.stringify({
+          tasks: [],
+          analytics: [],
+          preferences: {},
+        });
+      },
+      setItem() {},
+    };
+
+    const state = new LocalTaskRepository({ storage }).load();
+
+    expect(state.tasks).toHaveLength(0);
+  });
 });

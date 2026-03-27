@@ -390,16 +390,16 @@ export class TaskFactory {
         subtasks: ['Definir alcance', 'Confirmar costos'],
       }),
       this.create({
-        title: 'Follow-up de feedback pendiente',
+        title: 'Seguimiento de feedback pendiente',
         project: 'Clientes',
         area: 'Trabajo',
         status: TASK_STATUS.WAITING,
         followUpAt: followUp,
         effortMinutes: 10,
-        tags: ['follow-up'],
+        tags: ['seguimiento'],
       }),
       this.create({
-        title: 'Recurring Task',
+        title: 'Regar plantas',
         project: 'Hogar',
         area: 'Casa',
         priority: TASK_PRIORITY.MEDIUM,
@@ -431,7 +431,7 @@ export class TaskFactory {
         },
       }),
       this.create({
-        title: 'Recurring Task done',
+        title: 'Regar plantas',
         project: 'Hogar',
         area: 'Casa',
         priority: TASK_PRIORITY.MEDIUM,
@@ -534,7 +534,7 @@ export class TaskContextPresenter {
       id: subtask.id,
       title: subtask.title,
       done: subtask.done,
-      context: this.buildTaskContext(task).join(' · '),
+      context: this.buildTaskContext(task).join(' - '),
     };
   }
 

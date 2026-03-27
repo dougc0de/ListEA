@@ -11,10 +11,13 @@ export class BacklogInsightAnalyzer {
 
     const noDateTasks = activeTasks.filter(task => !task.getRelevantDate());
     if (noDateTasks.length) {
+      const message = noDateTasks.length === 1
+        ? '1 tarea puede perderse dentro de tu lista ya que no precisa de una fecha.'
+        : `${noDateTasks.length} tareas pueden perderse dentro de tu lista ya que no precisan de una fecha.`;
       insights.push({
         id: 'no-date',
         title: 'Hay tareas sin fecha',
-        message: `${noDateTasks.length} tarea(s) pueden perderse en el backlog.`,
+        message,
       });
     }
 
@@ -73,7 +76,7 @@ export class ExecutionAdvisor {
     }
 
     if (task.status === TASK_STATUS.WAITING) {
-      return 'Programa el siguiente follow-up para no perder contexto.';
+      return 'Programa el siguiente seguimiento para no perder contexto.';
     }
 
     if (!task.hasSubtasks() && (task.priority === 'high' || task.impact === 'high')) {

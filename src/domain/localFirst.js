@@ -8,7 +8,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   reminderPermission: 'default',
   exactAlarmPermission: 'prompt',
   themeMode: 'light',
-  colorPalette: 'warm',
+  colorPalette: 'ocean',
   avatar: new AvatarPreferences({
     enabled: false,
     reminderTiming: AVATAR_TIMINGS.BEFORE_10,
@@ -38,12 +38,13 @@ export class LocalTaskRepository {
 
     try {
       const parsed = JSON.parse(raw);
+      const hasPersistedTasks = Array.isArray(parsed.tasks);
       const tasks = Array.isArray(parsed.tasks)
         ? parsed.tasks.map((task, index) => this.factory.rehydrate(task, index)).filter(task => task.title)
         : [];
 
       return {
-        tasks: tasks.length ? tasks : this.factory.createDemoTasks(),
+        tasks: hasPersistedTasks ? tasks : this.factory.createDemoTasks(),
         analytics: this.normalizeAnalytics(parsed.analytics),
         preferences: this.normalizePreferences(parsed.preferences),
       };

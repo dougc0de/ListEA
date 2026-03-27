@@ -216,7 +216,7 @@ function cancelEdit() {
       </label>
 
       <label class="fieldGroup">
-        <span>Follow-up</span>
+        <span>Seguimiento</span>
         <input v-model="editableFollowUpAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
       </label>
 
@@ -262,7 +262,7 @@ function cancelEdit() {
       </label>
 
       <label class="fieldGroup wide">
-        <span>Tags</span>
+        <span>Etiquetas</span>
         <input v-model="editableTags" class="detailField" type="text" :readonly="!isEditing" />
       </label>
 
