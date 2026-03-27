@@ -84,4 +84,51 @@ describe('TaskActivityDashboard', () => {
     expect(dashboard.series.some(bucket => bucket.completed === 1)).toBe(true);
     expect(dashboard.series.some(bucket => bucket.deleted === 1)).toBe(true);
   });
+
+  it('computes completion rate against all tracked outcomes in range', () => {
+    const factory = new TaskFactory();
+    const ledger = new TaskActivityLedger([
+      {
+        id: 'event-1',
+        type: ACTIVITY_TYPES.COMPLETED,
+        taskId: 'task-1',
+        title: 'Cerrar propuesta',
+        happenedAt: '2026-03-22T09:00:00.000Z',
+      },
+      {
+        id: 'event-2',
+        type: ACTIVITY_TYPES.DELETED,
+        taskId: 'task-2',
+        title: 'Depurar borrador',
+        happenedAt: '2026-03-24T16:00:00.000Z',
+      },
+    ]);
+
+    const overdueTask = factory.create({
+      id: 'task-3',
+      title: 'Seguimiento vencido',
+      dueAt: '2026-03-23T10:00:00.000Z',
+      status: 'active',
+    });
+    const incompleteTask = factory.create({
+      id: 'task-4',
+      title: 'Revision pendiente',
+      dueAt: '2026-03-24T20:00:00.000Z',
+      status: 'active',
+    });
+
+    const dashboard = new TaskActivityDashboard().build(ledger, {
+      referenceDate: new Date('2026-03-24T18:00:00.000Z'),
+      days: 3,
+      tasks: [overdueTask, incompleteTask],
+    });
+
+    expect(dashboard.summary.completed).toBe(1);
+    expect(dashboard.summary.deleted).toBe(1);
+    expect(dashboard.summary.overdue).toBe(1);
+    expect(dashboard.summary.incomplete).toBe(1);
+    expect(dashboard.summary.tracked).toBe(4);
+    expect(dashboard.summary.resolutionRate).toBe(50);
+    expect(dashboard.summary.completionRate).toBe(25);
+  });
 });

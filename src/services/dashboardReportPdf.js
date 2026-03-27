@@ -430,13 +430,23 @@ function drawTextBlock(doc, text, x, y, options = {}) {
   doc.setFontSize(options.size || 11);
   textColor(doc, options.color || COLORS.text);
   const width = options.width || 120;
-  const lines = doc.splitTextToSize(`${text ?? ''}`, width);
+  const lines = Array.isArray(text) ? text : doc.splitTextToSize(`${text ?? ''}`, width);
   doc.text(lines, x, y, {
     align: options.align || 'left',
     baseline: 'top',
     lineHeightFactor: options.lineHeight || 1.2,
   });
   return lines.length * (options.size || 11) * (options.lineHeight || 1.2);
+}
+
+function getTextLines(doc, text, width, options = {}) {
+  doc.setFont('helvetica', options.fontStyle || 'normal');
+  doc.setFontSize(options.size || 11);
+  return doc.splitTextToSize(`${text ?? ''}`, width);
+}
+
+function getTextHeight(lines, size, lineHeight = 1.2) {
+  return lines.length * size * lineHeight;
 }
 
 function drawTag(doc, text, x, y, color) {
@@ -462,13 +472,24 @@ function drawMetricCard(doc, x, y, width, height, metric) {
     fill: mixHex(metric.accent, COLORS.white, 0.82),
     stroke: mixHex(metric.accent, COLORS.stroke, 0.44),
   });
-  drawTextBlock(doc, `${metric.value}`, x + 14, y + 12, {
+  const valueText = `${metric.value ?? ''}`;
+  const isDescriptor = metric.kind === 'descriptor';
+  const valueSize = metric.size
+    ?? (isDescriptor ? (valueText.length > 18 ? 10 : 11) : (valueText.length > 8 ? 18 : 23));
+  const valueLines = getTextLines(doc, valueText, width - 28, {
+    size: valueSize,
+    fontStyle: 'bold',
+  }).slice(0, isDescriptor ? 3 : 2);
+  const valueHeight = getTextHeight(valueLines, valueSize, isDescriptor ? 1.15 : 1.05);
+
+  drawTextBlock(doc, valueLines, x + 14, y + 12, {
     width: width - 28,
-    size: 23,
+    size: valueSize,
     color: COLORS.title,
     fontStyle: 'bold',
+    lineHeight: isDescriptor ? 1.15 : 1.05,
   });
-  drawTextBlock(doc, metric.label, x + 14, y + 40, {
+  drawTextBlock(doc, metric.label, x + 14, y + 18 + valueHeight, {
     width: width - 28,
     size: 10,
     color: COLORS.text,
@@ -480,7 +501,6 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
   const width = pageWidth - (PAGE_MARGIN * 2);
   const x = PAGE_MARGIN;
   const y = cursor.y;
-  const pillWidth = 164;
   drawPanel(doc, x, y, width, 94, { radius: 22 });
 
   if (logoDataUrl) {
@@ -507,21 +527,27 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
     color: COLORS.muted,
   });
 
-  drawPanel(doc, x + width - pillWidth - 18, y + 18, pillWidth, 28, {
+  const metaWidth = 188;
+  const metaX = x + width - metaWidth - 18;
+  drawPanel(doc, metaX, y + 18, metaWidth, 34, {
     fill: COLORS.soft,
     stroke: COLORS.soft,
     lineWidth: 0,
     radius: 14,
   });
-  drawTextBlock(doc, `Periodo: ${data.periodLabel}`, x + width - pillWidth - 6, y + 27, {
-    width: pillWidth - 24,
-    size: 9,
+  const periodLines = getTextLines(doc, `Periodo: ${data.periodLabel}`, metaWidth - 24, {
+    size: 8,
+    fontStyle: 'bold',
+  }).slice(0, 2);
+  drawTextBlock(doc, periodLines, metaX + 12, y + 23, {
+    width: metaWidth - 24,
+    size: 8,
     color: COLORS.title,
     fontStyle: 'bold',
     align: 'center',
   });
-  drawTextBlock(doc, `Generado: ${data.generatedAtLabel}`, x + width - 176, y + 58, {
-    width: 158,
+  drawTextBlock(doc, `Generado: ${data.generatedAtLabel}`, metaX, y + 60, {
+    width: metaWidth,
     size: 8,
     color: COLORS.muted,
     align: 'right',
@@ -631,7 +657,7 @@ function drawWeeklyBars(doc, x, y, width, height, weeklyBars) {
 function drawCategoryBars(doc, x, y, width, categories) {
   const maxValue = Math.max(...categories.map(item => item.value), 1);
   categories.forEach((category, index) => {
-    const rowY = y + (index * 28);
+    const rowY = y + (index * 24);
     drawTextBlock(doc, category.label, x, rowY + 4, {
       width: 88,
       size: 9,
@@ -640,12 +666,12 @@ function drawCategoryBars(doc, x, y, width, categories) {
     });
     const trackX = x + 92;
     const trackWidth = width - 126;
-    drawPanel(doc, trackX, rowY, trackWidth, 18, {
+    drawPanel(doc, trackX, rowY, trackWidth, 16, {
       fill: mixHex(category.color, COLORS.white, 0.84),
       stroke: mixHex(category.color, COLORS.stroke, 0.42),
       radius: 9,
     });
-    drawPanel(doc, trackX, rowY, Math.min(trackWidth, Math.max(8, (category.value / maxValue) * trackWidth)), 18, {
+    drawPanel(doc, trackX, rowY, Math.min(trackWidth, Math.max(8, (category.value / maxValue) * trackWidth)), 16, {
       fill: category.color,
       stroke: category.color,
       lineWidth: 0,
@@ -664,9 +690,11 @@ function drawCategoryBars(doc, x, y, width, categories) {
 function drawProductivitySection(doc, cursor, data) {
   const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
   const x = PAGE_MARGIN;
-  ensurePageSpace(doc, cursor, 300);
+  const categoryRowsHeight = data.productivity.categoryBreakdown.length * 24;
+  const height = 314 + categoryRowsHeight;
+  ensurePageSpace(doc, cursor, height);
   const y = cursor.y;
-  drawPanel(doc, x, y, width, 300, { radius: 22 });
+  drawPanel(doc, x, y, width, height, { radius: 22 });
   drawTextBlock(doc, 'Resumen semanal', x + 22, y + 22, {
     width: 220,
     size: 17,
@@ -689,11 +717,13 @@ function drawProductivitySection(doc, cursor, data) {
     value: data.productivity.bestHourRange,
     label: 'Mejor franja',
     accent: COLORS.title,
+    kind: 'descriptor',
   });
   drawMetricCard(doc, x + 22 + ((metricWidth + 10) * 2), y + 76, metricWidth, 58, {
     value: data.productivity.mostPostponedCategory,
     label: 'Categoria mas reprogramada',
     accent: COLORS.deleted,
+    kind: 'descriptor',
   });
 
   drawTextBlock(doc, 'Completadas vs creadas', x + 22, y + 152, {
@@ -703,14 +733,14 @@ function drawProductivitySection(doc, cursor, data) {
     fontStyle: 'bold',
   });
   drawWeeklyBars(doc, x + 22, y + 168, width - 44, 84, data.productivity.weeklyBars);
-  drawTextBlock(doc, 'Peso por categoria', x + 22, y + 260, {
+  drawTextBlock(doc, 'Peso por categoria', x + 22, y + 266, {
     width: 160,
     size: 11,
     color: COLORS.text,
     fontStyle: 'bold',
   });
-  drawCategoryBars(doc, x + 22, y + 276, width - 44, data.productivity.categoryBreakdown);
-  cursor.y += 300 + SECTION_GAP;
+  drawCategoryBars(doc, x + 22, y + 284, width - 44, data.productivity.categoryBreakdown);
+  cursor.y += height + SECTION_GAP;
 }
 
 function drawInsightsSection(doc, cursor, data) {
@@ -752,18 +782,35 @@ function drawInsightsSection(doc, cursor, data) {
   cursor.y += height + SECTION_GAP;
 }
 
+function buildTaskRowLayout(doc, item, width) {
+  const contentWidth = width - 24;
+  const titleLines = getTextLines(doc, item.title, contentWidth, {
+    size: 10,
+    fontStyle: 'bold',
+  });
+  const detailLines = getTextLines(doc, item.detail, contentWidth, {
+    size: 9,
+  });
+  const titleHeight = getTextHeight(titleLines, 10, 1.1);
+  const detailHeight = getTextHeight(detailLines, 9, 1.18);
+  const detailY = 38 + titleHeight + 4;
+  const rowHeight = Math.max(64, detailY + detailHeight + 12);
+
+  return {
+    titleLines,
+    detailLines,
+    detailY,
+    rowHeight,
+  };
+}
+
 function measureTaskRowHeight(doc, item, width) {
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  const titleLines = doc.splitTextToSize(item.title, width - 180);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  const detailLines = doc.splitTextToSize(item.detail, width - 180);
-  return Math.max(44, 16 + (titleLines.length * 11) + (detailLines.length * 9));
+  return buildTaskRowLayout(doc, item, width).rowHeight;
 }
 
 function drawTaskRow(doc, x, y, width, item, color) {
-  const rowHeight = measureTaskRowHeight(doc, item, width);
+  const layout = buildTaskRowLayout(doc, item, width);
+  const rowHeight = layout.rowHeight;
   drawPanel(doc, x, y, width, rowHeight, { radius: 14 });
   drawTag(doc, item.tag, x + 12, y + 10, color);
   drawTextBlock(doc, item.whenLabel, x + width - 108, y + 12, {
@@ -772,16 +819,18 @@ function drawTaskRow(doc, x, y, width, item, color) {
     color: COLORS.muted,
     align: 'right',
   });
-  drawTextBlock(doc, item.title, x + 12, y + 34, {
+  drawTextBlock(doc, layout.titleLines, x + 12, y + 34, {
     width: width - 130,
     size: 10,
     color: COLORS.text,
     fontStyle: 'bold',
+    lineHeight: 1.1,
   });
-  drawTextBlock(doc, item.detail, x + 12, y + 48, {
+  drawTextBlock(doc, layout.detailLines, x + 12, y + layout.detailY, {
     width: width - 24,
     size: 9,
     color: COLORS.muted,
+    lineHeight: 1.18,
   });
   return rowHeight;
 }

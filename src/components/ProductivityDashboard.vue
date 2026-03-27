@@ -2,20 +2,20 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Chart from 'chart.js/auto';
 import { DASHBOARD_GRANULARITY, TaskActivityDashboard } from '../domain/activity';
-import { downloadDashboardPdfReport } from '../services/dashboardReportPdf';
 
 const props = defineProps({
   analytics: { type: Object, required: true },
+  entitlements: { type: Object, default: () => ({}) },
+  licenseTier: { type: String, default: 'free' },
   tasks: { type: Array, default: () => [] },
 });
-const emit = defineEmits(['clear-analytics']);
+const emit = defineEmits(['clear-analytics', 'upgrade']);
 
 const dashboardService = new TaskActivityDashboard();
 const viewMode = ref('day');
 const customGranularity = ref(DASHBOARD_GRANULARITY.DAY);
 const customStart = ref('');
 const customEnd = ref('');
-const isExportingPdf = ref(false);
 const selectedActivityCategory = ref('completed');
 const trendCanvas = ref(null);
 const mixCanvas = ref(null);
@@ -35,6 +35,7 @@ const categoryCatalog = [
 
 let trendChart;
 let mixChart;
+const canUseAdvancedDashboard = computed(() => Boolean(props.entitlements?.advancedDashboard));
 
 function formatDateInputValue(value) {
   const date = value instanceof Date ? new Date(value) : new Date(value);
@@ -392,20 +393,13 @@ function toggleCategory(categoryId) {
   };
 }
 
-async function exportPdfReport() {
-  if (isExportingPdf.value) return;
-
-  isExportingPdf.value = true;
-  try {
-    await downloadDashboardPdfReport({
-      dashboard: dashboard.value,
-      tasks: props.tasks,
-      analytics: props.analytics,
-      visibleCategoryLabels: mixChartCategories.value.map(item => item.label),
-    });
-  } finally {
-    isExportingPdf.value = false;
+function setViewMode(nextViewMode) {
+  if (['week', 'custom'].includes(nextViewMode) && !canUseAdvancedDashboard.value) {
+    emit('upgrade', 'advancedDashboard');
+    return;
   }
+
+  viewMode.value = nextViewMode;
 }
 
 watch(dashboard, renderCharts, { deep: true });
@@ -415,6 +409,11 @@ watch(visibleActivityGroups, groups => {
     selectedActivityCategory.value = groups[0]?.id ?? '';
   }
 }, { deep: true, immediate: true });
+watch(canUseAdvancedDashboard, enabled => {
+  if (!enabled && ['week', 'custom'].includes(viewMode.value)) {
+    viewMode.value = 'day';
+  }
+});
 
 onMounted(renderCharts);
 onBeforeUnmount(destroyCharts);
@@ -441,9 +440,6 @@ onBeforeUnmount(destroyCharts);
         <div class="controlActions">
           <p class="controlCopy">{{ rangeHelper }}</p>
           <div class="actionButtons">
-            <button type="button" class="ghostButton" :disabled="isExportingPdf" @click="exportPdfReport">
-              {{ isExportingPdf ? 'Generando PDF...' : 'Descargar reporte PDF' }}
-            </button>
             <button type="button" class="ghostButton" @click="emit('clear-analytics')">
               Limpiar estadisticas
             </button>
@@ -452,16 +448,20 @@ onBeforeUnmount(destroyCharts);
       </div>
 
       <div class="modeRow">
-        <button type="button" class="modeChip" :class="{ active: viewMode === 'day' }" @click="viewMode = 'day'">
+        <button type="button" class="modeChip" :class="{ active: viewMode === 'day' }" @click="setViewMode('day')">
           Por dia
         </button>
-        <button type="button" class="modeChip" :class="{ active: viewMode === 'week' }" @click="viewMode = 'week'">
+        <button type="button" class="modeChip" :class="{ active: viewMode === 'week', locked: !canUseAdvancedDashboard }" @click="setViewMode('week')">
           Por semana
         </button>
-        <button type="button" class="modeChip" :class="{ active: viewMode === 'custom' }" @click="viewMode = 'custom'">
+        <button type="button" class="modeChip" :class="{ active: viewMode === 'custom', locked: !canUseAdvancedDashboard }" @click="setViewMode('custom')">
           Personalizado
         </button>
       </div>
+
+      <p v-if="!canUseAdvancedDashboard" class="proHint">
+        ListEA Free mantiene el panel corto y privado en el dispositivo. ListEA Pro desbloquea vista semanal y rango personalizado.
+      </p>
 
       <div v-if="viewMode === 'custom'" class="customControls">
         <label class="fieldGroup">
@@ -522,6 +522,7 @@ onBeforeUnmount(destroyCharts);
           <div class="completionHero">
             <span class="completionCaption">Cumplimiento</span>
             <strong>{{ dashboard.summary.completionRate }}%</strong>
+            <small class="completionNote">Completadas sobre el total observado del rango</small>
           </div>
           <div v-if="mixChartCategories.length" class="chartFrame donut">
             <canvas ref="mixCanvas"></canvas>
@@ -723,6 +724,10 @@ onBeforeUnmount(destroyCharts);
   border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
 }
 
+.modeChip.locked {
+  border-style: dashed;
+}
+
 .customControls {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -749,6 +754,16 @@ onBeforeUnmount(destroyCharts);
   border-radius: 16px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 78%, white);
+}
+
+.proHint {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  color: var(--text-muted);
+  text-align: left;
 }
 
 .visibilityCopy {
@@ -860,6 +875,12 @@ onBeforeUnmount(destroyCharts);
   font-size: clamp(1.8rem, 5vw, 2.6rem);
   line-height: 1;
   color: var(--accent-strong);
+}
+
+.completionNote {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .chartFrame.donut {

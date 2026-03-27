@@ -1,17 +1,18 @@
 import { TaskActivityLedger } from './activity';
 import { AvatarPreferences, AVATAR_SNIPPET_DURATIONS, AVATAR_TIMINGS } from './avatar';
+import { buildLicenseState, serializeLicenseState } from './license';
 import { TaskFactory } from './tasks';
 
 export const DEFAULT_PREFERENCES = Object.freeze({
-  premiumEnabled: false,
   notificationsEnabled: false,
   reminderPermission: 'default',
   exactAlarmPermission: 'prompt',
   themeMode: 'light',
   colorPalette: 'ocean',
+  license: buildLicenseState(),
   avatar: new AvatarPreferences({
     enabled: false,
-    reminderTiming: AVATAR_TIMINGS.BEFORE_10,
+    reminderTiming: AVATAR_TIMINGS.ON_TIME,
     importantOnly: false,
     snippetEnabled: false,
     snippetTiming: AVATAR_TIMINGS.ON_TIME,
@@ -83,26 +84,29 @@ export class LocalTaskRepository {
 
   normalizePreferences(rawPreferences = {}) {
     const avatar = new AvatarPreferences(rawPreferences.avatar);
+    const license = buildLicenseState(rawPreferences.license, {
+      migratedPremiumEnabled: rawPreferences.premiumEnabled,
+    });
 
     return {
-      premiumEnabled: Boolean(rawPreferences.premiumEnabled),
       notificationsEnabled: Boolean(rawPreferences.notificationsEnabled),
       reminderPermission: rawPreferences.reminderPermission ?? DEFAULT_PREFERENCES.reminderPermission,
       exactAlarmPermission: rawPreferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
       themeMode: rawPreferences.themeMode ?? DEFAULT_PREFERENCES.themeMode,
       colorPalette: rawPreferences.colorPalette ?? DEFAULT_PREFERENCES.colorPalette,
+      license,
       avatar,
     };
   }
 
   serializePreferences(preferences = {}) {
     return {
-      premiumEnabled: Boolean(preferences.premiumEnabled),
       notificationsEnabled: Boolean(preferences.notificationsEnabled),
       reminderPermission: preferences.reminderPermission ?? DEFAULT_PREFERENCES.reminderPermission,
       exactAlarmPermission: preferences.exactAlarmPermission ?? DEFAULT_PREFERENCES.exactAlarmPermission,
       themeMode: preferences.themeMode ?? DEFAULT_PREFERENCES.themeMode,
       colorPalette: preferences.colorPalette ?? DEFAULT_PREFERENCES.colorPalette,
+      license: serializeLicenseState(preferences.license),
       avatar: new AvatarPreferences(preferences.avatar),
     };
   }

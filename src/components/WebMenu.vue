@@ -145,11 +145,14 @@ onBeforeUnmount(() => {
 .brandLogo {
   margin: 1rem;
   margin-left: 2rem;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  object-fit: cover;
-  box-shadow: 0 10px 24px rgba(28, 39, 59, 0.12);
+  width: 100px;
+  height: 50px;
+  border-radius: 18px;
+  object-fit: contain;
+  object-position: center;
+  display: block;
+  padding: 0px 0px;
+
 }
 
 .brandCopy {

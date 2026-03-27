@@ -25,9 +25,17 @@ import {
   TaskVisibilityPlanner,
 } from '../domain/filters';
 import { BacklogInsightAnalyzer } from '../domain/insights';
+import {
+  ENTITLEMENT_KEYS,
+  LICENSE_TIERS,
+  activateLocalProLicense,
+  downgradeToFreeLicense,
+  hasEntitlement,
+} from '../domain/license';
 import { LocalTaskRepository } from '../domain/localFirst';
 import { NavigationCatalog } from '../domain/navigation';
 import { RecurrenceEngine } from '../domain/recurrence';
+import { downloadBackupFile, parseBackupDocument, readBackupFile } from '../services/localBackup';
 import { TaskContextPresenter, TaskFactory } from '../domain/tasks';
 
 const props = defineProps({
@@ -58,9 +66,15 @@ const searchQuery = ref('');
 const mounted = ref(false);
 const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
+const upgradePrompt = ref(null);
 const backlogCompletedOpen = ref(true);
 const focusListPanelRef = ref(null);
 const paletteSelectorOpen = ref(false);
+const backupFileInput = ref(null);
+const backupPassphrase = ref('');
+const importPassphrase = ref('');
+const isExportingBackup = ref(false);
+const isImportingBackup = ref(false);
 const THEME_MODES = Object.freeze({
   LIGHT: 'light',
   DARK: 'dark',
@@ -83,6 +97,37 @@ const paletteOptions = [
   { id: COLOR_PALETTES.NOIR, label: 'Noir', description: 'Tecnologica y premium' },
   { id: COLOR_PALETTES.SUNSET, label: 'Atardecer', description: 'Vibrante y moderna' },
 ];
+const BASIC_TIMINGS = new Set([AVATAR_TIMINGS.NEVER, AVATAR_TIMINGS.ON_TIME]);
+const UPGRADE_COPY = Object.freeze({
+  [ENTITLEMENT_KEYS.ADVANCED_DASHBOARD]: {
+    title: 'ListEA Pro desbloquea panel avanzado',
+    message: 'Los rangos personalizados y la lectura semanal viven solo en tu dispositivo y forman parte de ListEA Pro.',
+  },
+  [ENTITLEMENT_KEYS.PDF_EXPORT]: {
+    title: 'ListEA Pro desbloquea el PDF local',
+    message: 'El reporte PDF se genera localmente y esta incluido en ListEA Pro.',
+  },
+  [ENTITLEMENT_KEYS.PREMIUM_INSIGHTS]: {
+    title: 'ListEA Pro desbloquea insights del backlog',
+    message: 'La lectura automatica de saturacion, duplicados y tareas sin decision forma parte de ListEA Pro.',
+  },
+  [ENTITLEMENT_KEYS.ADVANCED_REMINDERS]: {
+    title: 'ListEA Pro desbloquea recordatorios avanzados',
+    message: 'Los avisos antes o despues de la hora objetivo forman parte de ListEA Pro.',
+  },
+  [ENTITLEMENT_KEYS.AVATAR_PRO]: {
+    title: 'ListEA Pro desbloquea el avatar avanzado',
+    message: 'Duracion personalizada, filtros por importancia y avisos avanzados estan en ListEA Pro.',
+  },
+  [ENTITLEMENT_KEYS.PREMIUM_THEMES]: {
+    title: 'ListEA Pro desbloquea paletas premium',
+    message: 'Modo dia/noche es gratis. Las paletas exclusivas se reservan para ListEA Pro.',
+  },
+  [ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP]: {
+    title: 'ListEA Pro desbloquea respaldo cifrado',
+    message: 'Puedes exportar e importar gratis. El respaldo cifrado con frase local forma parte de ListEA Pro.',
+  },
+});
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
@@ -250,26 +295,123 @@ function setAppearancePreferences(patch) {
   };
 }
 
-function togglePremium(enabled) {
-  const nextPreferences = {
-    ...preferences.value,
-    premiumEnabled: enabled,
+function hasFeature(entitlementKey) {
+  return hasEntitlement(preferences.value.license, entitlementKey);
+}
+
+function buildEffectiveAvatarPreferences() {
+  if (hasFeature(ENTITLEMENT_KEYS.ADVANCED_REMINDERS) || hasFeature(ENTITLEMENT_KEYS.AVATAR_PRO)) {
+    return new AvatarPreferences(preferences.value.avatar);
+  }
+
+  return new AvatarPreferences({
+    ...preferences.value.avatar,
+    reminderTiming: preferences.value.notificationsEnabled ? AVATAR_TIMINGS.ON_TIME : AVATAR_TIMINGS.NEVER,
+    snippetTiming: preferences.value.avatar.snippetEnabled ? AVATAR_TIMINGS.ON_TIME : AVATAR_TIMINGS.NEVER,
+    snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
+    importantOnly: false,
+  });
+}
+
+function buildPersistedSnapshot() {
+  return {
+    tasks: tasks.value.map(task => task.toJSON()),
+    analytics: repository.serializeAnalytics(analytics.value),
+    preferences: repository.serializePreferences(preferences.value),
+  };
+}
+
+function dismissUpgradePrompt() {
+  upgradePrompt.value = null;
+}
+
+function requestUpgrade(entitlementKey) {
+  const copy = UPGRADE_COPY[entitlementKey] ?? {
+    title: 'ListEA Pro desbloquea esta funcion',
+    message: 'Esta mejora vive localmente y forma parte de ListEA Pro.',
   };
 
-  if (!enabled) {
-    nextPreferences.colorPalette = COLOR_PALETTES.OCEAN;
+  upgradePrompt.value = {
+    ...copy,
+    entitlementKey,
+  };
+}
+
+function openUpgradeSettings() {
+  emit('navigate', 'settings');
+}
+
+function applyLicenseState(nextLicense, feedbackMessage = '') {
+  const nextHasPremiumThemes = hasEntitlement(nextLicense, ENTITLEMENT_KEYS.PREMIUM_THEMES);
+  const nextAvatarPreferences = (hasEntitlement(nextLicense, ENTITLEMENT_KEYS.ADVANCED_REMINDERS)
+    || hasEntitlement(nextLicense, ENTITLEMENT_KEYS.AVATAR_PRO))
+    ? new AvatarPreferences(preferences.value.avatar)
+    : new AvatarPreferences({
+      ...preferences.value.avatar,
+      reminderTiming: preferences.value.notificationsEnabled ? AVATAR_TIMINGS.ON_TIME : AVATAR_TIMINGS.NEVER,
+      snippetTiming: preferences.value.avatar.snippetEnabled ? AVATAR_TIMINGS.ON_TIME : AVATAR_TIMINGS.NEVER,
+      snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
+      importantOnly: false,
+    });
+
+  preferences.value = {
+    ...preferences.value,
+    license: nextLicense,
+    colorPalette: nextHasPremiumThemes ? preferences.value.colorPalette : COLOR_PALETTES.OCEAN,
+    avatar: nextAvatarPreferences,
+  };
+
+  if (!nextHasPremiumThemes) {
     paletteSelectorOpen.value = false;
   }
 
-  preferences.value = nextPreferences;
+  applyAppearancePreferences();
+  syncAvatarSnippet();
+  if (feedbackMessage) {
+    showUiFeedback(feedbackMessage, 'info');
+  }
+}
+
+function activateProLocally() {
+  applyLicenseState(
+    activateLocalProLicense(preferences.value.license),
+    'ListEA Pro quedo activado localmente en este dispositivo.',
+  );
+  dismissUpgradePrompt();
+}
+
+function restoreLocalPro() {
+  if (preferences.value.license?.restoreAvailable || preferences.value.license?.licenseTier === LICENSE_TIERS.PRO) {
+    applyLicenseState(
+      activateLocalProLicense(preferences.value.license),
+      'ListEA Pro se restauro localmente en este dispositivo.',
+    );
+    return;
+  }
+
+  showUiFeedback('Todavia no hay una compra local para restaurar en este dispositivo.', 'error');
+}
+
+function revertToFreePlan() {
+  applyLicenseState(
+    downgradeToFreeLicense(preferences.value.license),
+    'ListEA volvio al plan Free sin tocar tus tareas ni tu historial local.',
+  );
 }
 
 function togglePaletteSelector() {
-  if (!preferences.value.premiumEnabled) return;
+  if (!hasFeature(ENTITLEMENT_KEYS.PREMIUM_THEMES)) {
+    requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_THEMES);
+    return;
+  }
   paletteSelectorOpen.value = !paletteSelectorOpen.value;
 }
 
 function selectColorPalette(paletteId) {
+  if (!hasFeature(ENTITLEMENT_KEYS.PREMIUM_THEMES)) {
+    requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_THEMES);
+    return;
+  }
   setAppearancePreferences({ colorPalette: paletteId });
 }
 
@@ -290,7 +432,7 @@ function applyAppearancePreferences() {
 
   const root = document.documentElement;
   root.dataset.theme = preferences.value.themeMode ?? THEME_MODES.LIGHT;
-  root.dataset.palette = preferences.value.premiumEnabled
+  root.dataset.palette = hasFeature(ENTITLEMENT_KEYS.PREMIUM_THEMES)
     ? (preferences.value.colorPalette ?? COLOR_PALETTES.OCEAN)
     : COLOR_PALETTES.OCEAN;
 }
@@ -370,12 +512,13 @@ function dismissAvatarSnippet({ reschedule = true } = {}) {
 function showAvatarSnippet(task) {
   if (!task) return;
 
+  const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
   const shownAt = new Date().toISOString();
   task.applyPatch({ avatarSnippetShownAt: shownAt });
-  avatarSnippet.value = avatarCoach.buildTaskSnippet(task, preferences.value.avatar, new Date(shownAt));
+  avatarSnippet.value = avatarCoach.buildTaskSnippet(task, effectiveAvatarPreferences, new Date(shownAt));
 
   clearAvatarSnippetHideTimer();
-  const durationMs = preferences.value.avatar.getSnippetDurationMs();
+  const durationMs = effectiveAvatarPreferences.getSnippetDurationMs();
   if (durationMs === null || typeof window === 'undefined') return;
 
   avatarSnippetHideTimerId = window.setTimeout(() => {
@@ -386,11 +529,12 @@ function showAvatarSnippet(task) {
 
 function syncAvatarSnippet() {
   clearAvatarSnippetTimer();
+  const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
 
   const canRenderSnippet = mounted.value
     && showTaskWorkspace.value
-    && preferences.value.avatar.enabled
-    && preferences.value.avatar.snippetEnabled;
+    && effectiveAvatarPreferences.enabled
+    && effectiveAvatarPreferences.snippetEnabled;
 
   if (!canRenderSnippet) {
     clearAvatarSnippetHideTimer();
@@ -408,13 +552,13 @@ function syncAvatarSnippet() {
     avatarSnippet.value = null;
   }
 
-  const dueTask = avatarCoach.getDueSnippetTask(tasks.value, preferences.value.avatar, new Date());
+  const dueTask = avatarCoach.getDueSnippetTask(tasks.value, effectiveAvatarPreferences, new Date());
   if (dueTask) {
     showAvatarSnippet(dueTask);
     return;
   }
 
-  const nextSnippet = avatarCoach.getNextSnippetTask(tasks.value, preferences.value.avatar, new Date());
+  const nextSnippet = avatarCoach.getNextSnippetTask(tasks.value, effectiveAvatarPreferences, new Date());
   if (!nextSnippet || typeof window === 'undefined') {
     return;
   }
@@ -462,6 +606,7 @@ async function toggleNotificationsSetting(enabled) {
 async function saveReminderSettings() {
   persistState();
   await syncReminders();
+  showUiFeedback('Preferencias de recordatorio guardadas localmente.', 'success');
 }
 
 function markReminderSent(id) {
@@ -478,9 +623,10 @@ async function syncReminders() {
     return;
   }
 
+  const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
   for (const task of tasks.value) {
     if (task.isCompleted()) continue;
-    const reminderAt = avatarCoach.getReminderAt(task, preferences.value.avatar);
+    const reminderAt = avatarCoach.getReminderAt(task, effectiveAvatarPreferences);
     if (!reminderAt || task.reminderSent) continue;
 
     await scheduleReminder({
@@ -490,7 +636,113 @@ async function syncReminders() {
   }
 }
 
+function setReminderTiming(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.ADVANCED_REMINDERS) && !BASIC_TIMINGS.has(value)) {
+    requestUpgrade(ENTITLEMENT_KEYS.ADVANCED_REMINDERS);
+    return;
+  }
+
+  setAvatarPreferences({ reminderTiming: value });
+}
+
+function setSnippetTiming(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.AVATAR_PRO) && !BASIC_TIMINGS.has(value)) {
+    requestUpgrade(ENTITLEMENT_KEYS.AVATAR_PRO);
+    return;
+  }
+
+  setAvatarPreferences({ snippetTiming: value });
+}
+
+function setSnippetDuration(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.AVATAR_PRO) && value !== AVATAR_SNIPPET_DURATIONS.MEDIUM) {
+    requestUpgrade(ENTITLEMENT_KEYS.AVATAR_PRO);
+    return;
+  }
+
+  setAvatarPreferences({ snippetDuration: value });
+}
+
+function setImportantOnly(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.AVATAR_PRO) && value) {
+    requestUpgrade(ENTITLEMENT_KEYS.AVATAR_PRO);
+    return;
+  }
+
+  setAvatarPreferences({ importantOnly: value });
+}
+
+async function exportBackup({ encrypted = false } = {}) {
+  if (encrypted && !hasFeature(ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP)) {
+    requestUpgrade(ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP);
+    return;
+  }
+
+  if (encrypted && !backupPassphrase.value.trim()) {
+    showUiFeedback('Escribe una frase para cifrar tu respaldo local.', 'error');
+    return;
+  }
+
+  isExportingBackup.value = true;
+  try {
+    await downloadBackupFile(buildPersistedSnapshot(), {
+      encrypted,
+      passphrase: encrypted ? backupPassphrase.value : '',
+      appName: 'ListEA',
+      fileNamePrefix: encrypted ? 'listea-secure' : 'listea-local',
+    });
+    showUiFeedback(
+      encrypted
+        ? 'Respaldo local cifrado exportado.'
+        : 'Respaldo local exportado.',
+      'success',
+    );
+    if (encrypted) {
+      backupPassphrase.value = '';
+    }
+  } catch (error) {
+    showUiFeedback(error instanceof Error ? error.message : 'No se pudo exportar el respaldo.', 'error');
+  } finally {
+    isExportingBackup.value = false;
+  }
+}
+
+function openBackupImport() {
+  backupFileInput.value?.click();
+}
+
+async function importBackupFromFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  isImportingBackup.value = true;
+  try {
+    const rawText = await readBackupFile(file);
+    const snapshot = await parseBackupDocument(rawText, {
+      passphrase: importPassphrase.value,
+    });
+
+    tasks.value = Array.isArray(snapshot.tasks)
+      ? snapshot.tasks.map((task, index) => taskFactory.rehydrate(task, index))
+      : [];
+    analytics.value = repository.normalizeAnalytics(snapshot.analytics);
+    preferences.value = repository.normalizePreferences(snapshot.preferences);
+    applyAppearancePreferences();
+    dismissUpgradePrompt();
+    showUiFeedback('Respaldo local importado correctamente.', 'success');
+    await syncReminders();
+    syncAvatarSnippet();
+  } catch (error) {
+    showUiFeedback(error instanceof Error ? error.message : 'No se pudo importar el respaldo.', 'error');
+  } finally {
+    importPassphrase.value = '';
+    event.target.value = '';
+    isImportingBackup.value = false;
+  }
+}
+
 const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
+const effectiveAvatarPreferences = computed(() => buildEffectiveAvatarPreferences());
 const showTaskWorkspace = computed(() => ['today', 'backlog'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
 const completedTasks = computed(() =>
@@ -540,10 +792,11 @@ const focusEmptyMessage = computed(() => {
 
   return 'No hay tareas dentro de esta ventana de tiempo.';
 });
-const backlogInsights = computed(() =>
-  insightAnalyzer.analyze(openTasks.value, {
-    referenceDate: new Date(),
-  }),
+const backlogInsights = computed(() => insightAnalyzer.analyze(openTasks.value, {
+  referenceDate: new Date(),
+}));
+const visibleBacklogInsights = computed(() =>
+  hasFeature(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS) ? backlogInsights.value : [],
 );
 const summary = computed(() => ({
   pending: openTasks.value.length,
@@ -555,6 +808,13 @@ const summaryCards = computed(() => [
   { id: 'today', label: 'Para hoy', value: summary.value.today },
   { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
 ]);
+const activePaletteId = computed(() => hasFeature(ENTITLEMENT_KEYS.PREMIUM_THEMES)
+  ? (preferences.value.colorPalette ?? COLOR_PALETTES.OCEAN)
+  : COLOR_PALETTES.OCEAN);
+const licenseSummary = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO
+  ? 'ListEA Pro activado en este dispositivo.'
+  : 'ListEA Free activo. Tus tareas siguen siendo privadas y locales.');
+const isProActive = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO);
 
 function formatTaskCount(value) {
   return `${value} ${value === 1 ? 'tarea' : 'tareas'}`;
@@ -582,7 +842,11 @@ watch(
 );
 
 watch(
-  () => [preferences.value.themeMode, preferences.value.colorPalette],
+  () => [
+    preferences.value.themeMode,
+    preferences.value.colorPalette,
+    preferences.value.license?.licenseTier,
+  ],
   () => {
     applyAppearancePreferences();
   },
@@ -655,6 +919,29 @@ onBeforeUnmount(() => {
           </div>
 
           <button type="button" class="ghostButton snippetClose" @click="dismissAvatarSnippet()">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </transition>
+
+    <transition name="timeSwap">
+      <div
+        v-if="upgradePrompt"
+        class="upgradeBanner"
+        aria-live="polite"
+        role="status"
+      >
+        <div>
+          <p class="eyebrow">ListEA Pro</p>
+          <strong>{{ upgradePrompt.title }}</strong>
+          <p>{{ upgradePrompt.message }}</p>
+        </div>
+        <div class="upgradeActions">
+          <button type="button" class="primaryButton" @click="openUpgradeSettings">
+            Ver opciones Pro
+          </button>
+          <button type="button" class="ghostButton" @click="dismissUpgradePrompt">
             Cerrar
           </button>
         </div>
@@ -745,11 +1032,18 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="backlogInsights.length" class="insightList">
-          <article v-for="insight in backlogInsights" :key="insight.id" class="insightCard">
+        <div v-if="visibleBacklogInsights.length" class="insightList">
+          <article v-for="insight in visibleBacklogInsights" :key="insight.id" class="insightCard">
             <strong>{{ insight.title }}</strong>
             <p>{{ insight.message }}</p>
           </article>
+        </div>
+        <div v-else-if="backlogInsights.length" class="upgradePanel">
+          <strong>ListEA Pro lee tu backlog sin sacar datos del dispositivo.</strong>
+          <p class="panelText">Desbloquea deteccion de duplicados, saturacion y tareas sin decision directamente en local.</p>
+          <button type="button" class="ghostButton" @click="requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS)">
+            Ver ListEA Pro
+          </button>
         </div>
         <p v-else class="emptyText">No hay alertas relevantes en la agenda.</p>
       </article>
@@ -811,16 +1105,56 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="resolvedView === 'dashboard'" class="dashboardGrid">
-      <ProductivityDashboard :analytics="analytics" :tasks="tasks" @clear-analytics="clearAnalytics" />
+      <ProductivityDashboard
+        :analytics="analytics"
+        :entitlements="preferences.license.entitlements"
+        :license-tier="preferences.license.licenseTier"
+        :tasks="tasks"
+        @clear-analytics="clearAnalytics"
+        @upgrade="requestUpgrade"
+      />
     </section>
 
     <section v-else class="settingsGrid">
       <article class="panelCard">
-        <p class="eyebrow">Local-first</p>
-        <h3>Primero local, luego sincronizacion</h3>
+        <p class="eyebrow">Privacidad</p>
+        <h3>Todo vive en este dispositivo</h3>
         <p class="panelText">
-          Todo se guarda primero en el dispositivo. La interfaz no depende de red para crear, editar o completar tareas.
+          ListEA guarda tareas, historial y preferencias localmente. No necesita cuenta, backend ni sincronizacion para funcionar.
         </p>
+        <p class="panelText">
+          La promesa del producto es simple: ayudarte a actuar sin entregar tus datos.
+        </p>
+      </article>
+
+      <article class="panelCard">
+        <p class="eyebrow">Plan</p>
+        <h3>ListEA Free y ListEA Pro</h3>
+        <p class="panelText">{{ licenseSummary }}</p>
+        <div class="settingsStack">
+          <div class="licenseBadgeRow">
+            <span class="licenseBadge" :data-tier="preferences.license.licenseTier">
+              {{ isProActive ? 'ListEA Pro' : 'ListEA Free' }}
+            </span>
+            <span class="panelText">
+              {{ isProActive ? 'Pago unico local preparado para este dispositivo.' : 'Tus tareas siguen completas y privadas en el plan Free.' }}
+            </span>
+          </div>
+          <p class="panelText">
+            Pro desbloquea analisis avanzado, PDF local, avisos avanzados, paletas premium y respaldo cifrado.
+          </p>
+          <div class="buttonRow">
+            <button v-if="!isProActive" type="button" class="primaryButton" @click="activateProLocally">
+              Activar ListEA Pro local
+            </button>
+            <button type="button" class="ghostButton" @click="restoreLocalPro">
+              Restaurar Pro local
+            </button>
+            <button v-if="isProActive" type="button" class="ghostButton" @click="revertToFreePlan">
+              Volver a Free
+            </button>
+          </div>
+        </div>
       </article>
 
       <article class="panelCard">
@@ -843,16 +1177,19 @@ onBeforeUnmount(() => {
             <span>Momento del recordatorio</span>
             <select
               class="detailField"
-              :value="preferences.avatar.reminderTiming"
-              @change="setAvatarPreferences({ reminderTiming: $event.target.value })"
+              :value="effectiveAvatarPreferences.reminderTiming"
+              @change="setReminderTiming($event.target.value)"
             >
               <option :value="AVATAR_TIMINGS.NEVER">Nunca</option>
-              <option :value="AVATAR_TIMINGS.BEFORE_10">10 min antes</option>
-              <option :value="AVATAR_TIMINGS.BEFORE_5">5 min antes</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_10" :disabled="!preferences.license.entitlements.advancedReminders">10 min antes</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_5" :disabled="!preferences.license.entitlements.advancedReminders">5 min antes</option>
               <option :value="AVATAR_TIMINGS.ON_TIME">Justo a tiempo</option>
-              <option :value="AVATAR_TIMINGS.AFTER_10">10 min despues</option>
+              <option :value="AVATAR_TIMINGS.AFTER_10" :disabled="!preferences.license.entitlements.advancedReminders">10 min despues</option>
             </select>
           </label>
+          <p v-if="!preferences.license.entitlements.advancedReminders" class="panelText">
+            Free incluye avisos basicos. ListEA Pro desbloquea recordatorios antes o despues de la hora objetivo.
+          </p>
 
           <div class="buttonRow">
             <button type="button" class="primaryButton" @click="saveReminderSettings">
@@ -888,14 +1225,14 @@ onBeforeUnmount(() => {
             <span>Momento del aviso</span>
             <select
               class="detailField"
-              :value="preferences.avatar.snippetTiming"
-              @change="setAvatarPreferences({ snippetTiming: $event.target.value })"
+              :value="effectiveAvatarPreferences.snippetTiming"
+              @change="setSnippetTiming($event.target.value)"
             >
               <option :value="AVATAR_TIMINGS.NEVER">Nunca</option>
-              <option :value="AVATAR_TIMINGS.BEFORE_10">10 min antes</option>
-              <option :value="AVATAR_TIMINGS.BEFORE_5">5 min antes</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_10" :disabled="!preferences.license.entitlements.avatarPro">10 min antes</option>
+              <option :value="AVATAR_TIMINGS.BEFORE_5" :disabled="!preferences.license.entitlements.avatarPro">5 min antes</option>
               <option :value="AVATAR_TIMINGS.ON_TIME">Justo a tiempo</option>
-              <option :value="AVATAR_TIMINGS.AFTER_10">10 min despues</option>
+              <option :value="AVATAR_TIMINGS.AFTER_10" :disabled="!preferences.license.entitlements.avatarPro">10 min despues</option>
             </select>
           </label>
 
@@ -903,42 +1240,66 @@ onBeforeUnmount(() => {
             <span>Duracion del aviso</span>
             <select
               class="detailField"
-              :value="preferences.avatar.snippetDuration"
-              @change="setAvatarPreferences({ snippetDuration: $event.target.value })"
+              :value="effectiveAvatarPreferences.snippetDuration"
+              @change="setSnippetDuration($event.target.value)"
             >
-              <option :value="AVATAR_SNIPPET_DURATIONS.SHORT">Corta</option>
+              <option :value="AVATAR_SNIPPET_DURATIONS.SHORT" :disabled="!preferences.license.entitlements.avatarPro">Corta</option>
               <option :value="AVATAR_SNIPPET_DURATIONS.MEDIUM">Media</option>
-              <option :value="AVATAR_SNIPPET_DURATIONS.LONG">Larga</option>
-              <option :value="AVATAR_SNIPPET_DURATIONS.STICKY">Hasta cerrarlo</option>
+              <option :value="AVATAR_SNIPPET_DURATIONS.LONG" :disabled="!preferences.license.entitlements.avatarPro">Larga</option>
+              <option :value="AVATAR_SNIPPET_DURATIONS.STICKY" :disabled="!preferences.license.entitlements.avatarPro">Hasta cerrarlo</option>
             </select>
           </label>
 
           <label class="checkboxRow">
             <input
-              :checked="preferences.avatar.importantOnly"
+              :checked="effectiveAvatarPreferences.importantOnly"
               type="checkbox"
-              @change="setAvatarPreferences({ importantOnly: $event.target.checked })"
+              @change="setImportantOnly($event.target.checked)"
             />
             <span>Solo para tareas importantes</span>
           </label>
+          <p v-if="!preferences.license.entitlements.avatarPro" class="panelText">
+            El avatar basico sigue disponible gratis. ListEA Pro desbloquea duracion y filtros avanzados.
+          </p>
         </div>
       </article>
 
       <article class="panelCard">
-        <p class="eyebrow">Premium</p>
-        <h3>Funciones visuales premium</h3>
+        <p class="eyebrow">Respaldo</p>
+        <h3>Exporta e importa tus datos localmente</h3>
         <div class="settingsStack">
-          <label class="checkboxRow">
-            <input
-              :checked="preferences.premiumEnabled"
-              type="checkbox"
-              @change="togglePremium($event.target.checked)"
-            />
-            <span>Activar modo premium</span>
-          </label>
           <p class="panelText">
-            Activa esta opcion para probar paletas exclusivas sin afectar tareas, estadisticas o recordatorios.
+            Puedes mover tu informacion entre dispositivos usando un archivo local. El respaldo cifrado con frase queda reservado para ListEA Pro.
           </p>
+          <label class="fieldGroup">
+            <span>Frase para respaldo cifrado</span>
+            <input
+              v-model="backupPassphrase"
+              class="detailField"
+              type="password"
+              placeholder="Solo necesaria para el respaldo cifrado"
+            />
+          </label>
+          <label class="fieldGroup">
+            <span>Frase para importar respaldo cifrado</span>
+            <input
+              v-model="importPassphrase"
+              class="detailField"
+              type="password"
+              placeholder="Escribela solo si el archivo esta cifrado"
+            />
+          </label>
+          <div class="buttonRow">
+            <button type="button" class="ghostButton" :disabled="isExportingBackup" @click="exportBackup()">
+              {{ isExportingBackup ? 'Exportando...' : 'Exportar respaldo local' }}
+            </button>
+            <button type="button" class="primaryButton" :disabled="isExportingBackup" @click="exportBackup({ encrypted: true })">
+              Respaldo cifrado Pro
+            </button>
+            <button type="button" class="ghostButton" :disabled="isImportingBackup" @click="openBackupImport">
+              {{ isImportingBackup ? 'Importando...' : 'Importar respaldo local' }}
+            </button>
+          </div>
         </div>
       </article>
 
@@ -960,10 +1321,10 @@ onBeforeUnmount(() => {
 
           <label class="fieldGroup">
             <span>Paleta</span>
-            <p v-if="!preferences.premiumEnabled" class="panelText">
-              Las paletas exclusivas se habilitan al activar el modo premium.
+            <p v-if="!preferences.license.entitlements.premiumThemes" class="panelText">
+              Oceano sigue disponible gratis. Las paletas exclusivas se habilitan con ListEA Pro.
             </p>
-            <div v-else class="palettePickerStack">
+            <div class="palettePickerStack">
               <button
                 type="button"
                 class="paletteToggleButton"
@@ -971,7 +1332,7 @@ onBeforeUnmount(() => {
                 @click="togglePaletteSelector"
               >
                 <span>Cambiar paleta de colores</span>
-                <strong>{{ paletteOptions.find(palette => palette.id === preferences.colorPalette)?.label ?? 'Oceano' }}</strong>
+                <strong>{{ paletteOptions.find(palette => palette.id === activePaletteId)?.label ?? 'Oceano' }}</strong>
               </button>
 
               <div v-if="paletteSelectorOpen" class="paletteGrid">
@@ -980,7 +1341,7 @@ onBeforeUnmount(() => {
                   :key="palette.id"
                   type="button"
                   class="paletteCard"
-                  :class="{ active: preferences.colorPalette === palette.id }"
+                  :class="{ active: activePaletteId === palette.id }"
                   :data-palette="palette.id"
                   @click="selectColorPalette(palette.id)"
                 >
@@ -1002,6 +1363,14 @@ onBeforeUnmount(() => {
         </p>
         <p class="panelText">{{ contextPresenter.getPriorityLabel('high') }} se usa como referencia de lenguaje consistente.</p>
       </article>
+
+      <input
+        ref="backupFileInput"
+        class="srOnly"
+        type="file"
+        accept="application/json,.json,.listea-backup.json,.listea-secure.json"
+        @change="importBackupFromFile"
+      />
     </section>
   </section>
 </template>
@@ -1089,10 +1458,61 @@ onBeforeUnmount(() => {
   border-color: color-mix(in srgb, #de6f4d 38%, var(--line));
 }
 
+.feedbackBanner[data-tone='info'] {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
 .feedbackBanner p {
   margin: 0;
   text-align: left;
   font-weight: 600;
+}
+
+.upgradeBanner,
+.upgradePanel {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--surface) 86%, white);
+  box-shadow: var(--card-shadow);
+}
+
+.upgradeBanner strong,
+.upgradePanel strong {
+  display: block;
+  text-align: left;
+}
+
+.upgradeBanner p,
+.upgradePanel p {
+  margin: 6px 0 0;
+  text-align: left;
+}
+
+.upgradeActions,
+.licenseBadgeRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.licenseBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.licenseBadge[data-tier='pro'] {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+  color: var(--accent-strong);
 }
 
 .feedbackClose {

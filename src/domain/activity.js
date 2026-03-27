@@ -368,7 +368,10 @@ export class TaskActivityDashboard {
     });
 
     const handled = completed + deleted;
-    const completionRate = handled ? Math.round((completed / handled) * 100) : 0;
+    const tracked = completed + deleted + overdue + incomplete;
+    const resolved = completed + deleted;
+    const completionRate = tracked ? Math.round((completed / tracked) * 100) : 0;
+    const resolutionRate = tracked ? Math.round((resolved / tracked) * 100) : 0;
 
     return {
       summary: {
@@ -377,7 +380,10 @@ export class TaskActivityDashboard {
         overdue,
         incomplete,
         handled,
+        tracked,
+        resolved,
         completionRate,
+        resolutionRate,
       },
       range: {
         label: range.buildLabel(),

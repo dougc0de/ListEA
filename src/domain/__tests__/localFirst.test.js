@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ACTIVITY_TYPES } from '../activity';
 import { LocalTaskRepository } from '../localFirst';
 import { AVATAR_TIMINGS } from '../avatar';
+import { LICENSE_TIERS } from '../license';
 
 describe('LocalTaskRepository', () => {
   it('bootstraps demo data when storage is empty', () => {
@@ -17,6 +18,7 @@ describe('LocalTaskRepository', () => {
     expect(state.tasks.some(task => task.recurrence?.isEnabled?.())).toBe(true);
     expect(state.tasks.some(task => task.isCompleted())).toBe(true);
     expect(state.preferences.avatar.enabled).toBe(true);
+    expect(state.preferences.license.licenseTier).toBe(LICENSE_TIERS.FREE);
   });
 
   it('persists serialized tasks and preferences', () => {
@@ -39,6 +41,7 @@ describe('LocalTaskRepository', () => {
     expect(saved).toContain('"tasks"');
     expect(saved).toContain('"analytics"');
     expect(saved).toContain(ACTIVITY_TYPES.COMPLETED);
+    expect(saved).toContain('"license"');
   });
 
   it('migrates legacy avatar timing into both reminder and snippet settings', () => {
@@ -105,5 +108,26 @@ describe('LocalTaskRepository', () => {
     const state = new LocalTaskRepository({ storage }).load();
 
     expect(state.tasks).toHaveLength(0);
+  });
+
+  it('migrates legacy premium mode into a local pro license', () => {
+    const storage = {
+      getItem() {
+        return JSON.stringify({
+          tasks: [],
+          analytics: [],
+          preferences: {
+            premiumEnabled: true,
+          },
+        });
+      },
+      setItem() {},
+    };
+
+    const state = new LocalTaskRepository({ storage }).load();
+
+    expect(state.preferences.license.licenseTier).toBe(LICENSE_TIERS.PRO);
+    expect(state.preferences.license.entitlements.premiumThemes).toBe(true);
+    expect(state.preferences.license.entitlements.pdfExport).toBe(true);
   });
 });
