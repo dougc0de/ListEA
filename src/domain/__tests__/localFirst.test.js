@@ -5,7 +5,7 @@ import { AVATAR_TIMINGS } from '../avatar';
 import { LICENSE_TIERS } from '../license';
 
 describe('LocalTaskRepository', () => {
-  it('bootstraps demo data when storage is empty', () => {
+  it('bootstraps an empty local state when storage is empty', () => {
     const storage = {
       getItem() {
         return null;
@@ -14,10 +14,8 @@ describe('LocalTaskRepository', () => {
     };
 
     const state = new LocalTaskRepository({ storage }).load();
-    expect(state.tasks.length).toBeGreaterThan(0);
-    expect(state.tasks.some(task => task.recurrence?.isEnabled?.())).toBe(true);
-    expect(state.tasks.some(task => task.isCompleted())).toBe(true);
-    expect(state.preferences.avatar.enabled).toBe(true);
+    expect(state.tasks).toHaveLength(0);
+    expect(state.analytics.events).toHaveLength(0);
     expect(state.preferences.license.licenseTier).toBe(LICENSE_TIERS.FREE);
   });
 
@@ -34,7 +32,11 @@ describe('LocalTaskRepository', () => {
 
     const repository = new LocalTaskRepository({ storage });
     const state = repository.createBootstrapState();
-    state.analytics.recordCompleted(state.tasks[0], '2026-03-24T10:00:00.000Z');
+    const task = repository.factory.create({
+      title: 'Preparar release limpia',
+    });
+    state.tasks = [task];
+    state.analytics.recordCompleted(task, '2026-03-24T10:00:00.000Z');
     repository.save(state);
 
     expect(saved).toContain('listea-local-state-v4');

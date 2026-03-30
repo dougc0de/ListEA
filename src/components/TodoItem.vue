@@ -3,10 +3,11 @@ import { computed, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
 import { TaskContextPresenter, toDateTimeInputValue } from '../domain/tasks';
 
-const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask']);
+const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action']);
 
 const props = defineProps({
   todo: { type: Object, required: true },
+  taskActions: { type: Array, default: () => [] },
 });
 
 const presenter = new TaskContextPresenter();
@@ -189,6 +190,18 @@ function cancelEdit() {
       </button>
       <button type="button" class="dangerButton" @click="emit('remove', todo.id)">
         Eliminar
+      </button>
+    </div>
+
+    <div v-if="!isEditing && taskActions.length" class="taskActionRow">
+      <button
+        v-for="action in taskActions"
+        :key="action.id"
+        type="button"
+        :class="action.tone === 'primary' ? 'primaryButton' : 'ghostButton'"
+        @click="emit('task-action', { taskId: todo.id, actionId: action.id })"
+      >
+        {{ action.label }}
       </button>
     </div>
 
@@ -458,6 +471,12 @@ function cancelEdit() {
   flex-wrap: wrap;
 }
 
+.taskActionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .ghostButton,
 .primaryButton,
 .dangerButton {
@@ -565,6 +584,10 @@ function cancelEdit() {
   }
 
   .actionRow button {
+    width: 100%;
+  }
+
+  .taskActionRow button {
     width: 100%;
   }
 }

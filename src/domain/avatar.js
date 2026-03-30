@@ -28,6 +28,10 @@ const SNIPPET_DURATION_MS = {
   [AVATAR_SNIPPET_DURATIONS.STICKY]: null,
 };
 
+function getTaskScheduleAnchor(task) {
+  return task?.dueAt || task?.followUpAt || '';
+}
+
 export class AvatarPreferences {
   constructor(rawPreferences = {}) {
     const {
@@ -166,7 +170,7 @@ export class AvatarCoach {
       return '';
     }
 
-    return this.applyOffset(task.dueAt, offsetMinutes);
+    return this.applyOffset(getTaskScheduleAnchor(task), offsetMinutes);
   }
 
   getSnippetAt(task, preferences = new AvatarPreferences()) {
@@ -179,7 +183,7 @@ export class AvatarCoach {
       return '';
     }
 
-    return this.applyOffset(task.dueAt, offsetMinutes);
+    return this.applyOffset(getTaskScheduleAnchor(task), offsetMinutes);
   }
 
   buildTaskSnippet(task, preferences = new AvatarPreferences(), referenceDate = new Date()) {
@@ -233,7 +237,7 @@ export class AvatarCoach {
   }
 
   isTaskSchedulable(task, preferences = new AvatarPreferences()) {
-    if (!preferences.enabled || !task?.dueAt || task.status === 'completed') {
+    if (!preferences.enabled || !getTaskScheduleAnchor(task) || task.status === 'completed') {
       return false;
     }
 
@@ -251,10 +255,11 @@ export class AvatarCoach {
   }
 
   getSnippetTone(task, referenceDate = new Date()) {
-    if (!task?.dueAt) {
+    const anchor = getTaskScheduleAnchor(task);
+    if (!anchor) {
       return 'coach';
     }
 
-    return new Date(task.dueAt).getTime() < referenceDate.getTime() ? 'focus' : 'nudge';
+    return new Date(anchor).getTime() < referenceDate.getTime() ? 'focus' : 'nudge';
   }
 }

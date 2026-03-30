@@ -145,9 +145,9 @@ onBeforeUnmount(() => {
 .brandLogo {
   margin: 1rem;
   margin-left: 2rem;
-  width: 100px;
-  height: 50px;
-  border-radius: 18px;
+  width: 80px;
+  height: 35px;
+  border-radius: 30px;
   object-fit: contain;
   object-position: center;
   display: block;

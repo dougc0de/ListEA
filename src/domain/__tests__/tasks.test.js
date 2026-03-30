@@ -33,6 +33,8 @@ describe('TaskFactory', () => {
     expect(task.status).toBe(TASK_STATUS.BLOCKED);
     expect(task.project).toBe('Clientes');
     expect(task.effortMinutes).toBe(33);
+    expect(task.source).toBe('manual');
+    expect(task.needsTriage).toBe(false);
   });
 });
 

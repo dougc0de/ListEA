@@ -1,4 +1,4 @@
-import { TASK_PRIORITY } from './tasks';
+import { TASK_PRIORITY, TASK_STATUS } from './tasks';
 
 const WEEKDAY_MAP = {
   domingo: 0,
@@ -66,7 +66,9 @@ export class QuickCaptureInterpreter {
       return {
         title: '',
         dueAt: '',
+        followUpAt: '',
         priority: TASK_PRIORITY.MEDIUM,
+        status: TASK_STATUS.ACTIVE,
         tags: [],
         project: '',
         area: '',
@@ -82,9 +84,15 @@ export class QuickCaptureInterpreter {
     });
 
     const projectMatch = raw.match(/\+([\p{L}\p{N}-]+)/u);
-    const project = projectMatch?.[1] ?? '';
+    let project = projectMatch?.[1] ?? '';
     if (projectMatch) {
       fragments.push(projectMatch[0]);
+    }
+
+    const professionalProjectMatch = raw.match(/\b(?:cliente|proyecto|project):([\p{L}\p{N}-]+)/iu);
+    if (professionalProjectMatch && !project) {
+      project = professionalProjectMatch[1];
+      fragments.push(professionalProjectMatch[0]);
     }
 
     const areaMatch = raw.match(/area:([\p{L}\p{N}-]+)/iu);
@@ -115,13 +123,28 @@ export class QuickCaptureInterpreter {
     }
 
     const recurrence = this.extractRecurrence(raw, fragments);
-    const dueAt = this.extractDueDate(raw, referenceDate, fragments);
+    const detectedDate = this.extractDueDate(raw, referenceDate, fragments);
+    const blockedMatch = raw.match(/\b(bloquead[ao]|depende de|esperando insumo)\b/i);
+    const waitingMatch = raw.match(/\b(seguimiento|follow-?up|esperando respuesta|pendiente de respuesta)\b/i);
+    const status = blockedMatch
+      ? TASK_STATUS.BLOCKED
+      : (waitingMatch ? TASK_STATUS.WAITING : TASK_STATUS.ACTIVE);
+    if (blockedMatch) {
+      fragments.push(blockedMatch[0]);
+    }
+    if (waitingMatch) {
+      fragments.push(waitingMatch[0]);
+    }
+    const dueAt = status === TASK_STATUS.WAITING ? '' : detectedDate;
+    const followUpAt = status === TASK_STATUS.WAITING ? detectedDate : null;
     const title = cleanTitle(raw, fragments) || raw;
 
     return {
       title,
       dueAt: dueAt ? dueAt.toISOString() : '',
+      followUpAt: followUpAt ? followUpAt.toISOString() : '',
       priority,
+      status,
       tags,
       project,
       area,

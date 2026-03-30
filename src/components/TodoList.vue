@@ -4,9 +4,10 @@ import TodoItem from './TodoItem.vue';
 const props = defineProps({
   todos: { type: Array, required: true },
   emptyMessage: { type: String, default: 'No hay tareas.' },
+  taskActions: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask']);
+const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action']);
 </script>
 
 <template>
@@ -19,10 +20,12 @@ const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask']);
       v-for="todo in props.todos"
       :key="todo.id"
       :todo="todo"
+      :task-actions="props.taskActions"
       @toggle="emit('toggle', $event)"
       @remove="emit('remove', $event)"
       @update="emit('update', $event)"
       @toggle-subtask="emit('toggle-subtask', $event)"
+      @task-action="emit('task-action', $event)"
     />
   </div>
 </template>

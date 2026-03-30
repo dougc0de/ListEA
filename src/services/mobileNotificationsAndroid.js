@@ -43,7 +43,17 @@ export class AndroidMobileNotifications {
     }
   }
 
-  async schedule({ id, title, body, at }) {
+  async schedule({
+    id,
+    title,
+    body,
+    at,
+    largeBody,
+    summaryText,
+    actionTypeId,
+    extra,
+    group,
+  }) {
     await this.plugin.cancel({
       notifications: [{ id }],
     });
@@ -54,6 +64,11 @@ export class AndroidMobileNotifications {
           id,
           title,
           body,
+          largeBody,
+          summaryText,
+          actionTypeId,
+          extra,
+          group,
           schedule: {
             at,
             allowWhileIdle: true,

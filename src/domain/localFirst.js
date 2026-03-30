@@ -45,7 +45,7 @@ export class LocalTaskRepository {
         : [];
 
       return {
-        tasks: hasPersistedTasks ? tasks : this.factory.createDemoTasks(),
+        tasks: hasPersistedTasks ? tasks : [],
         analytics: this.normalizeAnalytics(parsed.analytics),
         preferences: this.normalizePreferences(parsed.preferences),
       };
@@ -64,7 +64,7 @@ export class LocalTaskRepository {
 
   createBootstrapState() {
     return {
-      tasks: this.factory.createDemoTasks(),
+      tasks: [],
       analytics: this.normalizeAnalytics(),
       preferences: this.normalizePreferences(),
     };

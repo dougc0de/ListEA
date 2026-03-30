@@ -23,6 +23,12 @@ export const TASK_IMPACT = Object.freeze({
   LOW: 'low',
 });
 
+export const CAPTURE_SOURCES = Object.freeze({
+  MANUAL: 'manual',
+  SHARE: 'share',
+  SHORTCUT: 'shortcut',
+});
+
 const RECURRENCE_PRESETS = new Set([
   'none',
   'daily',
@@ -80,6 +86,10 @@ function normalizeEffort(value) {
   }
 
   return Math.min(480, Math.round(numeric));
+}
+
+function normalizeCaptureSource(source) {
+  return Object.values(CAPTURE_SOURCES).includes(source) ? source : CAPTURE_SOURCES.MANUAL;
 }
 
 function titleize(value) {
@@ -170,6 +180,9 @@ export class TaskEntity {
     this.completedAt = task.completedAt;
     this.reminderSent = task.reminderSent;
     this.avatarSnippetShownAt = task.avatarSnippetShownAt;
+    this.source = task.source;
+    this.capturedAt = task.capturedAt;
+    this.needsTriage = task.needsTriage;
     this.recurrence = task.recurrence;
   }
 
@@ -194,6 +207,7 @@ export class TaskEntity {
     this.completedAt = normalizeDateTime(completedAt);
     this.updatedAt = this.completedAt;
     this.reminderSent = true;
+    this.needsTriage = false;
   }
 
   reopen(updatedAt = new Date().toISOString()) {
@@ -279,6 +293,18 @@ export class TaskEntity {
       this.avatarSnippetShownAt = normalizeDateTime(patch.avatarSnippetShownAt);
     }
 
+    if (patch.source !== undefined) {
+      this.source = normalizeCaptureSource(patch.source);
+    }
+
+    if (patch.capturedAt !== undefined) {
+      this.capturedAt = normalizeDateTime(patch.capturedAt) || this.capturedAt;
+    }
+
+    if (patch.needsTriage !== undefined) {
+      this.needsTriage = Boolean(patch.needsTriage);
+    }
+
     this.updatedAt = normalizeDateTime(timestamp);
   }
 
@@ -303,6 +329,9 @@ export class TaskEntity {
       completedAt: this.completedAt,
       reminderSent: this.reminderSent,
       avatarSnippetShownAt: this.avatarSnippetShownAt,
+      source: this.source,
+      capturedAt: this.capturedAt,
+      needsTriage: this.needsTriage,
       recurrence: this.recurrence.toJSON(),
     };
   }
@@ -336,6 +365,9 @@ export class TaskFactory {
       completedAt: normalizeDateTime(payload.completedAt),
       reminderSent: Boolean(payload.reminderSent),
       avatarSnippetShownAt: normalizeDateTime(payload.avatarSnippetShownAt),
+      source: normalizeCaptureSource(payload.source),
+      capturedAt: normalizeDateTime(payload.capturedAt) || normalizeDateTime(payload.createdAt) || now,
+      needsTriage: Boolean(payload.needsTriage),
       recurrence: TaskFactory.normalizeRecurrence(payload.recurrence, {
         dueAt: payload.dueAt,
       }),
@@ -521,12 +553,13 @@ export class TaskContextPresenter {
 
   buildTaskContext(task) {
     return [
+      task.needsTriage ? 'Inbox' : null,
       task.project || 'Sin proyecto',
       task.area || 'Sin area',
       this.getStatusLabel(task.status),
       this.getPriorityLabel(task.priority),
       this.formatDate(task.getRelevantDate()),
-    ];
+    ].filter(Boolean);
   }
 
   buildSubtaskContext(task, subtask) {

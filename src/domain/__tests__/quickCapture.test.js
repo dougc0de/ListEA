@@ -25,4 +25,18 @@ describe('QuickCaptureInterpreter', () => {
     expect(result.recurrence.interval).toBe(3);
     expect(result.effortMinutes).toBe(15);
   });
+
+  it('detects professional follow-ups and client context', () => {
+    const interpreter = new QuickCaptureInterpreter();
+    const result = interpreter.interpret(
+      'seguimiento manana 9am cliente:Mario #ventas',
+      new Date('2026-03-23T08:00:00.000Z'),
+    );
+
+    expect(result.status).toBe('waiting');
+    expect(result.project).toBe('Mario');
+    expect(new Date(result.followUpAt).getDate()).toBe(24);
+    expect(new Date(result.followUpAt).getHours()).toBe(9);
+    expect(result.dueAt).toBe('');
+  });
 });

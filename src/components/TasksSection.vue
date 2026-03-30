@@ -5,11 +5,15 @@ import ProductivityDashboard from './ProductivityDashboard.vue';
 import TodoList from './TodoList.vue';
 import {
   cancelReminder,
+  clearReminderInteractions,
   clearAllReminderTimers,
   enableExactReminders,
   enableReminders,
   getExactAlarmPermission,
   getReminderPermission,
+  isNativeReminderRuntime,
+  registerReminderInteractions,
+  REMINDER_ACTION_IDS,
   scheduleReminder,
 } from '../services/reminders';
 import {
@@ -34,12 +38,21 @@ import {
 } from '../domain/license';
 import { LocalTaskRepository } from '../domain/localFirst';
 import { NavigationCatalog } from '../domain/navigation';
+import { QuickCaptureInterpreter } from '../domain/quickCapture';
 import { RecurrenceEngine } from '../domain/recurrence';
+import { ProfessionalReviewAnalyzer } from '../domain/review';
 import { downloadBackupFile, parseBackupDocument, readBackupFile } from '../services/localBackup';
-import { TaskContextPresenter, TaskFactory } from '../domain/tasks';
+import { LAUNCH_INTENT_TYPES } from '../services/launchIntents';
+import {
+  CAPTURE_SOURCES,
+  TASK_STATUS,
+  TaskContextPresenter,
+  TaskFactory,
+} from '../domain/tasks';
 
 const props = defineProps({
   currentView: { type: String, default: 'today' },
+  launchIntent: { type: Object, default: null },
 });
 
 const emit = defineEmits(['navigate']);
@@ -57,6 +70,8 @@ const visibilityPlanner = new TaskVisibilityPlanner(filterService);
 const insightAnalyzer = new BacklogInsightAnalyzer();
 const navigationCatalog = new NavigationCatalog();
 const contextPresenter = new TaskContextPresenter();
+const captureInterpreter = new QuickCaptureInterpreter();
+const professionalReviewAnalyzer = new ProfessionalReviewAnalyzer();
 
 const tasks = ref([]);
 const analytics = ref(repository.normalizeAnalytics());
@@ -75,6 +90,7 @@ const backupPassphrase = ref('');
 const importPassphrase = ref('');
 const isExportingBackup = ref(false);
 const isImportingBackup = ref(false);
+const isNativeReminderPlatform = ref(false);
 const THEME_MODES = Object.freeze({
   LIGHT: 'light',
   DARK: 'dark',
@@ -128,6 +144,16 @@ const UPGRADE_COPY = Object.freeze({
     message: 'Puedes exportar e importar gratis. El respaldo cifrado con frase local forma parte de ListEA Pro.',
   },
 });
+const INBOX_TASK_ACTIONS = Object.freeze([
+  { id: 'triage', label: 'Sacar de inbox', tone: 'primary' },
+  { id: 'inbox-tomorrow', label: 'Manana 9:00', tone: 'ghost' },
+]);
+const FOLLOW_UP_TASK_ACTIONS = Object.freeze([
+  { id: 'follow-up-tomorrow', label: 'Manana', tone: 'ghost' },
+  { id: 'follow-up-friday', label: 'Viernes', tone: 'ghost' },
+  { id: 'follow-up-next-week', label: 'Prox. semana', tone: 'ghost' },
+  { id: 'follow-up-resolved', label: 'Resuelto', tone: 'primary' },
+]);
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
@@ -159,6 +185,65 @@ function applySearch(list) {
   );
 }
 
+function parseDate(value) {
+  const parsed = value ? new Date(value) : null;
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+}
+
+function resolveTaskActionField(task) {
+  if (task.followUpAt && (!task.dueAt || [TASK_STATUS.WAITING, TASK_STATUS.BLOCKED].includes(task.status))) {
+    return 'followUpAt';
+  }
+
+  return task.dueAt ? 'dueAt' : 'followUpAt';
+}
+
+function createDateAt(hour = 9, minute = 0) {
+  const nextDate = new Date();
+  nextDate.setHours(hour, minute, 0, 0);
+  return nextDate;
+}
+
+function buildTomorrowAt(hour = 9, minute = 0) {
+  const nextDate = createDateAt(hour, minute);
+  nextDate.setDate(nextDate.getDate() + 1);
+  return nextDate;
+}
+
+function buildNextWeekdayAt(targetWeekday, hour = 9, minute = 0) {
+  const nextDate = createDateAt(hour, minute);
+  do {
+    nextDate.setDate(nextDate.getDate() + 1);
+  } while (nextDate.getDay() !== targetWeekday);
+  return nextDate;
+}
+
+function buildNextWeekAt(hour = 9, minute = 0) {
+  return buildNextWeekdayAt(1, hour, minute);
+}
+
+function buildSnoozeDate(task, minutes = 10) {
+  const currentAnchor = parseDate(task[resolveTaskActionField(task)] || task.getRelevantDate());
+  const nextDate = currentAnchor && currentAnchor.getTime() > Date.now()
+    ? new Date(currentAnchor)
+    : new Date();
+  nextDate.setMinutes(nextDate.getMinutes() + minutes);
+  return nextDate;
+}
+
+function resolveTaskWorkspaceView(task) {
+  if (!task) return 'today';
+  if (task.needsTriage) return 'inbox';
+  if (task.status === TASK_STATUS.WAITING || task.status === TASK_STATUS.BLOCKED || task.followUpAt) {
+    return 'follow-up';
+  }
+
+  const preferredFilter = visibilityPlanner.getPreferredFilter(task, {
+    referenceDate: new Date(),
+  });
+  return preferredFilter ? 'today' : 'backlog';
+}
+
 function loadState() {
   const state = repository.load();
   tasks.value = state.tasks;
@@ -179,8 +264,32 @@ function addTask(payload) {
   if (!task.title) return;
 
   tasks.value = [task, ...tasks.value];
-  showUiFeedback(`Tarea "${task.title}" guardada.`, 'success');
+  const feedbackMessage = task.needsTriage
+    ? `Captura "${task.title}" guardada en Inbox.`
+    : `Tarea "${task.title}" guardada.`;
+  showUiFeedback(feedbackMessage, 'success');
   revealTask(task);
+}
+
+function captureTaskFromExternalSource(text, metadata = {}) {
+  const interpreted = captureInterpreter.interpret(text);
+  const nextTitle = interpreted.title || `${text ?? ''}`.trim();
+  if (!nextTitle) return;
+
+  addTask({
+    title: nextTitle,
+    project: metadata.project || interpreted.project,
+    area: metadata.area || interpreted.area,
+    dueAt: interpreted.dueAt,
+    followUpAt: interpreted.followUpAt,
+    priority: interpreted.priority,
+    status: interpreted.status,
+    tags: interpreted.tags,
+    effortMinutes: interpreted.effortMinutes || 20,
+    source: metadata.source || CAPTURE_SOURCES.SHARE,
+    capturedAt: new Date().toISOString(),
+    needsTriage: true,
+  });
 }
 
 function toggleTask(id) {
@@ -471,21 +580,124 @@ function showUiFeedback(message, tone = 'success') {
 
 function revealTask(task) {
   searchQuery.value = '';
+  const targetView = resolveTaskWorkspaceView(task);
 
-  if (resolvedView.value !== 'today') {
+  if (targetView === 'inbox' || targetView === 'follow-up') {
+    emit('navigate', targetView);
     return;
   }
 
-  const nextFilter = visibilityPlanner.resolveVisibleFilter(task, activeFilterId.value, {
-    referenceDate: new Date(),
-  });
+  if (targetView === 'today') {
+    const nextFilter = visibilityPlanner.resolveVisibleFilter(task, activeFilterId.value, {
+      referenceDate: new Date(),
+    });
 
-  if (nextFilter) {
-    activeFilterId.value = nextFilter;
+    if (nextFilter) {
+      activeFilterId.value = nextFilter;
+    }
+    emit('navigate', 'today');
     return;
   }
 
   emit('navigate', 'backlog');
+}
+
+function focusTaskById(taskId, preferredView = '') {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  searchQuery.value = '';
+  const targetView = preferredView || resolveTaskWorkspaceView(task);
+
+  if (targetView === 'today') {
+    const nextFilter = visibilityPlanner.resolveVisibleFilter(task, activeFilterId.value, {
+      referenceDate: new Date(),
+    });
+    if (nextFilter) {
+      activeFilterId.value = nextFilter;
+    }
+  }
+
+  emit('navigate', targetView || 'today');
+  showUiFeedback(`Abriendo "${task.title}".`, 'info');
+}
+
+function updateTaskWithDate(task, nextDate, feedbackMessage) {
+  if (!task || !nextDate) return;
+
+  const dateField = resolveTaskActionField(task);
+  const patch = {
+    [dateField]: nextDate.toISOString(),
+    reminderSent: false,
+    avatarSnippetShownAt: '',
+    needsTriage: false,
+  };
+
+  if (dateField === 'followUpAt' && task.status === TASK_STATUS.ACTIVE) {
+    patch.status = TASK_STATUS.WAITING;
+  }
+
+  task.applyPatch(patch);
+  tasks.value = [...tasks.value];
+  showUiFeedback(feedbackMessage, 'success');
+}
+
+function markTaskTriaged(taskId) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  task.applyPatch({ needsTriage: false });
+  tasks.value = [...tasks.value];
+  showUiFeedback(`"${task.title}" salio de Inbox y ya cuenta como tarea lista.`, 'success');
+}
+
+function resolveFollowUp(taskId) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  task.applyPatch({
+    status: TASK_STATUS.ACTIVE,
+    followUpAt: '',
+    needsTriage: false,
+    reminderSent: false,
+    avatarSnippetShownAt: '',
+  });
+  tasks.value = [...tasks.value];
+  showUiFeedback(`Seguimiento resuelto en "${task.title}".`, 'success');
+}
+
+function handleTaskAction({ taskId, actionId }) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  if (actionId === 'triage') {
+    markTaskTriaged(taskId);
+    return;
+  }
+
+  if (actionId === 'inbox-tomorrow') {
+    updateTaskWithDate(task, buildTomorrowAt(9, 0), `"${task.title}" quedo para manana a las 9:00.`);
+    return;
+  }
+
+  if (actionId === 'follow-up-tomorrow') {
+    updateTaskWithDate(task, buildTomorrowAt(9, 0), `Seguimiento reagendado para manana.`);
+    return;
+  }
+
+  if (actionId === 'follow-up-friday') {
+    updateTaskWithDate(task, buildNextWeekdayAt(5, 9, 0), `Seguimiento movido al viernes.`);
+    return;
+  }
+
+  if (actionId === 'follow-up-next-week') {
+    updateTaskWithDate(task, buildNextWeekAt(9, 0), `Seguimiento movido a la proxima semana.`);
+    return;
+  }
+
+  if (actionId === 'follow-up-resolved') {
+    resolveFollowUp(taskId);
+  }
 }
 
 function clearAvatarSnippetTimer() {
@@ -515,7 +727,11 @@ function showAvatarSnippet(task) {
   const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
   const shownAt = new Date().toISOString();
   task.applyPatch({ avatarSnippetShownAt: shownAt });
-  avatarSnippet.value = avatarCoach.buildTaskSnippet(task, effectiveAvatarPreferences, new Date(shownAt));
+  avatarSnippet.value = {
+    ...avatarCoach.buildTaskSnippet(task, effectiveAvatarPreferences, new Date(shownAt)),
+    context: contextPresenter.buildTaskContext(task).slice(0, 3).join(' - '),
+    preferredView: resolveTaskWorkspaceView(task),
+  };
 
   clearAvatarSnippetHideTimer();
   const durationMs = effectiveAvatarPreferences.getSnippetDurationMs();
@@ -534,7 +750,8 @@ function syncAvatarSnippet() {
   const canRenderSnippet = mounted.value
     && showTaskWorkspace.value
     && effectiveAvatarPreferences.enabled
-    && effectiveAvatarPreferences.snippetEnabled;
+    && effectiveAvatarPreferences.snippetEnabled
+    && !(preferences.value.notificationsEnabled && isNativeReminderPlatform.value);
 
   if (!canRenderSnippet) {
     clearAvatarSnippetHideTimer();
@@ -568,6 +785,75 @@ function syncAvatarSnippet() {
     avatarSnippetTimerId = 0;
     syncAvatarSnippet();
   }, Math.min(delay, 2147483647));
+}
+
+function showReminderBubble(taskId) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task || task.isCompleted() || avatarSnippet.value?.taskId === taskId) return;
+
+  task.applyPatch({ reminderSent: true });
+  tasks.value = [...tasks.value];
+  showAvatarSnippet(task);
+}
+
+function completeReminderTask(taskId) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task || task.isCompleted()) return;
+  toggleTask(taskId);
+  dismissAvatarSnippet({ reschedule: false });
+}
+
+function snoozeReminderTask(taskId, minutes = 10) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  updateTaskWithDate(task, buildSnoozeDate(task, minutes), `Aviso pospuesto ${minutes} minutos.`);
+  dismissAvatarSnippet({ reschedule: true });
+}
+
+function moveReminderTaskToTomorrow(taskId) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  updateTaskWithDate(task, buildTomorrowAt(9, 0), `Aviso movido a manana a las 9:00.`);
+  dismissAvatarSnippet({ reschedule: true });
+}
+
+function openReminderTask(taskId, preferredView = '') {
+  dismissAvatarSnippet({ reschedule: false });
+  focusTaskById(taskId, preferredView);
+}
+
+function handleReminderNotificationReceived(notification) {
+  const taskId = notification?.extra?.taskId;
+  if (!taskId) return;
+  showReminderBubble(taskId);
+}
+
+function handleReminderNotificationAction(notificationAction) {
+  const taskId = notificationAction?.notification?.extra?.taskId;
+  if (!taskId) return;
+
+  const preferredView = notificationAction?.notification?.extra?.preferredView ?? '';
+  const actionId = notificationAction?.actionId;
+  if (actionId === REMINDER_ACTION_IDS.COMPLETE) {
+    completeReminderTask(taskId);
+    return;
+  }
+
+  if (actionId === REMINDER_ACTION_IDS.SNOOZE_10) {
+    snoozeReminderTask(taskId, 10);
+    return;
+  }
+
+  if (actionId === REMINDER_ACTION_IDS.MOVE_TOMORROW) {
+    moveReminderTaskToTomorrow(taskId);
+    return;
+  }
+
+  if (actionId === REMINDER_ACTION_IDS.OPEN) {
+    openReminderTask(taskId, preferredView);
+  }
 }
 
 async function enableNotificationsFlow() {
@@ -741,10 +1027,51 @@ async function importBackupFromFile(event) {
   }
 }
 
+function runProfessionalReviewAction(item) {
+  if (!item?.targetView) return;
+  emit('navigate', item.targetView);
+  if (item.targetView === 'today') {
+    activeFilterId.value = FILTER_IDS.NO_DATE;
+  }
+}
+
+function handleLaunchIntent(intent) {
+  if (!intent?.nonce) return;
+
+  if (intent.type === LAUNCH_INTENT_TYPES.CAPTURE) {
+    captureTaskFromExternalSource(intent.payload?.text, {
+      project: intent.payload?.project,
+      area: intent.payload?.area,
+      source: intent.payload?.source || CAPTURE_SOURCES.SHARE,
+    });
+    emit('navigate', intent.view || 'inbox');
+    return;
+  }
+
+  if (intent.type === LAUNCH_INTENT_TYPES.FOCUS_TASK) {
+    focusTaskById(intent.taskId, intent.view);
+    return;
+  }
+
+  if (intent.type === LAUNCH_INTENT_TYPES.NAVIGATE && intent.view) {
+    emit('navigate', intent.view);
+  }
+}
+
 const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
 const effectiveAvatarPreferences = computed(() => buildEffectiveAvatarPreferences());
-const showTaskWorkspace = computed(() => ['today', 'backlog'].includes(resolvedView.value));
+const showTaskWorkspace = computed(() => ['inbox', 'today', 'follow-up', 'backlog'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
+const inboxTasks = computed(() =>
+  sortTasksByRelevance(applySearch(openTasks.value.filter(task => task.needsTriage))),
+);
+const followUpTasks = computed(() =>
+  sortTasksByRelevance(applySearch(openTasks.value.filter(task =>
+    task.status === TASK_STATUS.WAITING
+    || task.status === TASK_STATUS.BLOCKED
+    || Boolean(task.followUpAt),
+  ))),
+);
 const completedTasks = computed(() =>
   tasks.value
     .filter(task => task.isCompleted())
@@ -777,6 +1104,9 @@ const filteredTasks = computed(() => {
   return sortTasksByRelevance(applySearch(filtered));
 });
 const agendaTasks = computed(() => sortTasksByRelevance(applySearch(openTasks.value)));
+const professionalReviewItems = computed(() => professionalReviewAnalyzer.analyze(openTasks.value, {
+  referenceDate: new Date(),
+}));
 const focusEmptyMessage = computed(() => {
   if (selectedTimeFilter.value?.id === FILTER_IDS.OVERDUE) {
     return 'No hay tareas vencidas.';
@@ -802,12 +1132,64 @@ const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
   today: filterService.apply(openTasks.value, FILTER_IDS.TODAY, { referenceDate: new Date() }).length,
+  inbox: inboxTasks.value.length,
+  followUp: followUpTasks.value.length,
+  blocked: openTasks.value.filter(task => task.status === TASK_STATUS.BLOCKED).length,
 }));
-const summaryCards = computed(() => [
-  { id: 'pending', label: 'Abiertas', value: summary.value.pending },
-  { id: 'today', label: 'Para hoy', value: summary.value.today },
-  { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
-]);
+const heroCopy = computed(() => {
+  if (resolvedView.value === 'inbox') {
+    return {
+      eyebrow: 'Capturar',
+      title: 'Convierte ideas rapidas en siguientes pasos claros.',
+      description: 'Inbox conserva capturas locales antes de clasificarlas. Ideal para llamadas, correos y compromisos que no quieres perder.',
+    };
+  }
+
+  if (resolvedView.value === 'follow-up') {
+    return {
+      eyebrow: 'Seguimiento',
+      title: 'Mantén promesas, respuestas y pendientes visibles.',
+      description: 'ListEA junta lo que espera respuesta, lo bloqueado y lo que ya necesita una nueva fecha.',
+    };
+  }
+
+  if (resolvedView.value === 'backlog') {
+    return {
+      eyebrow: 'Agenda',
+      title: 'Ordena tu backlog con contexto real y privado.',
+      description: 'Aqui ves senales, saturacion y tareas activas para decidir mejor sin sacar datos del dispositivo.',
+    };
+  }
+
+  return {
+    eyebrow: 'Hoy',
+    title: 'Captura rapido, decide el siguiente paso y ejecuta con foco.',
+    description: 'ListEA prioriza lo que toca hoy sin perder el hilo de tus seguimientos ni tu contexto profesional.',
+  };
+});
+const summaryCards = computed(() => {
+  if (resolvedView.value === 'inbox') {
+    return [
+      { id: 'inbox', label: 'En Inbox', value: summary.value.inbox },
+      { id: 'today', label: 'Para hoy', value: summary.value.today },
+      { id: 'followUp', label: 'En seguimiento', value: summary.value.followUp },
+    ];
+  }
+
+  if (resolvedView.value === 'follow-up') {
+    return [
+      { id: 'followUp', label: 'Seguimientos', value: summary.value.followUp },
+      { id: 'blocked', label: 'Bloqueadas', value: summary.value.blocked },
+      { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
+    ];
+  }
+
+  return [
+    { id: 'pending', label: 'Abiertas', value: summary.value.pending },
+    { id: 'today', label: 'Para hoy', value: summary.value.today },
+    { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
+  ];
+});
 const activePaletteId = computed(() => hasFeature(ENTITLEMENT_KEYS.PREMIUM_THEMES)
   ? (preferences.value.colorPalette ?? COLOR_PALETTES.OCEAN)
   : COLOR_PALETTES.OCEAN);
@@ -853,10 +1235,22 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => props.launchIntent,
+  nextIntent => {
+    handleLaunchIntent(nextIntent);
+  },
+);
+
 onMounted(async () => {
   loadState();
+  isNativeReminderPlatform.value = await isNativeReminderRuntime();
   preferences.value.reminderPermission = await getReminderPermission();
   preferences.value.exactAlarmPermission = await getExactAlarmPermission();
+  await registerReminderInteractions({
+    onNotificationReceived: handleReminderNotificationReceived,
+    onNotificationAction: handleReminderNotificationAction,
+  });
   mounted.value = true;
   applyAppearancePreferences();
   persistState();
@@ -866,6 +1260,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearAllReminderTimers();
+  clearReminderInteractions();
   clearAvatarSnippetTimer();
   clearAvatarSnippetHideTimer();
   clearUiFeedbackTimer();
@@ -876,7 +1271,9 @@ onBeforeUnmount(() => {
   <section class="tasksShell">
     <section v-if="showTaskWorkspace" class="topBar">
       <div class="topCopy">
-        <p class="eyebrow">Todo empieza con lo que anotas.</p>
+        <p class="eyebrow">{{ heroCopy.eyebrow }}</p>
+        <h1>{{ heroCopy.title }}</h1>
+        <p class="panelText">{{ heroCopy.description }}</p>
       </div>
       <div class="topStats">
         <article v-for="card in summaryCards" :key="card.id" class="statCard">
@@ -916,6 +1313,22 @@ onBeforeUnmount(() => {
             <p class="eyebrow">Aviso</p>
             <strong>{{ avatarSnippet.title }}</strong>
             <p class="snippetTask">{{ avatarSnippet.message }}</p>
+            <p v-if="avatarSnippet.context" class="snippetContext">{{ avatarSnippet.context }}</p>
+          </div>
+
+          <div class="snippetActions">
+            <button type="button" class="primaryButton" @click="openReminderTask(avatarSnippet.taskId, avatarSnippet.preferredView)">
+              Abrir
+            </button>
+            <button type="button" class="ghostButton" @click="completeReminderTask(avatarSnippet.taskId)">
+              Completar
+            </button>
+            <button type="button" class="ghostButton" @click="snoozeReminderTask(avatarSnippet.taskId, 10)">
+              Posponer 10m
+            </button>
+            <button type="button" class="ghostButton" @click="moveReminderTaskToTomorrow(avatarSnippet.taskId)">
+              Manana
+            </button>
           </div>
 
           <button type="button" class="ghostButton snippetClose" @click="dismissAvatarSnippet()">
@@ -955,7 +1368,55 @@ onBeforeUnmount(() => {
       </label>
     </section>
 
-    <section v-if="resolvedView === 'today'" class="focusBoardGrid">
+    <section v-if="resolvedView === 'inbox'" class="workflowGrid">
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Inbox</p>
+            <h3>Capturas pendientes por clasificar</h3>
+          </div>
+          <div class="headerActions">
+            <span class="laneCount">{{ formatTaskCount(inboxTasks.length) }}</span>
+          </div>
+        </div>
+        <p class="panelText">
+          Todo lo capturado rapido cae aqui primero. Puedes sacarlo de Inbox o asignarle una fecha inmediata sin perder el ritmo.
+        </p>
+        <TodoList
+          :todos="inboxTasks"
+          :task-actions="INBOX_TASK_ACTIONS"
+          empty-message="Inbox esta limpio. Tus capturas ya tienen siguiente paso."
+          @toggle="toggleTask"
+          @remove="removeTask"
+          @update="updateTask"
+          @toggle-subtask="toggleSubtask"
+          @task-action="handleTaskAction"
+        />
+      </article>
+
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Revision rapida</p>
+            <h3>Senales que conviene resolver primero</h3>
+          </div>
+        </div>
+        <div v-if="professionalReviewItems.length" class="reviewList">
+          <article v-for="item in professionalReviewItems" :key="item.id" class="reviewCard">
+            <div>
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.message }}</p>
+            </div>
+            <button type="button" class="ghostButton" @click="runProfessionalReviewAction(item)">
+              {{ item.actionLabel }}
+            </button>
+          </article>
+        </div>
+        <p v-else class="emptyText">No hay senales urgentes en tu revision profesional.</p>
+      </article>
+    </section>
+
+    <section v-else-if="resolvedView === 'today'" class="focusBoardGrid">
       <article ref="focusListPanelRef" class="panelCard focusListPanel">
         <div class="sectionHeader">
           <div>
@@ -1020,6 +1481,54 @@ onBeforeUnmount(() => {
           @update="updateTask"
           @toggle-subtask="toggleSubtask"
         />
+      </article>
+    </section>
+
+    <section v-else-if="resolvedView === 'follow-up'" class="workflowGrid">
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Seguimiento</p>
+            <h3>Pendientes de respuesta, espera o desbloqueo</h3>
+          </div>
+          <div class="headerActions">
+            <span class="laneCount">{{ formatTaskCount(followUpTasks.length) }}</span>
+          </div>
+        </div>
+        <p class="panelText">
+          Aqui aterriza lo que depende de alguien mas, lo bloqueado y lo que ya merece un nuevo toque.
+        </p>
+        <TodoList
+          :todos="followUpTasks"
+          :task-actions="FOLLOW_UP_TASK_ACTIONS"
+          empty-message="No hay seguimientos ni bloqueos pendientes."
+          @toggle="toggleTask"
+          @remove="removeTask"
+          @update="updateTask"
+          @toggle-subtask="toggleSubtask"
+          @task-action="handleTaskAction"
+        />
+      </article>
+
+      <article class="panelCard insightsPanel">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Revision profesional</p>
+            <h3>Resumen local de 3 a 5 minutos</h3>
+          </div>
+        </div>
+        <div v-if="professionalReviewItems.length" class="reviewList">
+          <article v-for="item in professionalReviewItems" :key="item.id" class="reviewCard">
+            <div>
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.message }}</p>
+            </div>
+            <button type="button" class="ghostButton" @click="runProfessionalReviewAction(item)">
+              {{ item.actionLabel }}
+            </button>
+          </article>
+        </div>
+        <p v-else class="emptyText">Tu seguimiento se ve bajo control en este momento.</p>
       </article>
     </section>
 
@@ -1123,7 +1632,7 @@ onBeforeUnmount(() => {
           ListEA guarda tareas, historial y preferencias localmente. No necesita cuenta, backend ni sincronizacion para funcionar.
         </p>
         <p class="panelText">
-          La promesa del producto es simple: ayudarte a actuar sin entregar tus datos.
+          La promesa del producto es simple: capturar, decidir y dar seguimiento sin entregar tus datos.
         </p>
       </article>
 
@@ -1141,7 +1650,7 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <p class="panelText">
-            Pro desbloquea analisis avanzado, PDF local, avisos avanzados, paletas premium y respaldo cifrado.
+            Pro desbloquea revision avanzada, avisos avanzados, paletas premium y respaldo cifrado.
           </p>
           <div class="buttonRow">
             <button v-if="!isProActive" type="button" class="primaryButton" @click="activateProLocally">
@@ -1159,7 +1668,7 @@ onBeforeUnmount(() => {
 
       <article class="panelCard">
         <p class="eyebrow">Notificaciones</p>
-        <h3>Recordatorios moviles con control del usuario</h3>
+        <h3>Recordatorios nativos y accionables</h3>
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
         <p class="panelText">Recordatorios: {{ preferences.notificationsEnabled ? 'activados' : 'desactivados' }}</p>
         <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
@@ -1201,7 +1710,7 @@ onBeforeUnmount(() => {
 
       <article class="panelCard">
         <p class="eyebrow">Avisos</p>
-        <h3>Aparece al centro cuando toca</h3>
+        <h3>Globo local cuando toca actuar</h3>
         <div class="settingsStack">
           <label class="checkboxRow">
             <input
@@ -1545,11 +2054,12 @@ onBeforeUnmount(() => {
 }
 
 .snippetCard {
-  --snippet-card-max: min(88vw, 320px);
+  --snippet-card-max: min(92vw, 360px);
   width: min(100%, var(--snippet-card-max));
   max-width: var(--snippet-card-max);
   margin-inline: auto;
-  display: block;
+  display: grid;
+  gap: 10px;
   padding: 0;
   border-radius: 26px;
   border: 1px solid var(--line);
@@ -1576,7 +2086,7 @@ onBeforeUnmount(() => {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 18px 88px 18px 18px;
+  padding: 18px 88px 10px 18px;
   border-radius: 22px;
   background: var(--surface-soft);
   text-align: center;
@@ -1603,6 +2113,25 @@ onBeforeUnmount(() => {
   color: var(--text-main);
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+.snippetContext {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.snippetActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 18px 18px;
+}
+
+.snippetActions .ghostButton,
+.snippetActions .primaryButton {
+  flex: 1 1 140px;
 }
 
 .snippetClose {
@@ -1701,6 +2230,7 @@ onBeforeUnmount(() => {
 }
 
 .focusBoardGrid,
+.workflowGrid,
 .backlogGrid,
 .dashboardGrid,
 .settingsGrid {
@@ -1710,6 +2240,10 @@ onBeforeUnmount(() => {
 
 .focusBoardGrid {
   grid-template-columns: 1fr;
+}
+
+.workflowGrid {
+  grid-template-columns: 1.15fr 0.85fr;
 }
 
 .backlogGrid {
@@ -1836,19 +2370,36 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+.reviewList {
+  display: grid;
+  gap: 12px;
+}
+
 .insightCard {
   padding: 14px 16px;
   border-radius: 18px;
   background: var(--surface-soft);
 }
 
+.reviewCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface-soft) 88%, white);
+}
+
 .insightCard strong,
-.insightCard p {
+.insightCard p,
+.reviewCard strong,
+.reviewCard p {
   display: block;
   text-align: left;
 }
 
-.insightCard p {
+.insightCard p,
+.reviewCard p {
   margin: 6px 0 0;
 }
 
@@ -2009,6 +2560,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 860px) {
   .topBar,
+  .workflowGrid,
   .focusBoardGrid,
   .backlogGrid,
   .settingsGrid,
@@ -2056,6 +2608,10 @@ onBeforeUnmount(() => {
 
   .paletteGrid {
     grid-template-columns: 1fr;
+  }
+
+  .snippetActions {
+    padding: 0 16px 16px;
   }
 
   .focusFilterTile {

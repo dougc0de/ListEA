@@ -25,7 +25,16 @@ export class AppleMobileNotifications {
     return 'granted';
   }
 
-  async schedule({ id, title, body, at }) {
+  async schedule({
+    id,
+    title,
+    body,
+    at,
+    actionTypeId,
+    extra,
+    threadIdentifier,
+    summaryArgument,
+  }) {
     await this.plugin.cancel({
       notifications: [{ id }],
     });
@@ -36,6 +45,10 @@ export class AppleMobileNotifications {
           id,
           title,
           body,
+          actionTypeId,
+          extra,
+          threadIdentifier,
+          summaryArgument,
           schedule: { at },
           sound: undefined,
         },

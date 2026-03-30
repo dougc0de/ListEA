@@ -45,4 +45,20 @@ describe('AvatarCoach', () => {
 
     expect(dueTask?.title).toBe('Preparar reunion');
   });
+
+  it('computes reminders from follow-up dates when no due date exists', () => {
+    const factory = new TaskFactory();
+    const task = factory.create({
+      title: 'Seguimiento con proveedor',
+      status: 'waiting',
+      followUpAt: '2026-03-23T15:00:00.000Z',
+    });
+
+    const reminderAt = new AvatarCoach().getReminderAt(task, new AvatarPreferences({
+      enabled: true,
+      reminderTiming: AVATAR_TIMINGS.BEFORE_10,
+    }));
+
+    expect(reminderAt).toBe('2026-03-23T14:50:00.000Z');
+  });
 });

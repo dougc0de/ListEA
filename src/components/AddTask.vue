@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
+import { toDateTimeInputValue } from '../domain/tasks';
 
 const emit = defineEmits(['add']);
 
@@ -26,6 +27,13 @@ const recurrenceError = ref('');
 const titleField = ref(null);
 
 const interpreter = new QuickCaptureInterpreter();
+const captureTemplates = Object.freeze([
+  { id: 'call', label: 'Llamada' },
+  { id: 'email-follow-up', label: 'Correo pendiente' },
+  { id: 'meeting', label: 'Reunion' },
+  { id: 'proposal', label: 'Propuesta' },
+  { id: 'billing-follow-up', label: 'Cobro/seguimiento' },
+]);
 
 const parsedSubtasks = computed(() =>
   subtasks.value
@@ -54,10 +62,13 @@ const recurrenceLabels = Object.freeze({
 const previewItems = computed(() => {
   const items = [];
   if (capturePreview.value.dueAt) items.push(`Fecha detectada: ${new Date(capturePreview.value.dueAt).toLocaleString()}`);
+  if (capturePreview.value.followUpAt) items.push(`Seguimiento detectado: ${new Date(capturePreview.value.followUpAt).toLocaleString()}`);
   if (capturePreview.value.project || capturePreview.value.area) {
     items.push(`Area detectada: ${capturePreview.value.project || capturePreview.value.area}`);
   }
   if (capturePreview.value.tags.length) items.push(`Etiquetas: ${capturePreview.value.tags.join(', ')}`);
+  if (capturePreview.value.status === 'waiting') items.push('Estado sugerido: seguimiento');
+  if (capturePreview.value.status === 'blocked') items.push('Estado sugerido: bloqueada');
   if (capturePreview.value.priority !== 'medium') {
     const label = priorityLabels[capturePreview.value.priority] ?? capturePreview.value.priority;
     items.push(`Prioridad sugerida: ${label}`);
@@ -68,6 +79,13 @@ const previewItems = computed(() => {
   }
   return items;
 });
+
+function buildFutureInputValue(daysFromToday = 0, hours = 9, minutes = 0) {
+  const nextDate = new Date();
+  nextDate.setDate(nextDate.getDate() + daysFromToday);
+  nextDate.setHours(hours, minutes, 0, 0);
+  return toDateTimeInputValue(nextDate);
+}
 
 function openComposer() {
   composerOpen.value = true;
@@ -118,10 +136,87 @@ function resetForm() {
   recurrenceError.value = '';
 }
 
+function applyTemplate(templateId) {
+  advancedOpen.value = true;
+  titleError.value = '';
+  recurrenceError.value = '';
+
+  if (templateId === 'call') {
+    title.value = 'Llamar a ';
+    notes.value = 'Define el siguiente paso y deja un resumen corto.';
+    project.value = 'Clientes';
+    area.value = 'Trabajo';
+    dueAt.value = '';
+    followUpAt.value = '';
+    priority.value = 'medium';
+    status.value = 'active';
+    effortMinutes.value = '15';
+    tags.value = 'cliente, llamada';
+    return;
+  }
+
+  if (templateId === 'email-follow-up') {
+    title.value = 'Seguimiento de correo para ';
+    notes.value = 'Confirma respuesta, siguiente paso y fecha prometida.';
+    project.value = 'Clientes';
+    area.value = 'Trabajo';
+    dueAt.value = '';
+    followUpAt.value = buildFutureInputValue(1, 9, 0);
+    priority.value = 'medium';
+    status.value = 'waiting';
+    effortMinutes.value = '10';
+    tags.value = 'correo, seguimiento';
+    return;
+  }
+
+  if (templateId === 'meeting') {
+    title.value = 'Reunion con ';
+    notes.value = 'Anota el objetivo, decision esperada y siguiente paso.';
+    project.value = 'Trabajo';
+    area.value = 'Trabajo';
+    dueAt.value = '';
+    followUpAt.value = '';
+    priority.value = 'medium';
+    status.value = 'active';
+    effortMinutes.value = '45';
+    tags.value = 'reunion';
+    return;
+  }
+
+  if (templateId === 'proposal') {
+    title.value = 'Preparar propuesta para ';
+    notes.value = 'Deja alcance, fecha y cierre esperado.';
+    project.value = 'Clientes';
+    area.value = 'Trabajo';
+    dueAt.value = '';
+    followUpAt.value = '';
+    priority.value = 'high';
+    status.value = 'active';
+    effortMinutes.value = '50';
+    tags.value = 'propuesta, cliente';
+    return;
+  }
+
+  title.value = 'Seguimiento de cobro ';
+  notes.value = 'Confirma fecha de pago, evidencia y siguiente contacto.';
+  project.value = 'Finanzas';
+  area.value = 'Trabajo';
+  dueAt.value = '';
+  followUpAt.value = buildFutureInputValue(2, 9, 0);
+  priority.value = 'high';
+  status.value = 'waiting';
+  effortMinutes.value = '10';
+  tags.value = 'cobro, seguimiento';
+}
+
 function onSubmit() {
   const interpreted = capturePreview.value;
   const nextTitle = title.value.trim() || (interpreted.title || '').trim();
   const resolvedDueAt = dueAt.value || interpreted.dueAt;
+  const resolvedFollowUpAt = followUpAt.value || interpreted.followUpAt;
+  const resolvedStatus = advancedOpen.value
+    ? (status.value || interpreted.status || 'active')
+    : (interpreted.status || status.value || 'active');
   const effectiveRecurrenceMode = recurrencePreset.value !== 'none' && !resolvedDueAt
     ? 'after-completion'
     : recurrenceMode.value;
@@ -141,12 +236,15 @@ function onSubmit() {
     project: project.value.trim() || interpreted.project || '',
     area: area.value.trim() || interpreted.area || '',
     dueAt: resolvedDueAt,
-    followUpAt: followUpAt.value,
+    followUpAt: resolvedFollowUpAt,
     priority: priority.value || interpreted.priority,
-    status: status.value,
+    status: resolvedStatus,
     effortMinutes: effortMinutes.value || interpreted.effortMinutes || 20,
     tags: [tags.value, interpreted.tags.join(',')].filter(Boolean).join(','),
     subtasks: parsedSubtasks.value,
+    source: 'manual',
+    capturedAt: new Date().toISOString(),
+    needsTriage: !advancedOpen.value,
     recurrence: {
       ...(recurrencePreset.value === 'none' ? interpreted.recurrence : {
         preset: recurrencePreset.value,
@@ -191,6 +289,18 @@ function onSubmit() {
       </div>
 
       <form class="composerForm" @submit.prevent="onSubmit">
+        <div class="templateRow">
+          <button
+            v-for="template in captureTemplates"
+            :key="template.id"
+            type="button"
+            class="templateChip"
+            @click="applyTemplate(template.id)"
+          >
+            {{ template.label }}
+          </button>
+        </div>
+
         <p class="fieldLabel">Titulo</p>
         <textarea
           ref="titleField"
@@ -429,6 +539,22 @@ function onSubmit() {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.templateRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.templateChip {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .previewChip {
