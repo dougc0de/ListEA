@@ -209,6 +209,16 @@ function applyTemplate(templateId) {
   tags.value = 'cobro, seguimiento';
 }
 
+function clearDateField(field) {
+  if (field === 'dueAt') {
+    dueAt.value = '';
+    recurrenceError.value = '';
+    return;
+  }
+
+  followUpAt.value = '';
+}
+
 function onSubmit() {
   const interpreted = capturePreview.value;
   const nextTitle = title.value.trim() || (interpreted.title || '').trim();
@@ -338,12 +348,22 @@ function onSubmit() {
 
           <label class="fieldGroup">
             <span>Fecha objetivo</span>
-            <input v-model="dueAt" class="detailField" type="datetime-local" @input="recurrenceError = ''" />
+            <div class="fieldWithAction">
+              <input v-model="dueAt" class="detailField" type="datetime-local" @input="recurrenceError = ''" />
+              <button v-if="dueAt" type="button" class="clearFieldButton" @click="clearDateField('dueAt')">
+                Limpiar
+              </button>
+            </div>
           </label>
 
           <label class="fieldGroup">
             <span>Seguimiento</span>
-            <input v-model="followUpAt" class="detailField" type="datetime-local" />
+            <div class="fieldWithAction">
+              <input v-model="followUpAt" class="detailField" type="datetime-local" />
+              <button v-if="followUpAt" type="button" class="clearFieldButton" @click="clearDateField('followUpAt')">
+                Limpiar
+              </button>
+            </div>
           </label>
 
           <label class="fieldGroup">
@@ -529,6 +549,7 @@ function onSubmit() {
   background: var(--surface-soft);
   color: var(--text-main);
   resize: vertical;
+  font-size: 16px;
 }
 
 .primaryField {
@@ -574,6 +595,12 @@ function onSubmit() {
   gap: 14px;
 }
 
+.fieldWithAction {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
 .fieldGroup {
   display: flex;
   flex-direction: column;
@@ -606,6 +633,13 @@ function onSubmit() {
 .helperText {
   color: var(--text-muted);
   font-size: 0.92rem;
+}
+
+.clearFieldButton {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text-main);
 }
 
 .fieldError {
@@ -644,8 +678,13 @@ function onSubmit() {
 @media (max-width: 720px) {
   .launcherButtonOnly,
   .composerCard {
-    padding: 14px;
-    border-radius: 22px;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .primaryField {
+    min-height: 76px;
   }
 
   .composerHeading,
@@ -661,6 +700,28 @@ function onSubmit() {
   .submitButton,
   .launcherButtonOnly {
     width: 100%;
+  }
+
+  .templateRow,
+  .previewBox {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .templateRow::-webkit-scrollbar,
+  .previewBox::-webkit-scrollbar {
+    display: none;
+  }
+
+  .templateChip,
+  .previewChip {
+    flex: 0 0 auto;
+  }
+
+  .helperText {
+    display: none;
   }
 
   .advancedPanel {

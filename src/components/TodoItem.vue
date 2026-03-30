@@ -1,7 +1,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
+import { TaskExternalActionResolver } from '../domain/taskExternalActions';
 import { TaskContextPresenter, toDateTimeInputValue } from '../domain/tasks';
+import { openTaskExternalAction } from '../services/taskExternalApps';
 
 const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action']);
 
@@ -12,6 +14,7 @@ const props = defineProps({
 
 const presenter = new TaskContextPresenter();
 const advisor = new ExecutionAdvisor();
+const externalActionResolver = new TaskExternalActionResolver();
 
 const isEditing = ref(false);
 const detailsOpen = ref(false);
@@ -56,6 +59,7 @@ const subtaskRows = computed(() =>
 const visibleTags = computed(() => props.todo.tags ?? []);
 const subtaskPreviewRows = computed(() => subtaskRows.value.slice(0, 3));
 const hiddenSubtaskCount = computed(() => Math.max(subtaskRows.value.length - subtaskPreviewRows.value.length, 0));
+const externalAppActions = computed(() => externalActionResolver.resolve(props.todo));
 
 function resetEditors(todo = props.todo) {
   editableTitle.value = todo.title;
@@ -88,7 +92,7 @@ watch(
 function saveTask() {
   const nextTitle = editableTitle.value.trim();
   if (!nextTitle) {
-    editError.value = 'Título requerido';
+    editError.value = 'Titulo requerido';
     return;
   }
 
@@ -136,6 +140,19 @@ function cancelEdit() {
   resetEditors();
   isEditing.value = false;
 }
+
+function clearEditableDate(field) {
+  if (field === 'dueAt') {
+    editableDueAt.value = '';
+    return;
+  }
+
+  editableFollowUpAt.value = '';
+}
+
+function openExternalAction(action) {
+  openTaskExternalAction(action);
+}
 </script>
 
 <template>
@@ -168,7 +185,7 @@ function cancelEdit() {
         </div>
 
         <p v-if="todo.notes && !isEditing" class="notesPreview">{{ todo.notes }}</p>
-        <p class="advisorText">{{ nextAction }}</p>
+        <p v-if="detailsOpen || isEditing" class="advisorText">{{ nextAction }}</p>
       </div>
     </div>
 
@@ -205,6 +222,18 @@ function cancelEdit() {
       </button>
     </div>
 
+    <div v-if="!isEditing && detailsOpen && externalAppActions.length" class="externalActionRow">
+      <button
+        v-for="action in externalAppActions"
+        :key="action.id"
+        type="button"
+        class="externalActionButton"
+        @click="openExternalAction(action)"
+      >
+        {{ action.label }}
+      </button>
+    </div>
+
     <p v-if="editError" class="editError" role="alert">{{ editError }}</p>
 
     <div v-if="detailsOpen || isEditing" class="detailsPanel">
@@ -225,12 +254,22 @@ function cancelEdit() {
 
       <label class="fieldGroup">
         <span>Fecha objetivo</span>
-        <input v-model="editableDueAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
+        <div class="fieldWithAction">
+          <input v-model="editableDueAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
+          <button v-if="isEditing && editableDueAt" type="button" class="clearFieldButton" @click="clearEditableDate('dueAt')">
+            Limpiar
+          </button>
+        </div>
       </label>
 
       <label class="fieldGroup">
         <span>Seguimiento</span>
-        <input v-model="editableFollowUpAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
+        <div class="fieldWithAction">
+          <input v-model="editableFollowUpAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
+          <button v-if="isEditing && editableFollowUpAt" type="button" class="clearFieldButton" @click="clearEditableDate('followUpAt')">
+            Limpiar
+          </button>
+        </div>
       </label>
 
       <label class="fieldGroup">
@@ -358,6 +397,7 @@ function cancelEdit() {
   border-radius: 24px;
   border: 1px solid var(--line);
   background: var(--surface);
+  box-shadow: var(--card-shadow);
 }
 
 .taskCard.blocked {
@@ -392,6 +432,7 @@ function cancelEdit() {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  justify-content: space-between;
 }
 
 .titleRow h3 {
@@ -408,6 +449,7 @@ function cancelEdit() {
   padding: 12px 14px;
   background: var(--surface-soft);
   color: var(--text-main);
+  font-size: 16px;
 }
 
 .statusBadge,
@@ -420,6 +462,7 @@ function cancelEdit() {
   background: var(--surface-soft);
   color: var(--text-main);
   font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
 .recurrenceChip {
@@ -477,6 +520,13 @@ function cancelEdit() {
   flex-wrap: wrap;
 }
 
+.externalActionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
 .ghostButton,
 .primaryButton,
 .dangerButton {
@@ -503,6 +553,12 @@ function cancelEdit() {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.fieldWithAction {
+  width: 100%;
+  display: grid;
+  gap: 8px;
 }
 
 .fieldGroup {
@@ -573,22 +629,89 @@ function cancelEdit() {
   font-weight: 500;
 }
 
+.externalActionButton,
+.clearFieldButton {
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.notesPreview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.advisorText {
+  font-size: 0.88rem;
+}
+
 @media (max-width: 720px) {
   .taskCard {
-    padding: 16px;
-    border-radius: 20px;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .taskHeader {
+    gap: 10px;
+  }
+
+  .titleRow {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .detailsPanel {
     grid-template-columns: 1fr;
   }
 
-  .actionRow button {
+  .chipRow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .chipRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .actionRow,
+  .taskActionRow,
+  .externalActionRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actionRow button,
+  .taskActionRow button,
+  .externalActionRow button {
     width: 100%;
   }
 
-  .taskActionRow button {
-    width: 100%;
+  .taskActionRow,
+  .externalActionRow {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .taskActionRow::-webkit-scrollbar,
+  .externalActionRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .taskActionRow button,
+  .externalActionRow button {
+    width: auto;
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 }
 </style>

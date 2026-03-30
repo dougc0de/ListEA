@@ -1140,16 +1140,16 @@ const heroCopy = computed(() => {
   if (resolvedView.value === 'inbox') {
     return {
       eyebrow: 'Capturar',
-      title: 'Convierte ideas rapidas en siguientes pasos claros.',
-      description: 'Inbox conserva capturas locales antes de clasificarlas. Ideal para llamadas, correos y compromisos que no quieres perder.',
+      title: 'Convierte capturas rapidas en siguientes pasos claros.',
+      description: 'Inbox guarda ideas, llamadas y compromisos hasta que decidas que hacer con ellos.',
     };
   }
 
   if (resolvedView.value === 'follow-up') {
     return {
       eyebrow: 'Seguimiento',
-      title: 'Mantén promesas, respuestas y pendientes visibles.',
-      description: 'ListEA junta lo que espera respuesta, lo bloqueado y lo que ya necesita una nueva fecha.',
+      title: 'Manten promesas, respuestas y pendientes visibles.',
+      description: 'Aqui se junta lo que espera respuesta, esta bloqueado o necesita nueva fecha.',
     };
   }
 
@@ -1157,14 +1157,14 @@ const heroCopy = computed(() => {
     return {
       eyebrow: 'Agenda',
       title: 'Ordena tu backlog con contexto real y privado.',
-      description: 'Aqui ves senales, saturacion y tareas activas para decidir mejor sin sacar datos del dispositivo.',
+      description: 'Aqui ves senales y tareas activas para decidir mejor sin sacar datos del dispositivo.',
     };
   }
 
   return {
     eyebrow: 'Hoy',
     title: 'Captura rapido, decide el siguiente paso y ejecuta con foco.',
-    description: 'ListEA prioriza lo que toca hoy sin perder el hilo de tus seguimientos ni tu contexto profesional.',
+    description: 'ListEA prioriza lo que toca hoy sin perder el hilo de tu seguimiento.',
   };
 });
 const summaryCards = computed(() => {
@@ -1379,9 +1379,7 @@ onBeforeUnmount(() => {
             <span class="laneCount">{{ formatTaskCount(inboxTasks.length) }}</span>
           </div>
         </div>
-        <p class="panelText">
-          Todo lo capturado rapido cae aqui primero. Puedes sacarlo de Inbox o asignarle una fecha inmediata sin perder el ritmo.
-        </p>
+        <p class="panelText">Captura primero. Ordena cuando toque.</p>
         <TodoList
           :todos="inboxTasks"
           :task-actions="INBOX_TASK_ACTIONS"
@@ -1424,9 +1422,7 @@ onBeforeUnmount(() => {
             <h3>{{ selectedTimeFilter.label }}</h3>
           </div>
           <div class="headerActions">
-            <button type="button" class="ghostButton" @click="clearTaskField">
-              Limpiar campo de tareas
-            </button>
+            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
             <span class="laneCount">{{ formatTaskCount(filteredTasks.length) }}</span>
           </div>
         </div>
@@ -1466,9 +1462,7 @@ onBeforeUnmount(() => {
             <h3>Completadas recientes</h3>
           </div>
           <div class="headerActions">
-            <button type="button" class="ghostButton" @click="clearTaskField">
-              Limpiar campo de tareas
-            </button>
+            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
             <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
           </div>
         </div>
@@ -1495,9 +1489,7 @@ onBeforeUnmount(() => {
             <span class="laneCount">{{ formatTaskCount(followUpTasks.length) }}</span>
           </div>
         </div>
-        <p class="panelText">
-          Aqui aterriza lo que depende de alguien mas, lo bloqueado y lo que ya merece un nuevo toque.
-        </p>
+        <p class="panelText">Todo lo que espera respuesta o nueva fecha vive aqui.</p>
         <TodoList
           :todos="followUpTasks"
           :task-actions="FOLLOW_UP_TASK_ACTIONS"
@@ -1549,7 +1541,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-else-if="backlogInsights.length" class="upgradePanel">
           <strong>ListEA Pro lee tu backlog sin sacar datos del dispositivo.</strong>
-          <p class="panelText">Desbloquea deteccion de duplicados, saturacion y tareas sin decision directamente en local.</p>
+          <p class="panelText">Desbloquea deteccion de duplicados y tareas sin decision en local.</p>
           <button type="button" class="ghostButton" @click="requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS)">
             Ver ListEA Pro
           </button>
@@ -1564,9 +1556,7 @@ onBeforeUnmount(() => {
             <h3>Tareas activas ordenadas por fecha y prioridad</h3>
           </div>
           <div class="headerActions">
-            <button type="button" class="ghostButton" @click="clearTaskField">
-              Limpiar campo de tareas
-            </button>
+            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
           </div>
         </div>
 
@@ -1592,9 +1582,7 @@ onBeforeUnmount(() => {
               <span class="eyebrow">Completadas recientes</span>
               <span class="sectionToggleTitle">Completadas recientes</span>
             </button>
-            <button type="button" class="ghostButton" @click="clearTaskField">
-              Limpiar campo de tareas
-            </button>
+            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
           </div>
           <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
         </div>
@@ -1628,12 +1616,7 @@ onBeforeUnmount(() => {
       <article class="panelCard">
         <p class="eyebrow">Privacidad</p>
         <h3>Todo vive en este dispositivo</h3>
-        <p class="panelText">
-          ListEA guarda tareas, historial y preferencias localmente. No necesita cuenta, backend ni sincronizacion para funcionar.
-        </p>
-        <p class="panelText">
-          La promesa del producto es simple: capturar, decidir y dar seguimiento sin entregar tus datos.
-        </p>
+        <p class="panelText">Todo queda en este dispositivo. Sin cuentas ni nube propia.</p>
       </article>
 
       <article class="panelCard">
@@ -1777,9 +1760,7 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Respaldo</p>
         <h3>Exporta e importa tus datos localmente</h3>
         <div class="settingsStack">
-          <p class="panelText">
-            Puedes mover tu informacion entre dispositivos usando un archivo local. El respaldo cifrado con frase queda reservado para ListEA Pro.
-          </p>
+          <p class="panelText">Exporta e importa con un archivo local. El cifrado queda para ListEA Pro.</p>
           <label class="fieldGroup">
             <span>Frase para respaldo cifrado</span>
             <input
@@ -1867,10 +1848,7 @@ onBeforeUnmount(() => {
       <article class="panelCard">
         <p class="eyebrow">Contexto de subtareas</p>
         <h3>Siempre visible</h3>
-        <p class="panelText">
-          Cada subtarea conserva padre, proyecto, estado, prioridad y fecha relevante en la tarjeta principal.
-        </p>
-        <p class="panelText">{{ contextPresenter.getPriorityLabel('high') }} se usa como referencia de lenguaje consistente.</p>
+        <p class="panelText">Cada subtarea mantiene su padre, prioridad y fecha visible en la misma tarjeta.</p>
       </article>
 
       <input
@@ -1886,11 +1864,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .tasksShell {
-  width: min(960px, calc(100% - 24px));
-  margin: 0 auto 24px;
+  width: min(100%, 960px);
+  margin: 0 auto 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
 .topBar,
@@ -1904,12 +1883,18 @@ onBeforeUnmount(() => {
 
 .topBar {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
   gap: 14px;
-  padding: 16px 18px;
+  padding: 16px;
   background:
     radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%),
     var(--surface);
+}
+
+.topCopy {
+  display: grid;
+  gap: 6px;
+  align-content: start;
 }
 
 .topCopy h1,
@@ -1919,10 +1904,10 @@ onBeforeUnmount(() => {
 }
 
 .topCopy h1 {
-  margin-top: 0.5rem;
-  margin-bottom: 1rem;
-  max-width: 20ch;
-  font-size: clamp(1.2rem, 4vw, 1.7rem);
+  margin-top: 0.35rem;
+  margin-bottom: 0.5rem;
+  max-width: 18ch;
+  font-size: clamp(1.25rem, 4vw, 1.78rem);
   line-height: 1.05;
 }
 
@@ -1938,6 +1923,9 @@ onBeforeUnmount(() => {
 .panelText,
 .emptyText {
   color: var(--text-muted);
+  line-height: 1.45;
+  text-wrap: pretty;
+  max-width: 60ch;
 }
 
 .topStats {
@@ -1945,6 +1933,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   align-self: stretch;
+  grid-auto-rows: 1fr;
 }
 
 .feedbackBanner {
@@ -1957,6 +1946,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 88%, white);
   box-shadow: var(--card-shadow);
+  backdrop-filter: blur(12px);
 }
 
 .feedbackBanner[data-tone='success'] {
@@ -2032,11 +2022,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: flex-start;
   gap: 2px;
   min-height: 76px;
   padding: 12px;
   border-radius: 18px;
   background: var(--surface-soft);
+  text-align: left;
 }
 
 .statCard strong {
@@ -2154,6 +2146,18 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  position: sticky;
+  top: calc(62px + env(safe-area-inset-top));
+  z-index: 18;
+  padding: 8px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.searchField {
+  display: block;
 }
 
 .timeFilterGrid {
@@ -2227,6 +2231,7 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   background: var(--surface-soft);
   color: var(--text-main);
+  font-size: 16px;
 }
 
 .focusBoardGrid,
@@ -2243,11 +2248,11 @@ onBeforeUnmount(() => {
 }
 
 .workflowGrid {
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
 }
 
 .backlogGrid {
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .dashboardGrid {
@@ -2259,7 +2264,7 @@ onBeforeUnmount(() => {
 }
 
 .panelCard {
-  padding: 16px;
+  padding: 18px;
 }
 
 .laneHeader,
@@ -2267,7 +2272,7 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 14px;
 }
 
@@ -2327,6 +2332,7 @@ onBeforeUnmount(() => {
   background: var(--surface-soft);
   font-weight: 700;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .focusListPanel,
@@ -2383,11 +2389,17 @@ onBeforeUnmount(() => {
 
 .reviewCard {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 12px;
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
   background: color-mix(in srgb, var(--surface-soft) 88%, white);
+}
+
+.reviewCard button {
+  align-self: center;
 }
 
 .insightCard strong,
@@ -2409,6 +2421,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   margin-top: 14px;
+}
+
+.settingsGrid > .panelCard:first-child,
+.settingsGrid > .panelCard:nth-child(2) {
+  grid-column: 1 / -1;
 }
 
 .recentCompletedLabel {
@@ -2559,6 +2576,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 860px) {
+  .tasksShell {
+    width: min(100%, 860px);
+  }
+
   .topBar,
   .workflowGrid,
   .focusBoardGrid,
@@ -2567,43 +2588,109 @@ onBeforeUnmount(() => {
   .timeFilterGrid {
     grid-template-columns: 1fr;
   }
-}
-
-@media (max-width: 640px) {
-  .tasksShell {
-    width: min(100% - 20px, 960px);
-    gap: 12px;
-  }
-
-  .topBar,
-  .panelCard {
-    padding: 14px;
-    border-radius: 20px;
-  }
-
-  .focusListPanel {
-    padding: 14px;
-    border-radius: 20px;
-  }
 
   .sectionHeader {
-    align-items: stretch;
+    flex-direction: column;
   }
 
   .headerActions,
   .headerToggleWrap {
     width: 100%;
-    justify-content: center;
+    justify-content: flex-start;
+  }
+
+  .reviewCard {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tasksShell {
+    width: calc(100% - 14px);
+    gap: 10px;
+  }
+
+  .topBar,
+  .panelCard {
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .focusListPanel {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .topCopy h1 {
+    max-width: none;
+    font-size: clamp(1.02rem, 5vw, 1.3rem);
+  }
+
+  .panelText {
+    font-size: 0.89rem;
+    line-height: 1.4;
+  }
+
+  .topStats {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .topStats::-webkit-scrollbar {
+    display: none;
+  }
+
+  .statCard {
+    min-width: 124px;
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  .sectionHeader {
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .headerActions,
+  .headerToggleWrap {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .laneCount {
-    align-self: center;
-    justify-self: center;
+    align-self: flex-start;
+    justify-self: auto;
+  }
+
+  .feedbackBanner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .upgradeActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterBar {
+    top: calc(56px + env(safe-area-inset-top));
+    padding: 6px;
+    border-radius: 18px;
   }
 
   .focusFilterBar {
-    grid-template-columns: 1fr;
+    display: flex;
+    overflow-x: auto;
     gap: 8px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .focusFilterBar::-webkit-scrollbar {
+    display: none;
   }
 
   .paletteGrid {
@@ -2611,13 +2698,16 @@ onBeforeUnmount(() => {
   }
 
   .snippetActions {
-    padding: 0 16px 16px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0 14px 14px;
   }
 
   .focusFilterTile {
     min-height: 52px;
     padding: 9px 12px;
     border-radius: 16px;
+    flex: 0 0 150px;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -2633,11 +2723,12 @@ onBeforeUnmount(() => {
   }
 
   .snippetCard {
-    --snippet-card-max: min(90vw, 300px);
+    --snippet-card-max: min(92vw, 340px);
   }
 
   .snippetBubble {
-    padding: 18px 80px 18px 16px;
+    padding: 18px 72px 18px 16px;
+    text-align: left;
   }
 
   .snippetClose {
@@ -2645,8 +2736,14 @@ onBeforeUnmount(() => {
     right: 8px;
   }
 
+  .snippetOverlay {
+    place-items: end center;
+    padding: 16px 12px max(14px, env(safe-area-inset-bottom) + 10px);
+  }
+
   .topCopy h1 {
     max-width: none;
+    font-size: clamp(1.08rem, 5vw, 1.38rem);
   }
 }
 </style>

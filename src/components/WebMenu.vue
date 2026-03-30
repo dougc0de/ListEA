@@ -112,19 +112,20 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 30;
+  padding-top: env(safe-area-inset-top);
   background: color-mix(in srgb, var(--app-bg-solid) 85%, transparent);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
 .menuBar {
-  width: min(960px, calc(100% - 24px));
+  width: min(100%, 960px);
   margin: 0 auto;
-  min-height: 68px;
+  min-height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .brandButton {
@@ -143,16 +144,13 @@ onBeforeUnmount(() => {
 }
 
 .brandLogo {
-  margin: 1rem;
-  margin-left: 2rem;
-  width: 80px;
-  height: 35px;
-  border-radius: 30px;
+  width: 94px;
+  height: 38px;
+  border-radius: 16px;
   object-fit: contain;
   object-position: center;
   display: block;
-  padding: 0px 0px;
-
+  padding: 0;
 }
 
 .brandCopy {
@@ -205,12 +203,12 @@ onBeforeUnmount(() => {
   top: 0;
   left: 50%;
   transform: translate(-50%, calc(-100% - 18px));
-  width: min(960px, calc(100vw - 24px));
+  width: min(100vw - 16px, 860px);
   max-height: min(70vh, 520px);
-  padding: 84px 18px 18px;
+  padding: calc(72px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   background: var(--surface);
   transition: transform 220ms ease, opacity 220ms ease;
   box-shadow: 0 20px 50px rgba(18, 28, 44, 0.14);
@@ -228,8 +226,8 @@ onBeforeUnmount(() => {
 }
 
 .drawerItem {
-  min-height: 52px;
-  border-radius: 18px;
+  min-height: 48px;
+  border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
   color: var(--text-main);
@@ -258,13 +256,19 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .menuBar {
-    width: min(100% - 20px, 960px);
+    width: calc(100% - 16px);
+    min-height: 56px;
   }
 
   .drawer {
-    width: min(100% - 16px, 960px);
-    padding: 80px 14px 14px;
-    border-radius: 0 0 22px 22px;
+    width: calc(100% - 12px);
+    padding: calc(68px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 0 0 24px 24px;
+  }
+
+  .brandLogo {
+    width: 88px;
+    height: 36px;
   }
 
   .brandCopy span {
@@ -273,6 +277,10 @@ onBeforeUnmount(() => {
 
   .brandCopy strong {
     font-size: 0.95rem;
+  }
+
+  .drawerItem {
+    min-height: 46px;
   }
 }
 </style>

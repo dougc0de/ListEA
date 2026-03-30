@@ -54,6 +54,6 @@ onBeforeUnmount(() => {
 .appShell {
   display: flex;
   flex-direction: column;
-  padding: 10px 0 18px;
+  padding: 10px 0 max(18px, env(safe-area-inset-bottom));
 }
 </style>
