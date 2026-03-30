@@ -34,5 +34,6 @@ describe('license helpers', () => {
     expect(license.purchaseModel).toBe(PURCHASE_MODELS.ONE_TIME);
     expect(license.restoreAvailable).toBe(true);
     expect(hasEntitlement(license, ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP)).toBe(true);
+    expect(hasEntitlement(license, ENTITLEMENT_KEYS.SMART_APP_LAUNCH)).toBe(true);
   });
 });

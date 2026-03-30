@@ -7,7 +7,7 @@ const props = defineProps({
   taskActions: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action']);
+const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action', 'open-external']);
 </script>
 
 <template>
@@ -26,6 +26,7 @@ const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-
       @update="emit('update', $event)"
       @toggle-subtask="emit('toggle-subtask', $event)"
       @task-action="emit('task-action', $event)"
+      @open-external="emit('open-external', $event)"
     />
   </div>
 </template>

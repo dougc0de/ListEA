@@ -43,6 +43,7 @@ import { RecurrenceEngine } from '../domain/recurrence';
 import { ProfessionalReviewAnalyzer } from '../domain/review';
 import { downloadBackupFile, parseBackupDocument, readBackupFile } from '../services/localBackup';
 import { LAUNCH_INTENT_TYPES } from '../services/launchIntents';
+import { TaskAppLaunchService } from '../services/taskAppLaunchService';
 import {
   CAPTURE_SOURCES,
   TASK_STATUS,
@@ -72,6 +73,7 @@ const navigationCatalog = new NavigationCatalog();
 const contextPresenter = new TaskContextPresenter();
 const captureInterpreter = new QuickCaptureInterpreter();
 const professionalReviewAnalyzer = new ProfessionalReviewAnalyzer();
+const taskAppLaunchService = new TaskAppLaunchService();
 
 const tasks = ref([]);
 const analytics = ref(repository.normalizeAnalytics());
@@ -143,9 +145,13 @@ const UPGRADE_COPY = Object.freeze({
     title: 'ListEA Pro desbloquea respaldo cifrado',
     message: 'Puedes exportar e importar gratis. El respaldo cifrado con frase local forma parte de ListEA Pro.',
   },
+  [ENTITLEMENT_KEYS.SMART_APP_LAUNCH]: {
+    title: 'ListEA Pro desbloquea apertura inteligente de apps',
+    message: 'ListEA Pro detecta apps compatibles instaladas y las abre directamente desde tus tareas y recordatorios.',
+  },
 });
 const INBOX_TASK_ACTIONS = Object.freeze([
-  { id: 'triage', label: 'Sacar de inbox', tone: 'primary' },
+  { id: 'triage', label: 'Marcar lista', tone: 'primary' },
   { id: 'inbox-tomorrow', label: 'Manana 9:00', tone: 'ghost' },
 ]);
 const FOLLOW_UP_TASK_ACTIONS = Object.freeze([
@@ -265,7 +271,7 @@ function addTask(payload) {
 
   tasks.value = [task, ...tasks.value];
   const feedbackMessage = task.needsTriage
-    ? `Captura "${task.title}" guardada en Inbox.`
+    ? `Captura "${task.title}" guardada en Capturas.`
     : `Tarea "${task.title}" guardada.`;
   showUiFeedback(feedbackMessage, 'success');
   revealTask(task);
@@ -372,17 +378,10 @@ async function removeTask(id) {
   });
 }
 
-async function clearTaskField() {
-  const currentIds = tasks.value.map(task => task.id);
-  await removeTasksByIds(currentIds, {
-    // Vaciar la vista no debe contaminar metricas de eliminacion.
-    trackAnalytics: false,
-    showItemFeedback: false,
-  });
-  await clearAllReminderTimers();
+function resetTaskWorkspaceView() {
   searchQuery.value = '';
   activeFilterId.value = FILTER_IDS.TODAY;
-  showUiFeedback('Campo de tareas limpiado. Las estadisticas se conservaron.', 'success');
+  showUiFeedback('Vista reiniciada.', 'info');
 }
 
 function clearAnalytics() {
@@ -536,6 +535,10 @@ function scrollToFocusContent() {
   });
 }
 
+function resolvePrimaryLaunchSuggestion(task) {
+  return taskAppLaunchService.resolvePrimary(task);
+}
+
 function applyAppearancePreferences() {
   if (typeof document === 'undefined') return;
 
@@ -648,7 +651,7 @@ function markTaskTriaged(taskId) {
 
   task.applyPatch({ needsTriage: false });
   tasks.value = [...tasks.value];
-  showUiFeedback(`"${task.title}" salio de Inbox y ya cuenta como tarea lista.`, 'success');
+  showUiFeedback(`"${task.title}" salio de Capturas y ya cuenta como tarea lista.`, 'success');
 }
 
 function resolveFollowUp(taskId) {
@@ -726,11 +729,13 @@ function showAvatarSnippet(task) {
 
   const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
   const shownAt = new Date().toISOString();
+  const primaryAction = resolvePrimaryLaunchSuggestion(task);
   task.applyPatch({ avatarSnippetShownAt: shownAt });
   avatarSnippet.value = {
     ...avatarCoach.buildTaskSnippet(task, effectiveAvatarPreferences, new Date(shownAt)),
     context: contextPresenter.buildTaskContext(task).slice(0, 3).join(' - '),
     preferredView: resolveTaskWorkspaceView(task),
+    primaryAction,
   };
 
   clearAvatarSnippetHideTimer();
@@ -819,6 +824,65 @@ function moveReminderTaskToTomorrow(taskId) {
   dismissAvatarSnippet({ reschedule: true });
 }
 
+async function openTaskLaunch(task, suggestionId = '', { showPremiumHint = true } = {}) {
+  if (!task) {
+    return { completed: false, mode: 'none', suggestion: null };
+  }
+
+  const premiumEnabled = hasFeature(ENTITLEMENT_KEYS.SMART_APP_LAUNCH);
+  const result = await taskAppLaunchService.open(task, {
+    suggestionId,
+    premiumEnabled,
+  });
+
+  if (result.completed && result.mode === 'native') {
+    showUiFeedback(`Abriendo ${result.suggestion?.label ?? 'app'} para "${task.title}".`, 'info');
+    return result;
+  }
+
+  if (result.completed && ['fallback', 'web'].includes(result.mode)) {
+    if (!premiumEnabled && result.suggestion?.supportsNativeLaunch() && showPremiumHint) {
+      requestUpgrade(ENTITLEMENT_KEYS.SMART_APP_LAUNCH);
+    }
+    return result;
+  }
+
+  if (!premiumEnabled && result.suggestion?.supportsNativeLaunch()) {
+    if (showPremiumHint) {
+      requestUpgrade(ENTITLEMENT_KEYS.SMART_APP_LAUNCH);
+    }
+    return result;
+  }
+
+  return result;
+}
+
+async function openReminderPrimaryAction(taskId, preferredView = '') {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  const primarySuggestion = resolvePrimaryLaunchSuggestion(task);
+  const result = await openTaskLaunch(task, primarySuggestion?.id ?? '', {
+    showPremiumHint: false,
+  });
+  if (result.completed) {
+    dismissAvatarSnippet({ reschedule: false });
+    return;
+  }
+
+  openReminderTask(taskId, preferredView);
+}
+
+async function handleTaskLaunchRequest({ taskId, suggestionId }) {
+  const task = tasks.value.find(item => item.id === taskId);
+  if (!task) return;
+
+  const result = await openTaskLaunch(task, suggestionId);
+  if (!result.completed) {
+    showUiFeedback(`No fue posible abrir una app para "${task.title}".`, 'error');
+  }
+}
+
 function openReminderTask(taskId, preferredView = '') {
   dismissAvatarSnippet({ reschedule: false });
   focusTaskById(taskId, preferredView);
@@ -852,7 +916,7 @@ function handleReminderNotificationAction(notificationAction) {
   }
 
   if (actionId === REMINDER_ACTION_IDS.OPEN) {
-    openReminderTask(taskId, preferredView);
+    openReminderPrimaryAction(taskId, preferredView);
   }
 }
 
@@ -1062,6 +1126,9 @@ const resolvedView = computed(() => navigationCatalog.getFallbackView(props.curr
 const effectiveAvatarPreferences = computed(() => buildEffectiveAvatarPreferences());
 const showTaskWorkspace = computed(() => ['inbox', 'today', 'follow-up', 'backlog'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
+const focusTasks = computed(() =>
+  sortTasksByRelevance(openTasks.value.filter(task => resolveTaskWorkspaceView(task) === 'today')),
+);
 const inboxTasks = computed(() =>
   sortTasksByRelevance(applySearch(openTasks.value.filter(task => task.needsTriage))),
 );
@@ -1090,7 +1157,7 @@ const timeFilters = computed(() => {
     ].includes(filter.id))
     .map(filter => ({
       ...filter,
-      count: filterService.apply(openTasks.value, filter.id, { referenceDate }).length,
+      count: filterService.apply(focusTasks.value, filter.id, { referenceDate }).length,
     }));
 });
 const selectedTimeFilter = computed(() =>
@@ -1098,7 +1165,7 @@ const selectedTimeFilter = computed(() =>
   ?? timeFilters.value[0],
 );
 const filteredTasks = computed(() => {
-  const filtered = filterService.apply(openTasks.value, selectedTimeFilter.value?.id ?? FILTER_IDS.TODAY, {
+  const filtered = filterService.apply(focusTasks.value, selectedTimeFilter.value?.id ?? FILTER_IDS.TODAY, {
     referenceDate: new Date(),
   });
   return sortTasksByRelevance(applySearch(filtered));
@@ -1131,7 +1198,7 @@ const visibleBacklogInsights = computed(() =>
 const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
-  today: filterService.apply(openTasks.value, FILTER_IDS.TODAY, { referenceDate: new Date() }).length,
+  today: filterService.apply(focusTasks.value, FILTER_IDS.TODAY, { referenceDate: new Date() }).length,
   inbox: inboxTasks.value.length,
   followUp: followUpTasks.value.length,
   blocked: openTasks.value.filter(task => task.status === TASK_STATUS.BLOCKED).length,
@@ -1139,9 +1206,9 @@ const summary = computed(() => ({
 const heroCopy = computed(() => {
   if (resolvedView.value === 'inbox') {
     return {
-      eyebrow: 'Capturar',
+      eyebrow: 'Capturas',
       title: 'Convierte capturas rapidas en siguientes pasos claros.',
-      description: 'Inbox guarda ideas, llamadas y compromisos hasta que decidas que hacer con ellos.',
+      description: 'Capturas guarda ideas, llamadas y compromisos hasta que decidas que hacer con ellos.',
     };
   }
 
@@ -1170,7 +1237,7 @@ const heroCopy = computed(() => {
 const summaryCards = computed(() => {
   if (resolvedView.value === 'inbox') {
     return [
-      { id: 'inbox', label: 'En Inbox', value: summary.value.inbox },
+      { id: 'inbox', label: 'En Capturas', value: summary.value.inbox },
       { id: 'today', label: 'Para hoy', value: summary.value.today },
       { id: 'followUp', label: 'En seguimiento', value: summary.value.followUp },
     ];
@@ -1317,8 +1384,11 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="snippetActions">
-            <button type="button" class="primaryButton" @click="openReminderTask(avatarSnippet.taskId, avatarSnippet.preferredView)">
-              Abrir
+            <button type="button" class="primaryButton" @click="openReminderPrimaryAction(avatarSnippet.taskId, avatarSnippet.preferredView)">
+              {{ avatarSnippet.primaryAction?.label ?? 'Abrir' }}
+            </button>
+            <button v-if="avatarSnippet.primaryAction" type="button" class="ghostButton" @click="openReminderTask(avatarSnippet.taskId, avatarSnippet.preferredView)">
+              Ver tarea
             </button>
             <button type="button" class="ghostButton" @click="completeReminderTask(avatarSnippet.taskId)">
               Completar
@@ -1372,8 +1442,8 @@ onBeforeUnmount(() => {
       <article class="panelCard">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Inbox</p>
-            <h3>Capturas pendientes por clasificar</h3>
+            <p class="eyebrow">Capturas</p>
+            <h3>Capturas pendientes por ordenar</h3>
           </div>
           <div class="headerActions">
             <span class="laneCount">{{ formatTaskCount(inboxTasks.length) }}</span>
@@ -1383,12 +1453,13 @@ onBeforeUnmount(() => {
         <TodoList
           :todos="inboxTasks"
           :task-actions="INBOX_TASK_ACTIONS"
-          empty-message="Inbox esta limpio. Tus capturas ya tienen siguiente paso."
+          empty-message="No hay capturas pendientes. Todo ya tiene siguiente paso."
           @toggle="toggleTask"
           @remove="removeTask"
           @update="updateTask"
           @toggle-subtask="toggleSubtask"
           @task-action="handleTaskAction"
+          @open-external="handleTaskLaunchRequest"
         />
       </article>
 
@@ -1422,7 +1493,7 @@ onBeforeUnmount(() => {
             <h3>{{ selectedTimeFilter.label }}</h3>
           </div>
           <div class="headerActions">
-            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
+            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
             <span class="laneCount">{{ formatTaskCount(filteredTasks.length) }}</span>
           </div>
         </div>
@@ -1450,6 +1521,7 @@ onBeforeUnmount(() => {
               @remove="removeTask"
               @update="updateTask"
               @toggle-subtask="toggleSubtask"
+              @open-external="handleTaskLaunchRequest"
             />
           </div>
         </transition>
@@ -1462,7 +1534,7 @@ onBeforeUnmount(() => {
             <h3>Completadas recientes</h3>
           </div>
           <div class="headerActions">
-            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
+            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
             <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
           </div>
         </div>
@@ -1474,6 +1546,7 @@ onBeforeUnmount(() => {
           @remove="removeTask"
           @update="updateTask"
           @toggle-subtask="toggleSubtask"
+          @open-external="handleTaskLaunchRequest"
         />
       </article>
     </section>
@@ -1499,6 +1572,7 @@ onBeforeUnmount(() => {
           @update="updateTask"
           @toggle-subtask="toggleSubtask"
           @task-action="handleTaskAction"
+          @open-external="handleTaskLaunchRequest"
         />
       </article>
 
@@ -1556,7 +1630,7 @@ onBeforeUnmount(() => {
             <h3>Tareas activas ordenadas por fecha y prioridad</h3>
           </div>
           <div class="headerActions">
-            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
+            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
           </div>
         </div>
 
@@ -1567,6 +1641,7 @@ onBeforeUnmount(() => {
           @remove="removeTask"
           @update="updateTask"
           @toggle-subtask="toggleSubtask"
+          @open-external="handleTaskLaunchRequest"
         />
       </article>
 
@@ -1582,7 +1657,7 @@ onBeforeUnmount(() => {
               <span class="eyebrow">Completadas recientes</span>
               <span class="sectionToggleTitle">Completadas recientes</span>
             </button>
-            <button type="button" class="ghostButton" @click="clearTaskField">Limpiar lista</button>
+            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
           </div>
           <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
         </div>
@@ -1596,6 +1671,7 @@ onBeforeUnmount(() => {
             @remove="removeTask"
             @update="updateTask"
             @toggle-subtask="toggleSubtask"
+            @open-external="handleTaskLaunchRequest"
           />
         </div>
       </article>
@@ -1633,7 +1709,7 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <p class="panelText">
-            Pro desbloquea revision avanzada, avisos avanzados, paletas premium y respaldo cifrado.
+            Pro desbloquea revision avanzada, avisos avanzados, apertura inteligente de apps, paletas premium y respaldo cifrado.
           </p>
           <div class="buttonRow">
             <button v-if="!isProActive" type="button" class="primaryButton" @click="activateProLocally">

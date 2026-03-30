@@ -8,7 +8,7 @@ export class AppView {
 export class NavigationCatalog {
   constructor() {
     this.views = [
-      new AppView({ id: 'inbox', label: 'Inbox' }),
+      new AppView({ id: 'inbox', label: 'Capturas' }),
       new AppView({ id: 'today', label: 'Hoy' }),
       new AppView({ id: 'follow-up', label: 'Seguimiento' }),
       new AppView({ id: 'backlog', label: 'Agenda' }),

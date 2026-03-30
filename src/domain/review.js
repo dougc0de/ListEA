@@ -20,7 +20,7 @@ export class ProfessionalReviewAnalyzer {
         title: 'Capturas sin fecha',
         message: `${noDateTasks.length} tarea(s) siguen sin fecha y merecen una decision rapida.`,
         count: noDateTasks.length,
-        actionLabel: 'Abrir inbox',
+        actionLabel: 'Ver capturas',
         targetView: 'inbox',
       });
     }

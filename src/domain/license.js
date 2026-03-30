@@ -24,6 +24,7 @@ export const ENTITLEMENT_KEYS = Object.freeze({
   AVATAR_PRO: 'avatarPro',
   PREMIUM_THEMES: 'premiumThemes',
   LOCAL_ENCRYPTED_BACKUP: 'localEncryptedBackup',
+  SMART_APP_LAUNCH: 'smartAppLaunch',
 });
 
 export const FREE_ENTITLEMENTS = Object.freeze({
@@ -34,6 +35,7 @@ export const FREE_ENTITLEMENTS = Object.freeze({
   [ENTITLEMENT_KEYS.AVATAR_PRO]: false,
   [ENTITLEMENT_KEYS.PREMIUM_THEMES]: false,
   [ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP]: false,
+  [ENTITLEMENT_KEYS.SMART_APP_LAUNCH]: false,
 });
 
 export const PRO_ENTITLEMENTS = Object.freeze(

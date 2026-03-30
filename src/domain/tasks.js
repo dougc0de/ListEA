@@ -553,7 +553,7 @@ export class TaskContextPresenter {
 
   buildTaskContext(task) {
     return [
-      task.needsTriage ? 'Inbox' : null,
+      task.needsTriage ? 'Capturas' : null,
       task.project || 'Sin proyecto',
       task.area || 'Sin area',
       this.getStatusLabel(task.status),

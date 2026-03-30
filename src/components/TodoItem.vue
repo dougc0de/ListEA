@@ -1,11 +1,10 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
-import { TaskExternalActionResolver } from '../domain/taskExternalActions';
+import { TaskAppLaunchResolver } from '../domain/taskAppLaunch';
 import { TaskContextPresenter, toDateTimeInputValue } from '../domain/tasks';
-import { openTaskExternalAction } from '../services/taskExternalApps';
 
-const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action']);
+const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action', 'open-external']);
 
 const props = defineProps({
   todo: { type: Object, required: true },
@@ -14,7 +13,7 @@ const props = defineProps({
 
 const presenter = new TaskContextPresenter();
 const advisor = new ExecutionAdvisor();
-const externalActionResolver = new TaskExternalActionResolver();
+const appLaunchResolver = new TaskAppLaunchResolver();
 
 const isEditing = ref(false);
 const detailsOpen = ref(false);
@@ -59,7 +58,7 @@ const subtaskRows = computed(() =>
 const visibleTags = computed(() => props.todo.tags ?? []);
 const subtaskPreviewRows = computed(() => subtaskRows.value.slice(0, 3));
 const hiddenSubtaskCount = computed(() => Math.max(subtaskRows.value.length - subtaskPreviewRows.value.length, 0));
-const externalAppActions = computed(() => externalActionResolver.resolve(props.todo));
+const externalAppActions = computed(() => appLaunchResolver.resolve(props.todo));
 
 function resetEditors(todo = props.todo) {
   editableTitle.value = todo.title;
@@ -151,7 +150,10 @@ function clearEditableDate(field) {
 }
 
 function openExternalAction(action) {
-  openTaskExternalAction(action);
+  emit('open-external', {
+    taskId: props.todo.id,
+    suggestionId: action.id,
+  });
 }
 </script>
 

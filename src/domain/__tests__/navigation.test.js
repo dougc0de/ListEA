@@ -6,6 +6,7 @@ describe('NavigationCatalog', () => {
     const views = new NavigationCatalog().getMenuViews();
 
     expect(views.map(view => view.id)).toEqual(['inbox', 'today', 'follow-up', 'backlog', 'dashboard', 'settings']);
+    expect(views.find(view => view.id === 'inbox')?.label).toBe('Capturas');
     expect(views.find(view => view.id === 'backlog')?.label).toBe('Agenda');
     expect(views.find(view => view.id === 'follow-up')?.label).toBe('Seguimiento');
     expect(new NavigationCatalog().getFallbackView('unknown')).toBe('today');
