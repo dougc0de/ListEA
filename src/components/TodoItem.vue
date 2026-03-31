@@ -17,6 +17,7 @@ const appLaunchResolver = new TaskAppLaunchResolver();
 
 const isEditing = ref(false);
 const detailsOpen = ref(false);
+const overflowOpen = ref(false);
 const editableTitle = ref(props.todo.title);
 const editableNotes = ref(props.todo.notes ?? '');
 const editableProject = ref(props.todo.project ?? '');
@@ -59,6 +60,10 @@ const visibleTags = computed(() => props.todo.tags ?? []);
 const subtaskPreviewRows = computed(() => subtaskRows.value.slice(0, 3));
 const hiddenSubtaskCount = computed(() => Math.max(subtaskRows.value.length - subtaskPreviewRows.value.length, 0));
 const externalAppActions = computed(() => appLaunchResolver.resolve(props.todo));
+const primaryTaskAction = computed(() => props.taskActions[0] ?? null);
+const secondaryTaskActions = computed(() => props.taskActions.slice(1));
+const primaryExternalAction = computed(() => externalAppActions.value[0] ?? null);
+const secondaryExternalActions = computed(() => externalAppActions.value.slice(1));
 
 function resetEditors(todo = props.todo) {
   editableTitle.value = todo.title;
@@ -84,6 +89,9 @@ watch(
   () => props.todo,
   todo => {
     resetEditors(todo);
+    if (!isEditing.value) {
+      overflowOpen.value = false;
+    }
   },
   { deep: true },
 );
@@ -133,6 +141,13 @@ function saveTask() {
 
   detailsOpen.value = true;
   isEditing.value = false;
+  overflowOpen.value = false;
+}
+
+function startEditing() {
+  detailsOpen.value = true;
+  isEditing.value = true;
+  overflowOpen.value = false;
 }
 
 function cancelEdit() {
@@ -191,50 +206,68 @@ function openExternalAction(action) {
       </div>
     </div>
 
-    <div class="actionRow">
-      <button type="button" class="ghostButton" @click="detailsOpen = !detailsOpen">
-        {{ detailsOpen ? 'Ocultar detalle' : 'Ver detalle' }}
+    <div v-if="!isEditing" class="actionRow">
+      <button v-if="primaryExternalAction" type="button" class="primaryButton actionPrimary" @click="openExternalAction(primaryExternalAction)">
+        {{ primaryExternalAction.label }}
+      </button>
+      <button
+        v-if="primaryTaskAction"
+        type="button"
+        :class="primaryTaskAction.tone === 'primary' ? 'primaryButton' : 'ghostButton'"
+        @click="emit('task-action', { taskId: todo.id, actionId: primaryTaskAction.id })"
+      >
+        {{ primaryTaskAction.label }}
       </button>
       <button type="button" class="ghostButton" @click="emit('toggle', todo.id)">
         {{ todo.isCompleted() ? 'Reabrir' : 'Completar' }}
       </button>
-      <button v-if="!isEditing" type="button" class="ghostButton" @click="isEditing = true">
-        Editar
+      <button type="button" class="ghostButton moreButton" :class="{ active: overflowOpen }" @click="overflowOpen = !overflowOpen">
+        {{ overflowOpen ? 'Menos' : 'Mas' }}
       </button>
-      <button v-if="isEditing" type="button" class="primaryButton" @click="saveTask">
+    </div>
+
+    <div v-else class="actionRow">
+      <button type="button" class="primaryButton" @click="saveTask">
         Guardar
       </button>
-      <button v-if="isEditing" type="button" class="ghostButton" @click="cancelEdit">
+      <button type="button" class="ghostButton" @click="cancelEdit">
         Cancelar
       </button>
-      <button type="button" class="dangerButton" @click="emit('remove', todo.id)">
-        Eliminar
-      </button>
     </div>
 
-    <div v-if="!isEditing && taskActions.length" class="taskActionRow">
-      <button
-        v-for="action in taskActions"
-        :key="action.id"
-        type="button"
-        :class="action.tone === 'primary' ? 'primaryButton' : 'ghostButton'"
-        @click="emit('task-action', { taskId: todo.id, actionId: action.id })"
-      >
-        {{ action.label }}
-      </button>
-    </div>
-
-    <div v-if="!isEditing && detailsOpen && externalAppActions.length" class="externalActionRow">
-      <button
-        v-for="action in externalAppActions"
-        :key="action.id"
-        type="button"
-        class="externalActionButton"
-        @click="openExternalAction(action)"
-      >
-        {{ action.label }}
-      </button>
-    </div>
+    <transition name="overflowSwap">
+      <div v-if="!isEditing && overflowOpen" class="overflowPanel">
+        <div class="overflowActionGrid">
+          <button type="button" class="ghostButton" @click="detailsOpen = !detailsOpen">
+            {{ detailsOpen ? 'Ocultar detalle' : 'Ver detalle' }}
+          </button>
+          <button type="button" class="ghostButton" @click="startEditing">
+            Editar
+          </button>
+          <button
+            v-for="action in secondaryTaskActions"
+            :key="action.id"
+            type="button"
+            :class="action.tone === 'primary' ? 'primaryButton' : 'ghostButton'"
+            @click="emit('task-action', { taskId: todo.id, actionId: action.id })"
+          >
+            {{ action.label }}
+          </button>
+          <button
+            v-for="action in secondaryExternalActions"
+            :key="action.id"
+            type="button"
+            class="externalActionButton"
+            @click="openExternalAction(action)"
+          >
+            {{ action.label }}
+          </button>
+          <button type="button" class="dangerButton" @click="emit('remove', todo.id)">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </transition>
 
     <p v-if="editError" class="editError" role="alert">{{ editError }}</p>
 
@@ -421,6 +454,18 @@ function openExternalAction(action) {
   align-items: start;
 }
 
+.checkWrap {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.checkWrap input {
+  width: 18px;
+  height: 18px;
+}
+
 .taskCopy {
   display: flex;
   flex-direction: column;
@@ -502,7 +547,7 @@ function openExternalAction(action) {
 }
 
 .advisorText {
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 
 .completedTitle {
@@ -510,23 +555,30 @@ function openExternalAction(action) {
   opacity: 0.7;
 }
 
-.actionRow {
+.actionRow,
+.overflowActionGrid {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.taskActionRow {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.overflowPanel {
+  padding: 12px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-soft) 74%, white);
+  border: 1px solid color-mix(in srgb, var(--line) 86%, transparent);
 }
 
-.externalActionRow {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 2px;
+.overflowActionGrid {
+  width: 100%;
+}
+
+.actionPrimary {
+  flex: 1 1 180px;
+}
+
+.moreButton.active {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
 }
 
 .ghostButton,
@@ -647,8 +699,15 @@ function openExternalAction(action) {
   overflow: hidden;
 }
 
-.advisorText {
-  font-size: 0.88rem;
+.overflowSwap-enter-active,
+.overflowSwap-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.overflowSwap-enter-from,
+.overflowSwap-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 @media (max-width: 720px) {
@@ -671,49 +730,31 @@ function openExternalAction(action) {
     grid-template-columns: 1fr;
   }
 
-  .chipRow {
-    flex-wrap: nowrap;
+  .chipRow,
+  .actionRow {
     overflow-x: auto;
+    flex-wrap: nowrap;
     padding-bottom: 2px;
     scrollbar-width: none;
   }
 
-  .chipRow::-webkit-scrollbar {
+  .chipRow::-webkit-scrollbar,
+  .actionRow::-webkit-scrollbar {
     display: none;
   }
 
-  .actionRow,
-  .taskActionRow,
-  .externalActionRow {
+  .actionRow button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .overflowActionGrid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .actionRow button,
-  .taskActionRow button,
-  .externalActionRow button {
+  .overflowActionGrid button {
     width: 100%;
-  }
-
-  .taskActionRow,
-  .externalActionRow {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .taskActionRow::-webkit-scrollbar,
-  .externalActionRow::-webkit-scrollbar {
-    display: none;
-  }
-
-  .taskActionRow button,
-  .externalActionRow button {
-    width: auto;
-    flex: 0 0 auto;
-    white-space: nowrap;
   }
 }
 </style>

@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { AppLauncher } from '@capacitor/app-launcher';
-import { TaskAppLaunchResolver } from '../domain/taskAppLaunch';
+import { AppLaunchIntentRequest, TaskAppLaunchResolver } from '../domain/taskAppLaunch';
 import { openTaskExternalAction } from './taskExternalApps';
 
 export class AppLaunchRuntime {
@@ -71,7 +71,7 @@ export class TaskAppLaunchService {
     const queryTargets = suggestion.app.getQueryTargets(runtime.platform);
     for (const queryTarget of queryTargets) {
       if (await this.gateway.canOpen(queryTarget)) {
-        const openTarget = suggestion.app.getOpenTarget(runtime.platform);
+        const openTarget = suggestion.app.getOpenTarget(runtime.platform, suggestion.target);
         if (openTarget) {
           return {
             runtime,
@@ -85,15 +85,20 @@ export class TaskAppLaunchService {
   }
 
   async open(task = {}, { suggestionId = '', premiumEnabled = false } = {}) {
-    const suggestion = suggestionId
-      ? this.resolveById(task, suggestionId)
-      : this.resolvePrimary(task);
+    const request = new AppLaunchIntentRequest({
+      task,
+      suggestionId,
+      premiumEnabled,
+    });
+    const suggestion = request.suggestionId
+      ? this.resolveById(request.task, request.suggestionId)
+      : this.resolvePrimary(request.task);
 
     if (!suggestion) {
       return { completed: false, mode: 'none', suggestion: null };
     }
 
-    if (premiumEnabled && suggestion.supportsNativeLaunch()) {
+    if (request.premiumEnabled && suggestion.supportsNativeLaunch()) {
       const nativeTarget = await this.resolveNativeTarget(suggestion);
       if (nativeTarget) {
         const completed = await this.gateway.open(nativeTarget.target);
@@ -114,7 +119,7 @@ export class TaskAppLaunchService {
       };
     }
 
-    if (suggestion.webFallbackUrl) {
+    if (suggestion.webFallbackUrl && request.premiumEnabled) {
       const completed = openTaskExternalAction({ url: suggestion.webFallbackUrl });
       return {
         completed,
@@ -125,7 +130,7 @@ export class TaskAppLaunchService {
 
     return {
       completed: false,
-      mode: premiumEnabled ? 'none' : 'premium-only',
+      mode: request.premiumEnabled ? 'none' : 'premium-only',
       suggestion,
     };
   }

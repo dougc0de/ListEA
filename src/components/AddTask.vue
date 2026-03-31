@@ -268,6 +268,12 @@ function onSubmit() {
   resetForm();
   closeComposer();
 }
+
+defineExpose({
+  openComposer,
+  closeComposer,
+  focusTitleField,
+});
 </script>
 
 <template>

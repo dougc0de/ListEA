@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { DrawerGestureController, NavigationCatalog } from '../domain/navigation';
 
 const props = defineProps({
@@ -12,7 +12,23 @@ const navigationCatalog = new NavigationCatalog();
 const drawerGesture = new DrawerGestureController();
 const menuOpen = ref(false);
 const menuRoot = ref(null);
-const views = computed(() => navigationCatalog.getMenuViews());
+const utilityOpen = ref(false);
+const primaryViews = computed(() => navigationCatalog.getPrimaryViews());
+const utilityViews = computed(() => navigationCatalog.getUtilityViews());
+const currentUtilityView = computed(() =>
+  utilityViews.value.some(view => view.id === props.currentView),
+);
+
+const MENU_ICONS = Object.freeze({
+  today: 'M12 3.75a.75.75 0 0 1 .75.75v1.1h3.2a2.8 2.8 0 0 1 2.8 2.8v7.6a2.8 2.8 0 0 1-2.8 2.8H8.05a2.8 2.8 0 0 1-2.8-2.8v-7.6a2.8 2.8 0 0 1 2.8-2.8h3.2V4.5a.75.75 0 0 1 .75-.75Zm3.95 4.3H8.05a1.3 1.3 0 0 0-1.3 1.3v.8h10.5v-.8a1.3 1.3 0 0 0-1.3-1.3Zm1.3 3.9H6.75v4.95a1.3 1.3 0 0 0 1.3 1.3h7.9a1.3 1.3 0 0 0 1.3-1.3v-4.95Z',
+  inbox: 'M4.75 5.25A2.25 2.25 0 0 1 7 3h10a2.25 2.25 0 0 1 2.25 2.25v10.5A2.25 2.25 0 0 1 17 18H7a2.25 2.25 0 0 1-2.25-2.25V5.25Zm1.5 0v8.5h3.62a2.9 2.9 0 0 1 2.13.94 2.9 2.9 0 0 1 2.13-.94h3.62v-8.5a.75.75 0 0 0-.75-.75H7a.75.75 0 0 0-.75.75Zm0 10v.5c0 .41.34.75.75.75h10a.75.75 0 0 0 .75-.75v-.5h-3.62c-.38 0-.75.16-1.01.45l-.62.67a.75.75 0 0 1-1.1 0l-.62-.67a1.37 1.37 0 0 0-1.01-.45H6.25Z',
+  'follow-up': 'M12 3.25a8.75 8.75 0 1 1-6.19 2.56A8.72 8.72 0 0 1 12 3.25Zm0 1.5a7.25 7.25 0 1 0 5.13 2.12A7.2 7.2 0 0 0 12 4.75Zm-.75 3.5a.75.75 0 0 1 1.5 0v3.28l2.1 1.22a.75.75 0 1 1-.75 1.3l-2.48-1.43a.75.75 0 0 1-.37-.65V8.25Z',
+  backlog: 'M5.25 6A2.25 2.25 0 0 1 7.5 3.75h9A2.25 2.25 0 0 1 18.75 6v12a.75.75 0 0 1-1.28.53l-1.34-1.34-1.6 1.34a.75.75 0 0 1-.96 0l-1.57-1.32-1.57 1.32a.75.75 0 0 1-.96 0l-1.6-1.34-1.34 1.34A.75.75 0 0 1 5.25 18V6Zm1.5 0v10.19l.59-.59a.75.75 0 0 1 .98-.06l1.63 1.36 1.57-1.32a.75.75 0 0 1 .96 0l1.57 1.32 1.63-1.36a.75.75 0 0 1 .98.06l.59.59V6a.75.75 0 0 0-.75-.75h-9a.75.75 0 0 0-.75.75Zm2.5 2.25a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75Z',
+  dashboard: 'M4 6.75A2.75 2.75 0 0 1 6.75 4h3.5A2.75 2.75 0 0 1 13 6.75v3.5A2.75 2.75 0 0 1 10.25 13h-3.5A2.75 2.75 0 0 1 4 10.25v-3.5Zm10.75-2.75h2.5A2.75 2.75 0 0 1 20 6.75v1.5A2.75 2.75 0 0 1 17.25 11h-2.5A2.75 2.75 0 0 1 12 8.25v-1.5A2.75 2.75 0 0 1 14.75 4ZM4 15.75A2.75 2.75 0 0 1 6.75 13h1.5A2.75 2.75 0 0 1 11 15.75v2.5A2.75 2.75 0 0 1 8.25 21h-1.5A2.75 2.75 0 0 1 4 18.25v-2.5ZM14.75 12h2.5A2.75 2.75 0 0 1 20 14.75v3.5A2.75 2.75 0 0 1 17.25 21h-2.5A2.75 2.75 0 0 1 12 18.25v-3.5A2.75 2.75 0 0 1 14.75 12Z',
+  settings: 'M10.42 3.97a1.75 1.75 0 0 1 3.16 0l.29.64c.17.38.58.59.99.52l.7-.11a1.75 1.75 0 0 1 1.83 2.57l-.35.61a.96.96 0 0 0 0 .96l.35.61a1.75 1.75 0 0 1-1.83 2.57l-.7-.11a.92.92 0 0 0-.99.52l-.29.64a1.75 1.75 0 0 1-3.16 0l-.29-.64a.92.92 0 0 0-.99-.52l-.7.11a1.75 1.75 0 0 1-1.83-2.57l.35-.61a.96.96 0 0 0 0-.96l-.35-.61A1.75 1.75 0 0 1 8.44 5.02l.7.11c.41.07.82-.14.99-.52l.29-.64ZM12 8.25a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 0 0 0-4.5Z',
+  more: 'M12 5.75a1.25 1.25 0 1 1 0 2.5a1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5a1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5a1.25 1.25 0 0 1 0-2.5Z',
+  chevron: 'M8.47 9.97a.75.75 0 0 1 1.06 0L12 12.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 0 1 0-1.06Z',
+});
 
 function toggleMenu() {
   menuOpen.value = !menuOpen.value;
@@ -25,6 +41,14 @@ function closeMenu() {
 function navigateTo(viewId) {
   emit('navigate', viewId);
   closeMenu();
+}
+
+function toggleUtilityMenu() {
+  utilityOpen.value = !utilityOpen.value;
+}
+
+function getIconPath(iconId) {
+  return MENU_ICONS[iconId] ?? MENU_ICONS.more;
 }
 
 function onSwipeStart(event) {
@@ -61,6 +85,25 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocumentPointerDown);
   document.removeEventListener('keydown', onDocumentKeydown);
 });
+
+watch(
+  () => props.currentView,
+  nextView => {
+    if (utilityViews.value.some(view => view.id === nextView)) {
+      utilityOpen.value = true;
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => menuOpen.value,
+  nextOpen => {
+    if (!nextOpen && !currentUtilityView.value) {
+      utilityOpen.value = false;
+    }
+  },
+);
 </script>
 
 <template>
@@ -69,6 +112,8 @@ onBeforeUnmount(() => {
       <button type="button" class="brandButton" @click="navigateTo('today')">
         <img src="../assets/logo.png" alt="Logo de ListEA" class="brandLogo" />
         <div class="brandCopy">
+          <strong>ListEA</strong>
+          <span>Hoy y seguimiento</span>
         </div>
       </button>
 
@@ -86,16 +131,65 @@ onBeforeUnmount(() => {
     </div>
 
     <nav class="drawer" :class="{ active: menuOpen }">
-      <button
-        v-for="view in views"
-        :key="view.id"
-        type="button"
-        class="drawerItem"
-        :class="{ active: currentView === view.id }"
-        @click="navigateTo(view.id)"
-      >
-        {{ view.label }}
-      </button>
+      <div class="drawerGroup">
+        <p class="drawerGroupLabel">Flujo diario</p>
+        <button
+          v-for="view in primaryViews"
+          :key="view.id"
+          type="button"
+          class="drawerItem"
+          :class="{ active: currentView === view.id }"
+          @click="navigateTo(view.id)"
+        >
+          <span class="drawerIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path :d="getIconPath(view.icon)" />
+            </svg>
+          </span>
+          <span class="drawerItemLabel">{{ view.label }}</span>
+        </button>
+      </div>
+
+      <div class="drawerGroup drawerGroupSecondary">
+        <button
+          type="button"
+          class="drawerDisclosure"
+          :aria-expanded="utilityOpen ? 'true' : 'false'"
+          @click="toggleUtilityMenu"
+        >
+          <span class="drawerDisclosureLabel">
+            <span class="drawerIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path :d="getIconPath('more')" />
+              </svg>
+            </span>
+            <span>Mas</span>
+          </span>
+          <span class="drawerChevron" :class="{ open: utilityOpen }" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path :d="getIconPath('chevron')" />
+            </svg>
+          </span>
+        </button>
+
+        <div v-if="utilityOpen" class="utilityStack">
+          <button
+            v-for="view in utilityViews"
+            :key="view.id"
+            type="button"
+            class="drawerItem drawerItemSecondary"
+            :class="{ active: currentView === view.id }"
+            @click="navigateTo(view.id)"
+          >
+            <span class="drawerIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path :d="getIconPath(view.icon)" />
+              </svg>
+            </span>
+            <span class="drawerItemLabel">{{ view.label }}</span>
+          </button>
+        </div>
+      </div>
     </nav>
     <div v-if="menuOpen" class="overlay" @click="closeMenu"></div>
 
@@ -159,9 +253,14 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
+.brandCopy strong {
+  font-size: 0.98rem;
+  line-height: 1;
+}
+
 .brandCopy span {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.78rem;
 }
 
 .menuTrigger {
@@ -208,7 +307,7 @@ onBeforeUnmount(() => {
   padding: calc(72px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   background: var(--surface);
   transition: transform 220ms ease, opacity 220ms ease;
   box-shadow: 0 20px 50px rgba(18, 28, 44, 0.14);
@@ -225,13 +324,93 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
+.drawerGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.drawerGroupSecondary {
+  padding-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+}
+
+.drawerGroupLabel {
+  margin: 0;
+  padding: 0 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.drawerDisclosure,
 .drawerItem {
-  min-height: 48px;
+  min-height: 50px;
   border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--surface-soft);
   color: var(--text-main);
   text-align: left;
+}
+
+.drawerDisclosure,
+.drawerItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.drawerItem {
+  justify-content: flex-start;
+}
+
+.drawerDisclosureLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.drawerItemLabel {
+  font-weight: 700;
+}
+
+.drawerIcon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 92%, white);
+}
+
+.drawerIcon svg,
+.drawerChevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+.drawerIcon path,
+.drawerChevron path {
+  fill: currentColor;
+}
+
+.drawerChevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 160ms ease;
+}
+
+.drawerChevron.open {
+  transform: rotate(180deg);
+}
+
+.utilityStack {
+  display: grid;
+  gap: 8px;
 }
 
 .drawerItem.active {
@@ -279,7 +458,8 @@ onBeforeUnmount(() => {
     font-size: 0.95rem;
   }
 
-  .drawerItem {
+  .drawerItem,
+  .drawerDisclosure {
     min-height: 46px;
   }
 }

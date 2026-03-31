@@ -137,7 +137,7 @@ export class TaskExternalActionResolver {
       });
     }
 
-    if (hasKeyword(combinedText, KEYWORDS.whatsapp)) {
+    if (phone && hasKeyword(combinedText, KEYWORDS.whatsapp)) {
       const baseUrl = phone
         ? `https://wa.me/${phone.replace(/^\+/, '')}`
         : 'https://wa.me/';

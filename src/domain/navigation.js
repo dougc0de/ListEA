@@ -1,20 +1,30 @@
 export class AppView {
-  constructor({ id, label }) {
+  constructor({ id, label, icon = '', utility = false }) {
     this.id = id;
     this.label = label;
+    this.icon = icon;
+    this.utility = Boolean(utility);
   }
 }
 
 export class NavigationCatalog {
   constructor() {
     this.views = [
-      new AppView({ id: 'inbox', label: 'Capturas' }),
-      new AppView({ id: 'today', label: 'Hoy' }),
-      new AppView({ id: 'follow-up', label: 'Seguimiento' }),
-      new AppView({ id: 'backlog', label: 'Agenda' }),
-      new AppView({ id: 'dashboard', label: 'Panel' }),
-      new AppView({ id: 'settings', label: 'Ajustes' }),
+      new AppView({ id: 'today', label: 'Hoy', icon: 'today' }),
+      new AppView({ id: 'inbox', label: 'Capturas', icon: 'inbox' }),
+      new AppView({ id: 'follow-up', label: 'Seguimiento', icon: 'follow-up' }),
+      new AppView({ id: 'backlog', label: 'Agenda', icon: 'backlog' }),
+      new AppView({ id: 'dashboard', label: 'Panel', icon: 'dashboard', utility: true }),
+      new AppView({ id: 'settings', label: 'Ajustes', icon: 'settings', utility: true }),
     ];
+  }
+
+  getPrimaryViews() {
+    return this.views.filter(view => !view.utility);
+  }
+
+  getUtilityViews() {
+    return this.views.filter(view => view.utility);
   }
 
   getMenuViews() {

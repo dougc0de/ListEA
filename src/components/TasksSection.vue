@@ -85,7 +85,10 @@ const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
 const upgradePrompt = ref(null);
 const backlogCompletedOpen = ref(true);
+const addTaskRef = ref(null);
+const searchInputRef = ref(null);
 const focusListPanelRef = ref(null);
+const reviewPanelRef = ref(null);
 const paletteSelectorOpen = ref(false);
 const backupFileInput = ref(null);
 const backupPassphrase = ref('');
@@ -533,6 +536,32 @@ function scrollToFocusContent() {
     behavior: 'smooth',
     block: 'start',
   });
+}
+
+function scrollToElement(targetRef) {
+  if (typeof window === 'undefined') return;
+  const element = targetRef?.value;
+  if (!element) return;
+
+  element.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+}
+
+function focusSearchField() {
+  const field = searchInputRef.value;
+  if (!field) return;
+
+  field.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  });
+  field.focus({ preventScroll: true });
+}
+
+function openComposerFromShortcut() {
+  addTaskRef.value?.openComposer?.();
 }
 
 function resolvePrimaryLaunchSuggestion(task) {
@@ -1207,31 +1236,31 @@ const heroCopy = computed(() => {
   if (resolvedView.value === 'inbox') {
     return {
       eyebrow: 'Capturas',
-      title: 'Convierte capturas rapidas en siguientes pasos claros.',
-      description: 'Capturas guarda ideas, llamadas y compromisos hasta que decidas que hacer con ellos.',
+      title: 'Captura primero y ordena cuando toque.',
+      description: 'Ideas, llamadas y pendientes antes de decidir.',
     };
   }
 
   if (resolvedView.value === 'follow-up') {
     return {
       eyebrow: 'Seguimiento',
-      title: 'Manten promesas, respuestas y pendientes visibles.',
-      description: 'Aqui se junta lo que espera respuesta, esta bloqueado o necesita nueva fecha.',
+      title: 'Nada importante se queda sin seguimiento.',
+      description: 'Esperas, bloqueos y promesas en un solo lugar.',
     };
   }
 
   if (resolvedView.value === 'backlog') {
     return {
       eyebrow: 'Agenda',
-      title: 'Ordena tu backlog con contexto real y privado.',
-      description: 'Aqui ves senales y tareas activas para decidir mejor sin sacar datos del dispositivo.',
+      title: 'Ordena tu agenda sin perder contexto.',
+      description: 'Backlog vivo, privado y listo para decidir.',
     };
   }
 
   return {
     eyebrow: 'Hoy',
-    title: 'Captura rapido, decide el siguiente paso y ejecuta con foco.',
-    description: 'ListEA prioriza lo que toca hoy sin perder el hilo de tu seguimiento.',
+    title: 'Haz lo que toca hoy con menos friccion.',
+    description: 'Prioriza, ejecuta y sigue el hilo sin salir del dispositivo.',
   };
 });
 const summaryCards = computed(() => {
@@ -1264,9 +1293,72 @@ const licenseSummary = computed(() => preferences.value.license?.licenseTier ===
   ? 'ListEA Pro activado en este dispositivo.'
   : 'ListEA Free activo. Tus tareas siguen siendo privadas y locales.');
 const isProActive = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO);
+const viewQuickActions = computed(() => {
+  if (resolvedView.value === 'inbox') {
+    return [
+      { id: 'new-task', label: 'Nueva' },
+      { id: 'search', label: 'Buscar' },
+      { id: 'review', label: 'Revision' },
+    ];
+  }
+
+  if (resolvedView.value === 'follow-up') {
+    return [
+      { id: 'search', label: 'Buscar' },
+      { id: 'review', label: 'Revision' },
+      { id: 'open-backlog', label: 'Agenda' },
+    ];
+  }
+
+  if (resolvedView.value === 'backlog') {
+    return [
+      { id: 'search', label: 'Buscar' },
+      { id: 'review', label: 'Revision' },
+      { id: 'open-dashboard', label: 'Panel' },
+    ];
+  }
+
+  return [
+    { id: 'new-task', label: 'Nueva' },
+    { id: 'show-overdue', label: 'Vencidas' },
+    { id: 'search', label: 'Buscar' },
+  ];
+});
 
 function formatTaskCount(value) {
   return `${value} ${value === 1 ? 'tarea' : 'tareas'}`;
+}
+
+function handleQuickAction(actionId) {
+  if (actionId === 'new-task') {
+    openComposerFromShortcut();
+    return;
+  }
+
+  if (actionId === 'search') {
+    focusSearchField();
+    return;
+  }
+
+  if (actionId === 'review') {
+    scrollToElement(reviewPanelRef);
+    return;
+  }
+
+  if (actionId === 'show-overdue') {
+    activeFilterId.value = FILTER_IDS.OVERDUE;
+    scrollToFocusContent();
+    return;
+  }
+
+  if (actionId === 'open-backlog') {
+    emit('navigate', 'backlog');
+    return;
+  }
+
+  if (actionId === 'open-dashboard') {
+    emit('navigate', 'dashboard');
+  }
 }
 
 watch(
@@ -1340,7 +1432,18 @@ onBeforeUnmount(() => {
       <div class="topCopy">
         <p class="eyebrow">{{ heroCopy.eyebrow }}</p>
         <h1>{{ heroCopy.title }}</h1>
-        <p class="panelText">{{ heroCopy.description }}</p>
+        <p class="panelText topHint">{{ heroCopy.description }}</p>
+        <div class="quickActionRow">
+          <button
+            v-for="action in viewQuickActions"
+            :key="action.id"
+            type="button"
+            class="quickActionButton"
+            @click="handleQuickAction(action.id)"
+          >
+            {{ action.label }}
+          </button>
+        </div>
       </div>
       <div class="topStats">
         <article v-for="card in summaryCards" :key="card.id" class="statCard">
@@ -1350,7 +1453,7 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <AddTask v-if="showTaskWorkspace" @add="addTask" />
+    <AddTask v-if="showTaskWorkspace" ref="addTaskRef" @add="addTask" />
 
     <transition name="timeSwap">
       <div
@@ -1434,7 +1537,12 @@ onBeforeUnmount(() => {
     <section v-if="showTaskWorkspace" class="filterBar">
       <label class="searchField">
         <span class="srOnly">Buscar tareas</span>
-        <input v-model="searchQuery" type="search" placeholder="Buscar por tarea, proyecto, area o tag" />
+        <input
+          ref="searchInputRef"
+          v-model="searchQuery"
+          type="search"
+          placeholder="Buscar tarea, proyecto o tag"
+        />
       </label>
     </section>
 
@@ -1449,7 +1557,7 @@ onBeforeUnmount(() => {
             <span class="laneCount">{{ formatTaskCount(inboxTasks.length) }}</span>
           </div>
         </div>
-        <p class="panelText">Captura primero. Ordena cuando toque.</p>
+        <p class="panelText">Primero capturas. Luego decides.</p>
         <TodoList
           :todos="inboxTasks"
           :task-actions="INBOX_TASK_ACTIONS"
@@ -1463,7 +1571,7 @@ onBeforeUnmount(() => {
         />
       </article>
 
-      <article class="panelCard">
+      <article ref="reviewPanelRef" class="panelCard">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Revision rapida</p>
@@ -1481,7 +1589,7 @@ onBeforeUnmount(() => {
             </button>
           </article>
         </div>
-        <p v-else class="emptyText">No hay senales urgentes en tu revision profesional.</p>
+        <p v-else class="emptyText">No hay senales urgentes.</p>
       </article>
     </section>
 
@@ -1576,7 +1684,7 @@ onBeforeUnmount(() => {
         />
       </article>
 
-      <article class="panelCard insightsPanel">
+      <article ref="reviewPanelRef" class="panelCard insightsPanel">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Revision profesional</p>
@@ -1594,12 +1702,12 @@ onBeforeUnmount(() => {
             </button>
           </article>
         </div>
-        <p v-else class="emptyText">Tu seguimiento se ve bajo control en este momento.</p>
+        <p v-else class="emptyText">Tu seguimiento se ve bajo control.</p>
       </article>
     </section>
 
     <section v-else-if="resolvedView === 'backlog'" class="backlogGrid">
-      <article class="panelCard insightsPanel">
+      <article ref="reviewPanelRef" class="panelCard insightsPanel">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Agenda</p>
@@ -1615,7 +1723,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-else-if="backlogInsights.length" class="upgradePanel">
           <strong>ListEA Pro lee tu backlog sin sacar datos del dispositivo.</strong>
-          <p class="panelText">Desbloquea deteccion de duplicados y tareas sin decision en local.</p>
+          <p class="panelText">Detecta duplicados y tareas sin decision, siempre en local.</p>
           <button type="button" class="ghostButton" @click="requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS)">
             Ver ListEA Pro
           </button>
@@ -1692,7 +1800,7 @@ onBeforeUnmount(() => {
       <article class="panelCard">
         <p class="eyebrow">Privacidad</p>
         <h3>Todo vive en este dispositivo</h3>
-        <p class="panelText">Todo queda en este dispositivo. Sin cuentas ni nube propia.</p>
+        <p class="panelText">Sin cuentas, sin nube propia, sin sacar tus tareas del dispositivo.</p>
       </article>
 
       <article class="panelCard">
@@ -1708,9 +1816,7 @@ onBeforeUnmount(() => {
               {{ isProActive ? 'Pago unico local preparado para este dispositivo.' : 'Tus tareas siguen completas y privadas en el plan Free.' }}
             </span>
           </div>
-          <p class="panelText">
-            Pro desbloquea revision avanzada, avisos avanzados, apertura inteligente de apps, paletas premium y respaldo cifrado.
-          </p>
+          <p class="panelText">Pro suma revision avanzada, avisos, apertura inteligente, paletas y respaldo cifrado.</p>
           <div class="buttonRow">
             <button v-if="!isProActive" type="button" class="primaryButton" @click="activateProLocally">
               Activar ListEA Pro local
@@ -1756,7 +1862,7 @@ onBeforeUnmount(() => {
             </select>
           </label>
           <p v-if="!preferences.license.entitlements.advancedReminders" class="panelText">
-            Free incluye avisos basicos. ListEA Pro desbloquea recordatorios antes o despues de la hora objetivo.
+            Free incluye avisos basicos. Pro suma avisos antes o despues.
           </p>
 
           <div class="buttonRow">
@@ -1827,7 +1933,7 @@ onBeforeUnmount(() => {
             <span>Solo para tareas importantes</span>
           </label>
           <p v-if="!preferences.license.entitlements.avatarPro" class="panelText">
-            El avatar basico sigue disponible gratis. ListEA Pro desbloquea duracion y filtros avanzados.
+            El aviso basico es gratis. Pro suma duracion y filtros avanzados.
           </p>
         </div>
       </article>
@@ -1836,7 +1942,7 @@ onBeforeUnmount(() => {
         <p class="eyebrow">Respaldo</p>
         <h3>Exporta e importa tus datos localmente</h3>
         <div class="settingsStack">
-          <p class="panelText">Exporta e importa con un archivo local. El cifrado queda para ListEA Pro.</p>
+          <p class="panelText">Exporta e importa con un archivo local. El cifrado queda para Pro.</p>
           <label class="fieldGroup">
             <span>Frase para respaldo cifrado</span>
             <input
@@ -1973,6 +2079,10 @@ onBeforeUnmount(() => {
   align-content: start;
 }
 
+.topHint {
+  max-width: 36ch;
+}
+
 .topCopy h1,
 .eyebrow {
   margin: 0;
@@ -2010,6 +2120,22 @@ onBeforeUnmount(() => {
   gap: 8px;
   align-self: stretch;
   grid-auto-rows: 1fr;
+}
+
+.quickActionRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.quickActionButton {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  color: var(--text-main);
 }
 
 .feedbackBanner {
@@ -2723,6 +2849,22 @@ onBeforeUnmount(() => {
     min-width: 124px;
     min-height: 68px;
     padding: 10px;
+  }
+
+  .quickActionRow {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .quickActionRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quickActionButton {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .sectionHeader {

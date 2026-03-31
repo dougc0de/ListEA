@@ -9,6 +9,10 @@
         <package android:name="com.microsoft.office.outlook" />
         <package android:name="com.microsoft.teams" />
         <package android:name="us.zoom.videomeetings" />
+        <package android:name="com.google.android.apps.meetings" />
+        <package android:name="com.google.android.calendar" />
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.waze" />
 
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -37,6 +41,30 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="zoomus" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="googlemeet" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="googlecalendar" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="comgooglemaps" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="waze" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="sms" />
         </intent>
     </queries>
 

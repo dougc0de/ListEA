@@ -1,0 +1,445 @@
+[
+  {
+    "id": "whatsapp",
+    "label": "WhatsApp",
+    "keywords": ["whatsapp", "wsp", "wa"],
+    "category": "messaging",
+    "premium": true,
+    "actionIds": ["whatsapp"],
+    "urlHosts": ["wa.me", "web.whatsapp.com"],
+    "targets": ["home", "compose", "chat"],
+    "platforms": {
+      "ios": {
+        "schemes": ["whatsapp"],
+        "open": {
+          "home": "whatsapp://"
+        }
+      },
+      "android": {
+        "packageName": "com.whatsapp",
+        "schemes": ["whatsapp"],
+        "open": {
+          "home": "com.whatsapp"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://wa.me/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://wa.me/"
+    }
+  },
+  {
+    "id": "telegram",
+    "label": "Telegram",
+    "keywords": ["telegram", "tg"],
+    "category": "messaging",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["t.me"],
+    "targets": ["home", "chat"],
+    "platforms": {
+      "ios": {
+        "schemes": ["tg"],
+        "open": {
+          "home": "tg://"
+        }
+      },
+      "android": {
+        "packageName": "org.telegram.messenger",
+        "schemes": ["tg"],
+        "open": {
+          "home": "org.telegram.messenger"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://t.me/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://t.me/"
+    }
+  },
+  {
+    "id": "slack",
+    "label": "Slack",
+    "keywords": ["slack"],
+    "category": "messaging",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["slack.com", "app.slack.com"],
+    "targets": ["home", "chat"],
+    "platforms": {
+      "ios": {
+        "schemes": ["slack"],
+        "open": {
+          "home": "slack://"
+        }
+      },
+      "android": {
+        "packageName": "com.Slack",
+        "schemes": ["slack"],
+        "open": {
+          "home": "com.Slack"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://app.slack.com/client"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://app.slack.com/client"
+    }
+  },
+  {
+    "id": "gmail",
+    "label": "Gmail",
+    "keywords": ["gmail"],
+    "category": "email",
+    "premium": true,
+    "actionIds": ["email"],
+    "urlHosts": ["mail.google.com"],
+    "targets": ["home", "compose"],
+    "platforms": {
+      "ios": {
+        "schemes": ["googlegmail"],
+        "open": {
+          "home": "googlegmail://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.gm",
+        "schemes": ["googlegmail"],
+        "open": {
+          "home": "com.google.android.gm"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://mail.google.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://mail.google.com/"
+    }
+  },
+  {
+    "id": "outlook",
+    "label": "Outlook",
+    "keywords": ["outlook"],
+    "category": "email",
+    "premium": true,
+    "actionIds": ["email"],
+    "urlHosts": ["outlook.office.com"],
+    "targets": ["home", "compose"],
+    "platforms": {
+      "ios": {
+        "schemes": ["ms-outlook"],
+        "open": {
+          "home": "ms-outlook://"
+        }
+      },
+      "android": {
+        "packageName": "com.microsoft.office.outlook",
+        "schemes": ["ms-outlook"],
+        "open": {
+          "home": "com.microsoft.office.outlook"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://outlook.office.com/mail/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://outlook.office.com/mail/"
+    }
+  },
+  {
+    "id": "teams",
+    "label": "Teams",
+    "keywords": ["teams", "microsoft teams"],
+    "category": "meeting",
+    "premium": true,
+    "actionIds": ["meeting-link"],
+    "urlHosts": ["teams.microsoft.com"],
+    "targets": ["home", "meeting", "chat"],
+    "platforms": {
+      "ios": {
+        "schemes": ["msteams"],
+        "open": {
+          "home": "msteams://"
+        }
+      },
+      "android": {
+        "packageName": "com.microsoft.teams",
+        "schemes": ["msteams"],
+        "open": {
+          "home": "com.microsoft.teams"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://teams.microsoft.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://teams.microsoft.com/"
+    }
+  },
+  {
+    "id": "zoom",
+    "label": "Zoom",
+    "keywords": ["zoom"],
+    "category": "meeting",
+    "premium": true,
+    "actionIds": ["meeting-link"],
+    "urlHosts": ["zoom.us"],
+    "targets": ["home", "meeting"],
+    "platforms": {
+      "ios": {
+        "schemes": ["zoomus"],
+        "open": {
+          "home": "zoomus://"
+        }
+      },
+      "android": {
+        "packageName": "us.zoom.videomeetings",
+        "schemes": ["zoomus"],
+        "open": {
+          "home": "us.zoom.videomeetings"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://zoom.us/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://zoom.us/"
+    }
+  },
+  {
+    "id": "google-meet",
+    "label": "Google Meet",
+    "keywords": ["google meet", "meet"],
+    "category": "meeting",
+    "premium": true,
+    "actionIds": ["meeting-link"],
+    "urlHosts": ["meet.google.com"],
+    "targets": ["home", "meeting"],
+    "platforms": {
+      "ios": {
+        "schemes": ["googlemeet"],
+        "open": {
+          "home": "googlemeet://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.apps.meetings",
+        "schemes": ["googlemeet"],
+        "open": {
+          "home": "com.google.android.apps.meetings"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://meet.google.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://meet.google.com/"
+    }
+  },
+  {
+    "id": "google-calendar",
+    "label": "Google Calendar",
+    "keywords": ["google calendar", "gcal", "calendar"],
+    "category": "calendar",
+    "premium": true,
+    "actionIds": ["calendar"],
+    "urlHosts": ["calendar.google.com"],
+    "targets": ["home", "compose"],
+    "platforms": {
+      "ios": {
+        "schemes": ["googlecalendar"],
+        "open": {
+          "home": "googlecalendar://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.calendar",
+        "schemes": ["googlecalendar"],
+        "open": {
+          "home": "com.google.android.calendar"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://calendar.google.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://calendar.google.com/"
+    }
+  },
+  {
+    "id": "google-maps",
+    "label": "Google Maps",
+    "keywords": ["google maps", "maps", "mapas"],
+    "category": "maps",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["maps.google.com", "google.com/maps", "maps.app.goo.gl"],
+    "targets": ["home", "map"],
+    "platforms": {
+      "ios": {
+        "schemes": ["comgooglemaps"],
+        "open": {
+          "home": "comgooglemaps://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.apps.maps",
+        "schemes": ["geo", "google.navigation", "comgooglemaps"],
+        "open": {
+          "home": "com.google.android.apps.maps"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://maps.google.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://maps.google.com/"
+    }
+  },
+  {
+    "id": "waze",
+    "label": "Waze",
+    "keywords": ["waze"],
+    "category": "maps",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["waze.com", "waze.link"],
+    "targets": ["home", "map"],
+    "platforms": {
+      "ios": {
+        "schemes": ["waze"],
+        "open": {
+          "home": "waze://"
+        }
+      },
+      "android": {
+        "packageName": "com.waze",
+        "schemes": ["waze"],
+        "open": {
+          "home": "com.waze"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.waze.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.waze.com/"
+    }
+  },
+  {
+    "id": "phone",
+    "label": "Telefono",
+    "keywords": [],
+    "category": "device",
+    "premium": true,
+    "actionIds": ["call"],
+    "urlHosts": [],
+    "targets": ["call"],
+    "platforms": {
+      "ios": {
+        "schemes": ["tel"],
+        "open": {}
+      },
+      "android": {
+        "schemes": ["tel"],
+        "open": {}
+      },
+      "web": {
+        "open": {}
+      }
+    },
+    "fallback": {
+      "url": ""
+    }
+  },
+  {
+    "id": "sms",
+    "label": "Mensajes",
+    "keywords": [],
+    "category": "device",
+    "premium": true,
+    "actionIds": ["sms"],
+    "urlHosts": [],
+    "targets": ["sms"],
+    "platforms": {
+      "ios": {
+        "schemes": ["sms"],
+        "open": {}
+      },
+      "android": {
+        "schemes": ["sms"],
+        "open": {}
+      },
+      "web": {
+        "open": {}
+      }
+    },
+    "fallback": {
+      "url": ""
+    }
+  },
+  {
+    "id": "browser",
+    "label": "Navegador",
+    "keywords": ["browser", "navegador", "chrome", "safari"],
+    "category": "utility",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": [],
+    "targets": ["web"],
+    "platforms": {
+      "ios": {
+        "schemes": [],
+        "open": {}
+      },
+      "android": {
+        "schemes": [],
+        "open": {}
+      },
+      "web": {
+        "open": {
+          "web": "https://www.google.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.google.com/"
+    }
+  }
+]
