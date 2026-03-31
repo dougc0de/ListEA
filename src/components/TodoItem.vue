@@ -2,7 +2,13 @@
 import { computed, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
 import { TaskAppLaunchResolver } from '../domain/taskAppLaunch';
-import { TaskContextPresenter, toDateTimeInputValue } from '../domain/tasks';
+import {
+  TASK_DATE_PRECISION,
+  TaskContextPresenter,
+  buildTaskDateTime,
+  toDateInputValue,
+  toTimeInputValue,
+} from '../domain/tasks';
 
 const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action', 'open-external']);
 
@@ -22,8 +28,12 @@ const editableTitle = ref(props.todo.title);
 const editableNotes = ref(props.todo.notes ?? '');
 const editableProject = ref(props.todo.project ?? '');
 const editableArea = ref(props.todo.area ?? '');
-const editableDueAt = ref(props.todo.dueAt ? props.todo.dueAt.slice(0, 16) : '');
-const editableFollowUpAt = ref(props.todo.followUpAt ? props.todo.followUpAt.slice(0, 16) : '');
+const editableDueDate = ref('');
+const editableDueTime = ref('');
+const editableDueHasTime = ref(false);
+const editableFollowUpDate = ref('');
+const editableFollowUpTime = ref('');
+const editableFollowUpHasTime = ref(false);
 const editablePriority = ref(props.todo.priority ?? 'medium');
 const editableStatus = ref(props.todo.status ?? 'active');
 const editableEnergy = ref(props.todo.energy ?? 'medium');
@@ -65,13 +75,25 @@ const secondaryTaskActions = computed(() => props.taskActions.slice(1));
 const primaryExternalAction = computed(() => externalAppActions.value[0] ?? null);
 const secondaryExternalActions = computed(() => externalAppActions.value.slice(1));
 
+function setEditableDateParts(dateRef, timeRef, hasTimeRef, value = '', precision = '') {
+  dateRef.value = toDateInputValue(value);
+  hasTimeRef.value = precision === TASK_DATE_PRECISION.DATETIME;
+  timeRef.value = hasTimeRef.value ? toTimeInputValue(value) : '';
+}
+
 function resetEditors(todo = props.todo) {
   editableTitle.value = todo.title;
   editableNotes.value = todo.notes ?? '';
   editableProject.value = todo.project ?? '';
   editableArea.value = todo.area ?? '';
-  editableDueAt.value = toDateTimeInputValue(todo.dueAt);
-  editableFollowUpAt.value = toDateTimeInputValue(todo.followUpAt);
+  setEditableDateParts(editableDueDate, editableDueTime, editableDueHasTime, todo.dueAt, todo.dueAtPrecision);
+  setEditableDateParts(
+    editableFollowUpDate,
+    editableFollowUpTime,
+    editableFollowUpHasTime,
+    todo.followUpAt,
+    todo.followUpAtPrecision,
+  );
   editablePriority.value = todo.priority ?? 'medium';
   editableStatus.value = todo.status ?? 'active';
   editableEnergy.value = todo.energy ?? 'medium';
@@ -108,6 +130,16 @@ function saveTask() {
   const currentSubtasksByTitle = new Map(
     props.todo.subtasks.map(subtask => [subtask.title.toLowerCase(), subtask.done]),
   );
+  const nextDueAt = buildTaskDateTime(
+    editableDueDate.value,
+    editableDueTime.value,
+    editableDueHasTime.value,
+  );
+  const nextFollowUpAt = buildTaskDateTime(
+    editableFollowUpDate.value,
+    editableFollowUpTime.value,
+    editableFollowUpHasTime.value,
+  );
 
   emit('update', {
     id: props.todo.id,
@@ -115,8 +147,10 @@ function saveTask() {
     notes: editableNotes.value,
     project: editableProject.value,
     area: editableArea.value,
-    dueAt: editableDueAt.value,
-    followUpAt: editableFollowUpAt.value,
+    dueAt: nextDueAt.value,
+    dueAtPrecision: nextDueAt.precision,
+    followUpAt: nextFollowUpAt.value,
+    followUpAtPrecision: nextFollowUpAt.precision,
     priority: editablePriority.value,
     status: editableStatus.value,
     energy: editableEnergy.value,
@@ -157,11 +191,15 @@ function cancelEdit() {
 
 function clearEditableDate(field) {
   if (field === 'dueAt') {
-    editableDueAt.value = '';
+    editableDueDate.value = '';
+    editableDueTime.value = '';
+    editableDueHasTime.value = false;
     return;
   }
 
-  editableFollowUpAt.value = '';
+  editableFollowUpDate.value = '';
+  editableFollowUpTime.value = '';
+  editableFollowUpHasTime.value = false;
 }
 
 function openExternalAction(action) {
@@ -290,8 +328,19 @@ function openExternalAction(action) {
       <label class="fieldGroup">
         <span>Fecha objetivo</span>
         <div class="fieldWithAction">
-          <input v-model="editableDueAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
-          <button v-if="isEditing && editableDueAt" type="button" class="clearFieldButton" @click="clearEditableDate('dueAt')">
+          <input v-model="editableDueDate" class="detailField" type="date" :disabled="!isEditing" />
+          <input
+            v-if="editableDueHasTime || isEditing"
+            v-model="editableDueTime"
+            class="detailField"
+            type="time"
+            :disabled="!isEditing || !editableDueHasTime"
+          />
+          <label v-if="isEditing" class="checkboxRow compactToggle">
+            <input v-model="editableDueHasTime" type="checkbox" />
+            <span>Agregar hora</span>
+          </label>
+          <button v-if="isEditing && editableDueDate" type="button" class="clearFieldButton" @click="clearEditableDate('dueAt')">
             Limpiar
           </button>
         </div>
@@ -300,8 +349,19 @@ function openExternalAction(action) {
       <label class="fieldGroup">
         <span>Seguimiento</span>
         <div class="fieldWithAction">
-          <input v-model="editableFollowUpAt" class="detailField" type="datetime-local" :disabled="!isEditing" />
-          <button v-if="isEditing && editableFollowUpAt" type="button" class="clearFieldButton" @click="clearEditableDate('followUpAt')">
+          <input v-model="editableFollowUpDate" class="detailField" type="date" :disabled="!isEditing" />
+          <input
+            v-if="editableFollowUpHasTime || isEditing"
+            v-model="editableFollowUpTime"
+            class="detailField"
+            type="time"
+            :disabled="!isEditing || !editableFollowUpHasTime"
+          />
+          <label v-if="isEditing" class="checkboxRow compactToggle">
+            <input v-model="editableFollowUpHasTime" type="checkbox" />
+            <span>Agregar hora</span>
+          </label>
+          <button v-if="isEditing && editableFollowUpDate" type="button" class="clearFieldButton" @click="clearEditableDate('followUpAt')">
             Limpiar
           </button>
         </div>
@@ -632,6 +692,11 @@ function openExternalAction(action) {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.compactToggle {
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .subtaskList {

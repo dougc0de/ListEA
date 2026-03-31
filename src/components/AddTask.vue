@@ -1,7 +1,13 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
-import { toDateTimeInputValue } from '../domain/tasks';
+import {
+  TASK_DATE_PRECISION,
+  TaskContextPresenter,
+  buildTaskDateTime,
+  toDateInputValue,
+  toTimeInputValue,
+} from '../domain/tasks';
 
 const emit = defineEmits(['add']);
 
@@ -9,8 +15,12 @@ const title = ref('');
 const notes = ref('');
 const project = ref('');
 const area = ref('');
-const dueAt = ref('');
-const followUpAt = ref('');
+const dueDate = ref('');
+const dueTime = ref('');
+const dueHasTime = ref(false);
+const followUpDate = ref('');
+const followUpTime = ref('');
+const followUpHasTime = ref(false);
 const priority = ref('');
 const status = ref('active');
 const effortMinutes = ref('');
@@ -27,6 +37,7 @@ const recurrenceError = ref('');
 const titleField = ref(null);
 
 const interpreter = new QuickCaptureInterpreter();
+const presenter = new TaskContextPresenter();
 const captureTemplates = Object.freeze([
   { id: 'call', label: 'Llamada' },
   { id: 'email-follow-up', label: 'Correo pendiente' },
@@ -61,10 +72,14 @@ const recurrenceLabels = Object.freeze({
 
 const previewItems = computed(() => {
   const items = [];
-  if (capturePreview.value.dueAt) items.push(`Fecha detectada: ${new Date(capturePreview.value.dueAt).toLocaleString()}`);
-  if (capturePreview.value.followUpAt) items.push(`Seguimiento detectado: ${new Date(capturePreview.value.followUpAt).toLocaleString()}`);
+  if (capturePreview.value.dueAt) {
+    items.push(`Fecha detectada: ${presenter.formatDate(capturePreview.value.dueAt, capturePreview.value.dueAtPrecision)}`);
+  }
+  if (capturePreview.value.followUpAt) {
+    items.push(`Seguimiento detectado: ${presenter.formatDate(capturePreview.value.followUpAt, capturePreview.value.followUpAtPrecision)}`);
+  }
   if (capturePreview.value.project || capturePreview.value.area) {
-    items.push(`Area detectada: ${capturePreview.value.project || capturePreview.value.area}`);
+    items.push(`Contexto detectado: ${capturePreview.value.project || capturePreview.value.area}`);
   }
   if (capturePreview.value.tags.length) items.push(`Etiquetas: ${capturePreview.value.tags.join(', ')}`);
   if (capturePreview.value.status === 'waiting') items.push('Estado sugerido: seguimiento');
@@ -80,11 +95,17 @@ const previewItems = computed(() => {
   return items;
 });
 
-function buildFutureInputValue(daysFromToday = 0, hours = 9, minutes = 0) {
+function buildFutureDateInputValue(daysFromToday = 0) {
   const nextDate = new Date();
   nextDate.setDate(nextDate.getDate() + daysFromToday);
-  nextDate.setHours(hours, minutes, 0, 0);
-  return toDateTimeInputValue(nextDate);
+  nextDate.setHours(23, 59, 0, 0);
+  return toDateInputValue(nextDate);
+}
+
+function setDateField(dateRef, timeRef, hasTimeRef, value = '', precision = '') {
+  dateRef.value = toDateInputValue(value);
+  hasTimeRef.value = precision === TASK_DATE_PRECISION.DATETIME;
+  timeRef.value = hasTimeRef.value ? toTimeInputValue(value) : '';
 }
 
 function openComposer() {
@@ -120,8 +141,12 @@ function resetForm() {
   notes.value = '';
   project.value = '';
   area.value = '';
-  dueAt.value = '';
-  followUpAt.value = '';
+  dueDate.value = '';
+  dueTime.value = '';
+  dueHasTime.value = false;
+  followUpDate.value = '';
+  followUpTime.value = '';
+  followUpHasTime.value = false;
   priority.value = '';
   status.value = 'active';
   effortMinutes.value = '';
@@ -146,8 +171,8 @@ function applyTemplate(templateId) {
     notes.value = 'Define el siguiente paso y deja un resumen corto.';
     project.value = 'Clientes';
     area.value = 'Trabajo';
-    dueAt.value = '';
-    followUpAt.value = '';
+    setDateField(dueDate, dueTime, dueHasTime);
+    setDateField(followUpDate, followUpTime, followUpHasTime);
     priority.value = 'medium';
     status.value = 'active';
     effortMinutes.value = '15';
@@ -160,8 +185,10 @@ function applyTemplate(templateId) {
     notes.value = 'Confirma respuesta, siguiente paso y fecha prometida.';
     project.value = 'Clientes';
     area.value = 'Trabajo';
-    dueAt.value = '';
-    followUpAt.value = buildFutureInputValue(1, 9, 0);
+    setDateField(dueDate, dueTime, dueHasTime);
+    followUpDate.value = buildFutureDateInputValue(1);
+    followUpTime.value = '';
+    followUpHasTime.value = false;
     priority.value = 'medium';
     status.value = 'waiting';
     effortMinutes.value = '10';
@@ -174,8 +201,8 @@ function applyTemplate(templateId) {
     notes.value = 'Anota el objetivo, decision esperada y siguiente paso.';
     project.value = 'Trabajo';
     area.value = 'Trabajo';
-    dueAt.value = '';
-    followUpAt.value = '';
+    setDateField(dueDate, dueTime, dueHasTime);
+    setDateField(followUpDate, followUpTime, followUpHasTime);
     priority.value = 'medium';
     status.value = 'active';
     effortMinutes.value = '45';
@@ -188,8 +215,8 @@ function applyTemplate(templateId) {
     notes.value = 'Deja alcance, fecha y cierre esperado.';
     project.value = 'Clientes';
     area.value = 'Trabajo';
-    dueAt.value = '';
-    followUpAt.value = '';
+    setDateField(dueDate, dueTime, dueHasTime);
+    setDateField(followUpDate, followUpTime, followUpHasTime);
     priority.value = 'high';
     status.value = 'active';
     effortMinutes.value = '50';
@@ -201,8 +228,10 @@ function applyTemplate(templateId) {
   notes.value = 'Confirma fecha de pago, evidencia y siguiente contacto.';
   project.value = 'Finanzas';
   area.value = 'Trabajo';
-  dueAt.value = '';
-  followUpAt.value = buildFutureInputValue(2, 9, 0);
+  setDateField(dueDate, dueTime, dueHasTime);
+  followUpDate.value = buildFutureDateInputValue(2);
+  followUpTime.value = '';
+  followUpHasTime.value = false;
   priority.value = 'high';
   status.value = 'waiting';
   effortMinutes.value = '10';
@@ -211,23 +240,37 @@ function applyTemplate(templateId) {
 
 function clearDateField(field) {
   if (field === 'dueAt') {
-    dueAt.value = '';
+    dueDate.value = '';
+    dueTime.value = '';
+    dueHasTime.value = false;
     recurrenceError.value = '';
     return;
   }
 
-  followUpAt.value = '';
+  followUpDate.value = '';
+  followUpTime.value = '';
+  followUpHasTime.value = false;
 }
 
 function onSubmit() {
   const interpreted = capturePreview.value;
   const nextTitle = title.value.trim() || (interpreted.title || '').trim();
-  const resolvedDueAt = dueAt.value || interpreted.dueAt;
-  const resolvedFollowUpAt = followUpAt.value || interpreted.followUpAt;
+  const resolvedDue = dueDate.value
+    ? buildTaskDateTime(dueDate.value, dueTime.value, dueHasTime.value)
+    : {
+      value: interpreted.dueAt,
+      precision: interpreted.dueAtPrecision,
+    };
+  const resolvedFollowUp = followUpDate.value
+    ? buildTaskDateTime(followUpDate.value, followUpTime.value, followUpHasTime.value)
+    : {
+      value: interpreted.followUpAt,
+      precision: interpreted.followUpAtPrecision,
+    };
   const resolvedStatus = advancedOpen.value
     ? (status.value || interpreted.status || 'active')
     : (interpreted.status || status.value || 'active');
-  const effectiveRecurrenceMode = recurrencePreset.value !== 'none' && !resolvedDueAt
+  const effectiveRecurrenceMode = recurrencePreset.value !== 'none' && !resolvedDue.value
     ? 'after-completion'
     : recurrenceMode.value;
 
@@ -245,8 +288,10 @@ function onSubmit() {
     notes: notes.value.trim(),
     project: project.value.trim() || interpreted.project || '',
     area: area.value.trim() || interpreted.area || '',
-    dueAt: resolvedDueAt,
-    followUpAt: resolvedFollowUpAt,
+    dueAt: resolvedDue.value,
+    dueAtPrecision: resolvedDue.precision,
+    followUpAt: resolvedFollowUp.value,
+    followUpAtPrecision: resolvedFollowUp.precision,
     priority: priority.value || interpreted.priority,
     status: resolvedStatus,
     effortMinutes: effortMinutes.value || interpreted.effortMinutes || 20,
@@ -254,7 +299,7 @@ function onSubmit() {
     subtasks: parsedSubtasks.value,
     source: 'manual',
     capturedAt: new Date().toISOString(),
-    needsTriage: !advancedOpen.value,
+    needsTriage: false,
     recurrence: {
       ...(recurrencePreset.value === 'none' ? interpreted.recurrence : {
         preset: recurrencePreset.value,
@@ -355,8 +400,19 @@ defineExpose({
           <label class="fieldGroup">
             <span>Fecha objetivo</span>
             <div class="fieldWithAction">
-              <input v-model="dueAt" class="detailField" type="datetime-local" @input="recurrenceError = ''" />
-              <button v-if="dueAt" type="button" class="clearFieldButton" @click="clearDateField('dueAt')">
+              <input v-model="dueDate" class="detailField" type="date" @input="recurrenceError = ''" />
+              <input
+                v-if="dueHasTime"
+                v-model="dueTime"
+                class="detailField"
+                type="time"
+                @input="recurrenceError = ''"
+              />
+              <label class="checkboxRow compactToggle">
+                <input v-model="dueHasTime" type="checkbox" />
+                <span>Agregar hora</span>
+              </label>
+              <button v-if="dueDate" type="button" class="clearFieldButton" @click="clearDateField('dueAt')">
                 Limpiar
               </button>
             </div>
@@ -365,8 +421,18 @@ defineExpose({
           <label class="fieldGroup">
             <span>Seguimiento</span>
             <div class="fieldWithAction">
-              <input v-model="followUpAt" class="detailField" type="datetime-local" />
-              <button v-if="followUpAt" type="button" class="clearFieldButton" @click="clearDateField('followUpAt')">
+              <input v-model="followUpDate" class="detailField" type="date" />
+              <input
+                v-if="followUpHasTime"
+                v-model="followUpTime"
+                class="detailField"
+                type="time"
+              />
+              <label class="checkboxRow compactToggle">
+                <input v-model="followUpHasTime" type="checkbox" />
+                <span>Agregar hora</span>
+              </label>
+              <button v-if="followUpDate" type="button" class="clearFieldButton" @click="clearDateField('followUpAt')">
                 Limpiar
               </button>
             </div>
@@ -626,6 +692,11 @@ defineExpose({
   gap: 10px;
   text-align: left;
   color: var(--text-main);
+}
+
+.compactToggle {
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .composerActions {

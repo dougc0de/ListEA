@@ -18,7 +18,7 @@ describe('ProfessionalReviewAnalyzer', () => {
     });
 
     expect(review.map(item => item.id)).toEqual(['no-date', 'overdue-follow-up', 'duplicates']);
-    expect(review[0].targetView).toBe('inbox');
+    expect(review[0].targetView).toBe('today');
     expect(review[1].targetView).toBe('follow-up');
   });
 });

@@ -22,7 +22,6 @@ Estado actual:
 - etiquetas, proyecto y area
 
 ### Captura y organizacion
-- `Capturas` para entradas rapidas antes de clasificar
 - interpretacion de lenguaje natural en captura
 - templates para llamada, reunion, propuesta, correo pendiente y cobro/seguimiento
 - vista `Hoy`

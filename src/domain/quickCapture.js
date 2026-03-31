@@ -1,4 +1,4 @@
-import { TASK_PRIORITY, TASK_STATUS } from './tasks';
+import { TASK_DATE_PRECISION, TASK_PRIORITY, TASK_STATUS } from './tasks';
 
 const WEEKDAY_MAP = {
   domingo: 0,
@@ -66,7 +66,9 @@ export class QuickCaptureInterpreter {
       return {
         title: '',
         dueAt: '',
+        dueAtPrecision: '',
         followUpAt: '',
+        followUpAtPrecision: '',
         priority: TASK_PRIORITY.MEDIUM,
         status: TASK_STATUS.ACTIVE,
         tags: [],
@@ -135,14 +137,16 @@ export class QuickCaptureInterpreter {
     if (waitingMatch) {
       fragments.push(waitingMatch[0]);
     }
-    const dueAt = status === TASK_STATUS.WAITING ? '' : detectedDate;
+    const dueAt = status === TASK_STATUS.WAITING ? null : detectedDate;
     const followUpAt = status === TASK_STATUS.WAITING ? detectedDate : null;
     const title = cleanTitle(raw, fragments) || raw;
 
     return {
       title,
-      dueAt: dueAt ? dueAt.toISOString() : '',
-      followUpAt: followUpAt ? followUpAt.toISOString() : '',
+      dueAt: dueAt?.value ? dueAt.value.toISOString() : '',
+      dueAtPrecision: dueAt?.precision ?? '',
+      followUpAt: followUpAt?.value ? followUpAt.value.toISOString() : '',
+      followUpAtPrecision: followUpAt?.precision ?? '',
       priority,
       status,
       tags,
@@ -204,7 +208,10 @@ export class QuickCaptureInterpreter {
     const todayMatch = value.match(/\bhoy\b/i);
     if (todayMatch) {
       fragments.push(todayMatch[0]);
-      return setTimeOnDate(referenceDate, time?.hours ?? 9, time?.minutes ?? 0);
+      return {
+        value: setTimeOnDate(referenceDate, time?.hours ?? 23, time?.minutes ?? 59),
+        precision: time ? TASK_DATE_PRECISION.DATETIME : TASK_DATE_PRECISION.DATE,
+      };
     }
 
     const tomorrowMatch = value.match(/\b(mañana|manana)\b/i);
@@ -212,7 +219,10 @@ export class QuickCaptureInterpreter {
       fragments.push(tomorrowMatch[0]);
       const nextDate = new Date(referenceDate);
       nextDate.setDate(nextDate.getDate() + 1);
-      return setTimeOnDate(nextDate, time?.hours ?? 9, time?.minutes ?? 0);
+      return {
+        value: setTimeOnDate(nextDate, time?.hours ?? 23, time?.minutes ?? 59),
+        precision: time ? TASK_DATE_PRECISION.DATETIME : TASK_DATE_PRECISION.DATE,
+      };
     }
 
     const inDaysMatch = value.match(/\ben\s+(\d+)\s+dias\b/i);
@@ -220,14 +230,20 @@ export class QuickCaptureInterpreter {
       fragments.push(inDaysMatch[0]);
       const nextDate = new Date(referenceDate);
       nextDate.setDate(nextDate.getDate() + Number(inDaysMatch[1]));
-      return setTimeOnDate(nextDate, time?.hours ?? 9, time?.minutes ?? 0);
+      return {
+        value: setTimeOnDate(nextDate, time?.hours ?? 23, time?.minutes ?? 59),
+        precision: time ? TASK_DATE_PRECISION.DATETIME : TASK_DATE_PRECISION.DATE,
+      };
     }
 
     for (const [name, weekday] of Object.entries(WEEKDAY_MAP)) {
       const weekdayMatch = value.match(new RegExp(`\\b${name}\\b`, 'i'));
       if (weekdayMatch) {
         fragments.push(weekdayMatch[0]);
-        return setTimeOnDate(nextWeekday(referenceDate, weekday), time?.hours ?? 9, time?.minutes ?? 0);
+        return {
+          value: setTimeOnDate(nextWeekday(referenceDate, weekday), time?.hours ?? 23, time?.minutes ?? 59),
+          precision: time ? TASK_DATE_PRECISION.DATETIME : TASK_DATE_PRECISION.DATE,
+        };
       }
     }
 

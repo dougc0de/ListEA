@@ -46,6 +46,7 @@ import { LAUNCH_INTENT_TYPES } from '../services/launchIntents';
 import { TaskAppLaunchService } from '../services/taskAppLaunchService';
 import {
   CAPTURE_SOURCES,
+  TASK_DATE_PRECISION,
   TASK_STATUS,
   TaskContextPresenter,
   TaskFactory,
@@ -153,10 +154,6 @@ const UPGRADE_COPY = Object.freeze({
     message: 'ListEA Pro detecta apps compatibles instaladas y las abre directamente desde tus tareas y recordatorios.',
   },
 });
-const INBOX_TASK_ACTIONS = Object.freeze([
-  { id: 'triage', label: 'Marcar lista', tone: 'primary' },
-  { id: 'inbox-tomorrow', label: 'Manana 9:00', tone: 'ghost' },
-]);
 const FOLLOW_UP_TASK_ACTIONS = Object.freeze([
   { id: 'follow-up-tomorrow', label: 'Manana', tone: 'ghost' },
   { id: 'follow-up-friday', label: 'Viernes', tone: 'ghost' },
@@ -207,28 +204,53 @@ function resolveTaskActionField(task) {
   return task.dueAt ? 'dueAt' : 'followUpAt';
 }
 
-function createDateAt(hour = 9, minute = 0) {
-  const nextDate = new Date();
-  nextDate.setHours(hour, minute, 0, 0);
-  return nextDate;
+function resolveTaskActionPrecision(task) {
+  const dateField = resolveTaskActionField(task);
+  return dateField === 'followUpAt'
+    ? task.followUpAtPrecision
+    : task.dueAtPrecision;
 }
 
-function buildTomorrowAt(hour = 9, minute = 0) {
-  const nextDate = createDateAt(hour, minute);
-  nextDate.setDate(nextDate.getDate() + 1);
-  return nextDate;
+function buildTaskSchedule(value = '', precision = '') {
+  return {
+    value,
+    precision,
+  };
 }
 
-function buildNextWeekdayAt(targetWeekday, hour = 9, minute = 0) {
-  const nextDate = createDateAt(hour, minute);
-  do {
+function buildRelativeTaskSchedule(task, moveDate) {
+  const dateField = resolveTaskActionField(task);
+  const originalValue = task[dateField] || task.getRelevantDate();
+  const originalDate = parseDate(originalValue) ?? new Date();
+  const keepTime = resolveTaskActionPrecision(task) === TASK_DATE_PRECISION.DATETIME;
+  const nextDate = new Date(originalDate);
+
+  moveDate(nextDate);
+
+  if (keepTime) {
+    return buildTaskSchedule(nextDate.toISOString(), TASK_DATE_PRECISION.DATETIME);
+  }
+
+  nextDate.setHours(23, 59, 0, 0);
+  return buildTaskSchedule(nextDate.toISOString(), TASK_DATE_PRECISION.DATE);
+}
+
+function buildTomorrowSchedule(task) {
+  return buildRelativeTaskSchedule(task, nextDate => {
     nextDate.setDate(nextDate.getDate() + 1);
-  } while (nextDate.getDay() !== targetWeekday);
-  return nextDate;
+  });
 }
 
-function buildNextWeekAt(hour = 9, minute = 0) {
-  return buildNextWeekdayAt(1, hour, minute);
+function buildNextWeekdaySchedule(task, targetWeekday) {
+  return buildRelativeTaskSchedule(task, nextDate => {
+    do {
+      nextDate.setDate(nextDate.getDate() + 1);
+    } while (nextDate.getDay() !== targetWeekday);
+  });
+}
+
+function buildNextWeekSchedule(task) {
+  return buildNextWeekdaySchedule(task, 1);
 }
 
 function buildSnoozeDate(task, minutes = 10) {
@@ -237,12 +259,11 @@ function buildSnoozeDate(task, minutes = 10) {
     ? new Date(currentAnchor)
     : new Date();
   nextDate.setMinutes(nextDate.getMinutes() + minutes);
-  return nextDate;
+  return buildTaskSchedule(nextDate.toISOString(), TASK_DATE_PRECISION.DATETIME);
 }
 
 function resolveTaskWorkspaceView(task) {
   if (!task) return 'today';
-  if (task.needsTriage) return 'inbox';
   if (task.status === TASK_STATUS.WAITING || task.status === TASK_STATUS.BLOCKED || task.followUpAt) {
     return 'follow-up';
   }
@@ -273,10 +294,7 @@ function addTask(payload) {
   if (!task.title) return;
 
   tasks.value = [task, ...tasks.value];
-  const feedbackMessage = task.needsTriage
-    ? `Captura "${task.title}" guardada en Capturas.`
-    : `Tarea "${task.title}" guardada.`;
-  showUiFeedback(feedbackMessage, 'success');
+  showUiFeedback(`Tarea "${task.title}" guardada.`, 'success');
   revealTask(task);
 }
 
@@ -290,14 +308,16 @@ function captureTaskFromExternalSource(text, metadata = {}) {
     project: metadata.project || interpreted.project,
     area: metadata.area || interpreted.area,
     dueAt: interpreted.dueAt,
+    dueAtPrecision: interpreted.dueAtPrecision,
     followUpAt: interpreted.followUpAt,
+    followUpAtPrecision: interpreted.followUpAtPrecision,
     priority: interpreted.priority,
     status: interpreted.status,
     tags: interpreted.tags,
     effortMinutes: interpreted.effortMinutes || 20,
     source: metadata.source || CAPTURE_SOURCES.SHARE,
     capturedAt: new Date().toISOString(),
-    needsTriage: true,
+    needsTriage: false,
   });
 }
 
@@ -614,7 +634,7 @@ function revealTask(task) {
   searchQuery.value = '';
   const targetView = resolveTaskWorkspaceView(task);
 
-  if (targetView === 'inbox' || targetView === 'follow-up') {
+  if (targetView === 'follow-up') {
     emit('navigate', targetView);
     return;
   }
@@ -655,11 +675,13 @@ function focusTaskById(taskId, preferredView = '') {
 }
 
 function updateTaskWithDate(task, nextDate, feedbackMessage) {
-  if (!task || !nextDate) return;
+  if (!task || !nextDate?.value) return;
 
   const dateField = resolveTaskActionField(task);
+  const precisionField = dateField === 'followUpAt' ? 'followUpAtPrecision' : 'dueAtPrecision';
   const patch = {
-    [dateField]: nextDate.toISOString(),
+    [dateField]: nextDate.value,
+    [precisionField]: nextDate.precision,
     reminderSent: false,
     avatarSnippetShownAt: '',
     needsTriage: false,
@@ -674,15 +696,6 @@ function updateTaskWithDate(task, nextDate, feedbackMessage) {
   showUiFeedback(feedbackMessage, 'success');
 }
 
-function markTaskTriaged(taskId) {
-  const task = tasks.value.find(item => item.id === taskId);
-  if (!task) return;
-
-  task.applyPatch({ needsTriage: false });
-  tasks.value = [...tasks.value];
-  showUiFeedback(`"${task.title}" salio de Capturas y ya cuenta como tarea lista.`, 'success');
-}
-
 function resolveFollowUp(taskId) {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
@@ -690,6 +703,7 @@ function resolveFollowUp(taskId) {
   task.applyPatch({
     status: TASK_STATUS.ACTIVE,
     followUpAt: '',
+    followUpAtPrecision: '',
     needsTriage: false,
     reminderSent: false,
     avatarSnippetShownAt: '',
@@ -702,28 +716,18 @@ function handleTaskAction({ taskId, actionId }) {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
 
-  if (actionId === 'triage') {
-    markTaskTriaged(taskId);
-    return;
-  }
-
-  if (actionId === 'inbox-tomorrow') {
-    updateTaskWithDate(task, buildTomorrowAt(9, 0), `"${task.title}" quedo para manana a las 9:00.`);
-    return;
-  }
-
   if (actionId === 'follow-up-tomorrow') {
-    updateTaskWithDate(task, buildTomorrowAt(9, 0), `Seguimiento reagendado para manana.`);
+    updateTaskWithDate(task, buildTomorrowSchedule(task), 'Seguimiento reagendado para manana.');
     return;
   }
 
   if (actionId === 'follow-up-friday') {
-    updateTaskWithDate(task, buildNextWeekdayAt(5, 9, 0), `Seguimiento movido al viernes.`);
+    updateTaskWithDate(task, buildNextWeekdaySchedule(task, 5), 'Seguimiento movido al viernes.');
     return;
   }
 
   if (actionId === 'follow-up-next-week') {
-    updateTaskWithDate(task, buildNextWeekAt(9, 0), `Seguimiento movido a la proxima semana.`);
+    updateTaskWithDate(task, buildNextWeekSchedule(task), 'Seguimiento movido a la proxima semana.');
     return;
   }
 
@@ -849,7 +853,7 @@ function moveReminderTaskToTomorrow(taskId) {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
 
-  updateTaskWithDate(task, buildTomorrowAt(9, 0), `Aviso movido a manana a las 9:00.`);
+  updateTaskWithDate(task, buildTomorrowSchedule(task), 'Aviso movido a manana.');
   dismissAvatarSnippet({ reschedule: true });
 }
 
@@ -1137,7 +1141,9 @@ function handleLaunchIntent(intent) {
       area: intent.payload?.area,
       source: intent.payload?.source || CAPTURE_SOURCES.SHARE,
     });
-    emit('navigate', intent.view || 'inbox');
+    if (intent.view) {
+      emit('navigate', intent.view);
+    }
     return;
   }
 
@@ -1153,13 +1159,10 @@ function handleLaunchIntent(intent) {
 
 const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
 const effectiveAvatarPreferences = computed(() => buildEffectiveAvatarPreferences());
-const showTaskWorkspace = computed(() => ['inbox', 'today', 'follow-up', 'backlog'].includes(resolvedView.value));
+const showTaskWorkspace = computed(() => ['today', 'follow-up', 'backlog'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
 const focusTasks = computed(() =>
   sortTasksByRelevance(openTasks.value.filter(task => resolveTaskWorkspaceView(task) === 'today')),
-);
-const inboxTasks = computed(() =>
-  sortTasksByRelevance(applySearch(openTasks.value.filter(task => task.needsTriage))),
 );
 const followUpTasks = computed(() =>
   sortTasksByRelevance(applySearch(openTasks.value.filter(task =>
@@ -1228,19 +1231,10 @@ const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
   today: filterService.apply(focusTasks.value, FILTER_IDS.TODAY, { referenceDate: new Date() }).length,
-  inbox: inboxTasks.value.length,
   followUp: followUpTasks.value.length,
   blocked: openTasks.value.filter(task => task.status === TASK_STATUS.BLOCKED).length,
 }));
 const heroCopy = computed(() => {
-  if (resolvedView.value === 'inbox') {
-    return {
-      eyebrow: 'Capturas',
-      title: 'Captura primero y ordena cuando toque.',
-      description: 'Ideas, llamadas y pendientes antes de decidir.',
-    };
-  }
-
   if (resolvedView.value === 'follow-up') {
     return {
       eyebrow: 'Seguimiento',
@@ -1264,14 +1258,6 @@ const heroCopy = computed(() => {
   };
 });
 const summaryCards = computed(() => {
-  if (resolvedView.value === 'inbox') {
-    return [
-      { id: 'inbox', label: 'En Capturas', value: summary.value.inbox },
-      { id: 'today', label: 'Para hoy', value: summary.value.today },
-      { id: 'followUp', label: 'En seguimiento', value: summary.value.followUp },
-    ];
-  }
-
   if (resolvedView.value === 'follow-up') {
     return [
       { id: 'followUp', label: 'Seguimientos', value: summary.value.followUp },
@@ -1294,14 +1280,6 @@ const licenseSummary = computed(() => preferences.value.license?.licenseTier ===
   : 'ListEA Free activo. Tus tareas siguen siendo privadas y locales.');
 const isProActive = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO);
 const viewQuickActions = computed(() => {
-  if (resolvedView.value === 'inbox') {
-    return [
-      { id: 'new-task', label: 'Nueva' },
-      { id: 'search', label: 'Buscar' },
-      { id: 'review', label: 'Revision' },
-    ];
-  }
-
   if (resolvedView.value === 'follow-up') {
     return [
       { id: 'search', label: 'Buscar' },
@@ -1546,54 +1524,7 @@ onBeforeUnmount(() => {
       </label>
     </section>
 
-    <section v-if="resolvedView === 'inbox'" class="workflowGrid">
-      <article class="panelCard">
-        <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Capturas</p>
-            <h3>Capturas pendientes por ordenar</h3>
-          </div>
-          <div class="headerActions">
-            <span class="laneCount">{{ formatTaskCount(inboxTasks.length) }}</span>
-          </div>
-        </div>
-        <p class="panelText">Primero capturas. Luego decides.</p>
-        <TodoList
-          :todos="inboxTasks"
-          :task-actions="INBOX_TASK_ACTIONS"
-          empty-message="No hay capturas pendientes. Todo ya tiene siguiente paso."
-          @toggle="toggleTask"
-          @remove="removeTask"
-          @update="updateTask"
-          @toggle-subtask="toggleSubtask"
-          @task-action="handleTaskAction"
-          @open-external="handleTaskLaunchRequest"
-        />
-      </article>
-
-      <article ref="reviewPanelRef" class="panelCard">
-        <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Revision rapida</p>
-            <h3>Senales que conviene resolver primero</h3>
-          </div>
-        </div>
-        <div v-if="professionalReviewItems.length" class="reviewList">
-          <article v-for="item in professionalReviewItems" :key="item.id" class="reviewCard">
-            <div>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.message }}</p>
-            </div>
-            <button type="button" class="ghostButton" @click="runProfessionalReviewAction(item)">
-              {{ item.actionLabel }}
-            </button>
-          </article>
-        </div>
-        <p v-else class="emptyText">No hay senales urgentes.</p>
-      </article>
-    </section>
-
-    <section v-else-if="resolvedView === 'today'" class="focusBoardGrid">
+    <section v-if="resolvedView === 'today'" class="focusBoardGrid">
       <article ref="focusListPanelRef" class="panelCard focusListPanel">
         <div class="sectionHeader">
           <div>

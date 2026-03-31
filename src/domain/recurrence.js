@@ -1,4 +1,4 @@
-import { TaskFactory, TASK_STATUS } from './tasks';
+import { TASK_DATE_PRECISION, TaskFactory, TASK_STATUS } from './tasks';
 
 function addInterval(baseDate, preset, interval) {
   const nextDate = new Date(baseDate);
@@ -78,6 +78,10 @@ export class RecurrenceEngine {
       return null;
     }
 
+    if (task.dueAtPrecision === TASK_DATE_PRECISION.DATE) {
+      nextDueAt.setHours(23, 59, 0, 0);
+    }
+
     return this.factory.create({
       title: task.title,
       notes: task.recurrence.resetNotes ? '' : task.notes,
@@ -90,6 +94,7 @@ export class RecurrenceEngine {
       area: task.area,
       tags: task.tags,
       dueAt: nextDueAt,
+      dueAtPrecision: task.dueAtPrecision,
       followUpAt: '',
       reminderSent: false,
       recurrence: task.recurrence.toJSON(),

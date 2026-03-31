@@ -27,7 +27,7 @@ export function parseLaunchIntentFromLocation(locationLike = typeof window !== '
   if (captureText) {
     return {
       type: LAUNCH_INTENT_TYPES.CAPTURE,
-      view: view || 'inbox',
+      view: view || '',
       payload: {
         text: captureText,
         project: `${params.get('project') ?? ''}`.trim(),

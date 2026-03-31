@@ -17,11 +17,11 @@ export class ProfessionalReviewAnalyzer {
     if (noDateTasks.length) {
       reviewItems.push({
         id: 'no-date',
-        title: 'Capturas sin fecha',
+        title: 'Tareas sin fecha',
         message: `${noDateTasks.length} tarea(s) siguen sin fecha y merecen una decision rapida.`,
         count: noDateTasks.length,
-        actionLabel: 'Ver capturas',
-        targetView: 'inbox',
+        actionLabel: 'Ver sin fecha',
+        targetView: 'today',
       });
     }
 

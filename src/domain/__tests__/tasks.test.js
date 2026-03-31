@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  TASK_DATE_PRECISION,
   TASK_PRIORITY,
   TASK_STATUS,
   TaskContextPresenter,
   TaskFactory,
+  buildTaskDateTime,
+  toDateInputValue,
   toDateTimeInputValue,
+  toTimeInputValue,
 } from '../tasks';
 
 describe('TaskFactory', () => {
@@ -74,5 +78,21 @@ describe('TaskContextPresenter', () => {
 
   it('formats ISO datetimes for datetime-local inputs without shifting the local wall-clock text', () => {
     expect(toDateTimeInputValue('2026-03-24T18:30:00.000Z')).toMatch(/^2026-03-24T\d{2}:30$/);
+  });
+
+  it('builds date-only task datetimes without forcing an explicit hour in the UI', () => {
+    const result = buildTaskDateTime('2026-03-24', '', false);
+
+    expect(result.precision).toBe(TASK_DATE_PRECISION.DATE);
+    expect(toDateInputValue(result.value)).toBe('2026-03-24');
+    expect(toTimeInputValue(result.value)).toBe('23:59');
+  });
+
+  it('formats date-only context without showing time', () => {
+    const presenter = new TaskContextPresenter();
+    const formatted = presenter.formatDate('2026-03-24T23:59:00.000Z', TASK_DATE_PRECISION.DATE, 'es-MX');
+
+    expect(formatted).toContain('24');
+    expect(formatted).not.toMatch(/\d{1,2}:\d{2}/);
   });
 });

@@ -81,7 +81,7 @@ function buildReminderPayload(todo) {
       taskId: todo.id,
       preferredView: isFollowUpReminder || ['waiting', 'blocked'].includes(todo.status)
         ? 'follow-up'
-        : (todo.needsTriage ? 'inbox' : 'today'),
+        : 'today',
     },
   };
 }

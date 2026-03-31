@@ -29,6 +29,11 @@ export const CAPTURE_SOURCES = Object.freeze({
   SHORTCUT: 'shortcut',
 });
 
+export const TASK_DATE_PRECISION = Object.freeze({
+  DATE: 'date',
+  DATETIME: 'datetime',
+});
+
 const RECURRENCE_PRESETS = new Set([
   'none',
   'daily',
@@ -52,6 +57,13 @@ function normalizeDateTime(value) {
   return Number.isNaN(nextDate.getTime()) ? '' : nextDate.toISOString();
 }
 
+function normalizeDatePrecision(precision, value) {
+  if (!value) return '';
+  return precision === TASK_DATE_PRECISION.DATE
+    ? TASK_DATE_PRECISION.DATE
+    : TASK_DATE_PRECISION.DATETIME;
+}
+
 export function toDateTimeInputValue(value) {
   if (!value) return '';
 
@@ -60,6 +72,57 @@ export function toDateTimeInputValue(value) {
 
   const localDate = new Date(nextDate.getTime() - nextDate.getTimezoneOffset() * 60000);
   return localDate.toISOString().slice(0, 16);
+}
+
+export function toDateInputValue(value) {
+  if (!value) return '';
+
+  const nextDate = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(nextDate.getTime())) return '';
+
+  const localDate = new Date(nextDate.getTime() - nextDate.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+export function toTimeInputValue(value) {
+  if (!value) return '';
+
+  const nextDate = value instanceof Date ? new Date(value) : new Date(value);
+  if (Number.isNaN(nextDate.getTime())) return '';
+
+  const localDate = new Date(nextDate.getTime() - nextDate.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(11, 16);
+}
+
+export function buildTaskDateTime(dateValue = '', timeValue = '', hasTime = false) {
+  const safeDate = `${dateValue ?? ''}`.trim();
+  if (!safeDate) {
+    return {
+      value: '',
+      precision: '',
+    };
+  }
+
+  const [year, month, day] = safeDate.split('-').map(Number);
+  if (![year, month, day].every(Number.isFinite)) {
+    return {
+      value: '',
+      precision: '',
+    };
+  }
+
+  const resolvedTime = hasTime && `${timeValue ?? ''}`.trim()
+    ? `${timeValue}`.trim()
+    : '23:59';
+  const [hours, minutes] = resolvedTime.split(':').map(Number);
+  const nextDate = new Date(year, month - 1, day, Number.isFinite(hours) ? hours : 23, Number.isFinite(minutes) ? minutes : 59, 0, 0);
+
+  return {
+    value: Number.isNaN(nextDate.getTime()) ? '' : nextDate.toISOString(),
+    precision: hasTime && `${timeValue ?? ''}`.trim()
+      ? TASK_DATE_PRECISION.DATETIME
+      : TASK_DATE_PRECISION.DATE,
+  };
 }
 
 function normalizePriority(priority) {
@@ -174,7 +237,9 @@ export class TaskEntity {
     this.tags = task.tags;
     this.subtasks = task.subtasks;
     this.dueAt = task.dueAt;
+    this.dueAtPrecision = task.dueAtPrecision;
     this.followUpAt = task.followUpAt;
+    this.followUpAtPrecision = task.followUpAtPrecision;
     this.createdAt = task.createdAt;
     this.updatedAt = task.updatedAt;
     this.completedAt = task.completedAt;
@@ -192,6 +257,12 @@ export class TaskEntity {
 
   getRelevantDate() {
     return this.dueAt || this.followUpAt || '';
+  }
+
+  getRelevantDatePrecision() {
+    return this.dueAt
+      ? this.dueAtPrecision
+      : this.followUpAtPrecision;
   }
 
   getPendingSubtasksCount() {
@@ -260,6 +331,10 @@ export class TaskEntity {
 
     if (patch.dueAt !== undefined) {
       this.dueAt = normalizeDateTime(patch.dueAt);
+      this.dueAtPrecision = normalizeDatePrecision(
+        patch.dueAtPrecision ?? this.dueAtPrecision,
+        this.dueAt,
+      );
       this.reminderSent = false;
       this.avatarSnippetShownAt = '';
       if (this.recurrence.isEnabled() && this.recurrence.mode === 'fixed') {
@@ -269,6 +344,10 @@ export class TaskEntity {
 
     if (patch.followUpAt !== undefined) {
       this.followUpAt = normalizeDateTime(patch.followUpAt);
+      this.followUpAtPrecision = normalizeDatePrecision(
+        patch.followUpAtPrecision ?? this.followUpAtPrecision,
+        this.followUpAt,
+      );
     }
 
     if (patch.tags !== undefined) {
@@ -323,7 +402,9 @@ export class TaskEntity {
       tags: [...this.tags],
       subtasks: this.subtasks.map(subtask => subtask.toJSON()),
       dueAt: this.dueAt,
+      dueAtPrecision: this.dueAtPrecision,
       followUpAt: this.followUpAt,
+      followUpAtPrecision: this.followUpAtPrecision,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       completedAt: this.completedAt,
@@ -359,7 +440,9 @@ export class TaskFactory {
       tags: TaskFactory.normalizeTags(payload.tags),
       subtasks: TaskFactory.normalizeSubtasks(payload.subtasks),
       dueAt: normalizeDateTime(payload.dueAt),
+      dueAtPrecision: normalizeDatePrecision(payload.dueAtPrecision, payload.dueAt),
       followUpAt: normalizeDateTime(payload.followUpAt),
+      followUpAtPrecision: normalizeDatePrecision(payload.followUpAtPrecision, payload.followUpAt),
       createdAt: normalizeDateTime(payload.createdAt) || now,
       updatedAt: normalizeDateTime(payload.updatedAt) || now,
       completedAt: normalizeDateTime(payload.completedAt),
@@ -538,10 +621,17 @@ export class TaskFactory {
 }
 
 export class TaskContextPresenter {
-  formatDate(value, locale = 'es-MX') {
+  formatDate(value, precision = TASK_DATE_PRECISION.DATETIME, locale = 'es-MX') {
     if (!value) return 'Sin fecha';
     const nextDate = new Date(value);
     if (Number.isNaN(nextDate.getTime())) return 'Sin fecha';
+
+    if (precision === TASK_DATE_PRECISION.DATE) {
+      return new Intl.DateTimeFormat(locale, {
+        day: 'numeric',
+        month: 'short',
+      }).format(nextDate);
+    }
 
     return new Intl.DateTimeFormat(locale, {
       day: 'numeric',
@@ -553,12 +643,11 @@ export class TaskContextPresenter {
 
   buildTaskContext(task) {
     return [
-      task.needsTriage ? 'Capturas' : null,
       task.project || 'Sin proyecto',
       task.area || 'Sin area',
       this.getStatusLabel(task.status),
       this.getPriorityLabel(task.priority),
-      this.formatDate(task.getRelevantDate()),
+      this.formatDate(task.getRelevantDate(), task.getRelevantDatePrecision?.()),
     ].filter(Boolean);
   }
 
