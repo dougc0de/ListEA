@@ -97,6 +97,7 @@ export const ACTIVITY_TYPES = Object.freeze({
   COMPLETED: 'completed',
   DELETED: 'deleted',
   DELETED_AFTER_COMPLETION: 'deleted_after_completion',
+  LAUNCHED: 'launched',
 });
 
 export const DASHBOARD_GRANULARITY = Object.freeze({
@@ -112,6 +113,8 @@ export class TaskActivityEvent {
     title = '',
     project = '',
     area = '',
+    appId = '',
+    launchMode = '',
     happenedAt = new Date().toISOString(),
   } = {}) {
     this.id = id || createEventId();
@@ -120,6 +123,8 @@ export class TaskActivityEvent {
     this.title = trimLabel(title);
     this.project = trimLabel(project);
     this.area = trimLabel(area);
+    this.appId = trimLabel(appId);
+    this.launchMode = trimLabel(launchMode);
     this.happenedAt = normalizeDateTime(happenedAt) || normalizeDateTime(new Date());
   }
 
@@ -131,6 +136,8 @@ export class TaskActivityEvent {
       title: this.title,
       project: this.project,
       area: this.area,
+      appId: this.appId,
+      launchMode: this.launchMode,
       happenedAt: this.happenedAt,
     };
   }
@@ -164,6 +171,20 @@ export class TaskActivityLedger {
       title: task?.title,
       project: task?.project,
       area: task?.area,
+      happenedAt,
+    }));
+    this.prune();
+  }
+
+  recordLaunched(task, suggestion = {}, happenedAt = new Date().toISOString()) {
+    this.events.push(new TaskActivityEvent({
+      type: ACTIVITY_TYPES.LAUNCHED,
+      taskId: task?.id,
+      title: task?.title,
+      project: task?.project,
+      area: task?.area,
+      appId: suggestion?.app?.id ?? suggestion?.id ?? '',
+      launchMode: suggestion?.mode ?? '',
       happenedAt,
     }));
     this.prune();
@@ -336,14 +357,16 @@ export class TaskActivityDashboard {
       if (bucket) {
         if (event.type === ACTIVITY_TYPES.COMPLETED) {
           bucket.completed += 1;
+          bucket.total += 1;
         }
         if (event.type === ACTIVITY_TYPES.DELETED) {
           bucket.deleted += 1;
+          bucket.total += 1;
         }
         if (event.type === ACTIVITY_TYPES.DELETED_AFTER_COMPLETION) {
           bucket.completed += 1;
+          bucket.total += 1;
         }
-        bucket.total += 1;
       }
 
       if (event.type === ACTIVITY_TYPES.COMPLETED || event.type === ACTIVITY_TYPES.DELETED_AFTER_COMPLETION) {

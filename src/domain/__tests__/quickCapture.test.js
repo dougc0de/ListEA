@@ -54,4 +54,28 @@ describe('QuickCaptureInterpreter', () => {
     expect(toDateInputValue(result.dueAt)).toBe('2026-03-24');
     expect(toTimeInputValue(result.dueAt)).toBe('23:59');
   });
+
+  it('extracts notes from multiline captures and keeps the action title focused', () => {
+    const interpreter = new QuickCaptureInterpreter();
+    const result = interpreter.interpret(
+      'Mandar mensaje por WhatsApp a Maria mañana\nConfirmar presupuesto y siguiente paso',
+      new Date('2026-03-23T08:00:00.000Z'),
+    );
+
+    expect(result.title).toBe('Mandar mensaje por WhatsApp a Maria');
+    expect(result.notes).toBe('Confirmar presupuesto y siguiente paso');
+    expect(result.dueAtPrecision).toBe('date');
+  });
+
+  it('uses chrono for explicit calendar dates that are harder to parse by hand', () => {
+    const interpreter = new QuickCaptureInterpreter();
+    const result = interpreter.interpret(
+      'Enviar propuesta el 25/04 3pm +Clientes',
+      new Date('2026-03-23T08:00:00.000Z'),
+    );
+
+    expect(result.project).toBe('Clientes');
+    expect(result.dueAtPrecision).toBe('datetime');
+    expect(toDateInputValue(result.dueAt)).toBe('2026-04-25');
+  });
 });

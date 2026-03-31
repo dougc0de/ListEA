@@ -5,6 +5,7 @@ vi.mock('../taskExternalApps', () => ({
 
 import { AppLaunchRuntime, TaskAppLaunchService } from '../taskAppLaunchService';
 import { ResolvedAppLaunchAction, SupportedMobileAppDescriptor } from '../../domain/taskAppLaunch';
+import { openTaskExternalAction } from '../taskExternalApps';
 
 function createSuggestion({
   id = 'app-slack',
@@ -86,5 +87,80 @@ describe('TaskAppLaunchService', () => {
 
     expect(result.completed).toBe(true);
     expect(result.mode).toBe('fallback');
+  });
+
+  it('prefers a mobile browser scheme launch before the web fallback when premium is enabled', async () => {
+    const fallbackAction = {
+      id: 'whatsapp',
+      label: 'WhatsApp',
+      url: 'https://wa.me/?text=hola',
+    };
+    const suggestion = new ResolvedAppLaunchAction({
+      id: 'app-whatsapp',
+      label: 'Abrir WhatsApp',
+      target: 'chat',
+      fallbackAction,
+      webFallbackUrl: 'https://wa.me/?text=hola',
+      matchSource: 'action',
+      app: new SupportedMobileAppDescriptor({
+        id: 'whatsapp',
+        label: 'WhatsApp',
+        keywords: ['whatsapp'],
+        category: 'messaging',
+        premium: true,
+        targets: ['home', 'chat'],
+        platforms: {
+          ios: {
+            schemes: ['whatsapp'],
+            browserOpen: {
+              home: 'whatsapp://',
+              chat: 'whatsapp://send',
+            },
+            open: {
+              home: 'whatsapp://',
+              chat: 'whatsapp://send',
+            },
+          },
+          android: {
+            packageName: 'com.whatsapp',
+            schemes: ['whatsapp'],
+            browserOpen: {
+              home: 'whatsapp://',
+              chat: 'whatsapp://send',
+            },
+            open: {
+              home: 'com.whatsapp',
+              chat: 'whatsapp://send',
+            },
+          },
+        },
+        fallback: {
+          url: 'https://wa.me/',
+        },
+      }),
+    });
+    const resolver = {
+      resolve: vi.fn().mockReturnValue([suggestion]),
+      resolvePrimary: vi.fn().mockReturnValue(suggestion),
+      resolveById: vi.fn().mockReturnValue(null),
+    };
+    const gateway = {
+      getRuntime: vi.fn().mockResolvedValue(new AppLaunchRuntime({ native: false, platform: 'web' })),
+      canOpen: vi.fn(),
+      open: vi.fn(),
+    };
+    const browserPlatformDetector = {
+      resolve: vi.fn().mockReturnValue('android'),
+    };
+
+    const service = new TaskAppLaunchService({ resolver, gateway, browserPlatformDetector });
+    const result = await service.open({ title: 'Mandar mensaje por WhatsApp' }, { premiumEnabled: true });
+
+    expect(result.completed).toBe(true);
+    expect(result.mode).toBe('scheme');
+    expect(openTaskExternalAction).toHaveBeenCalledWith(
+      { url: 'whatsapp://send?text=hola' },
+      { allowCustomScheme: true },
+    );
   });
 });

@@ -40,6 +40,16 @@ describe('TaskFactory', () => {
     expect(task.source).toBe('manual');
     expect(task.needsTriage).toBe(false);
   });
+
+  it('accepts screenshot as a first-class capture source', () => {
+    const factory = new TaskFactory();
+    const task = factory.create({
+      title: 'Convertida desde screenshot',
+      source: 'screenshot',
+    });
+
+    expect(task.source).toBe('screenshot');
+  });
 });
 
 describe('TaskContextPresenter', () => {

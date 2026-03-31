@@ -55,6 +55,20 @@ describe('TaskAppLaunchResolver', () => {
     expect(suggestions[0].webFallbackUrl).toContain('slack');
   });
 
+  it('detects instagram mentions as a direct app launch suggestion', () => {
+    const resolver = new TaskAppLaunchResolver();
+    const suggestions = resolver.resolve({
+      title: 'Postear contenido en Instagram',
+      notes: 'Revisar copy y publicar historia',
+      tags: [],
+    });
+
+    expect(suggestions[0].id).toBe('app-instagram');
+    expect(suggestions[0].label).toBe('Abrir Instagram');
+    expect(suggestions[0].app?.id).toBe('instagram');
+    expect(suggestions[0].target).toBe('home');
+  });
+
   it('maps explicit phone actions into the phone utility without losing the fallback action', () => {
     const resolver = new TaskAppLaunchResolver();
     const suggestions = resolver.resolve({

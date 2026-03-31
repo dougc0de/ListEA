@@ -868,7 +868,14 @@ async function openTaskLaunch(task, suggestionId = '', { showPremiumHint = true 
     premiumEnabled,
   });
 
-  if (result.completed && result.mode === 'native') {
+  if (result.completed && result.suggestion) {
+    analytics.value.recordLaunched(task, {
+      ...result.suggestion,
+      mode: result.mode,
+    });
+  }
+
+  if (result.completed && ['native', 'scheme'].includes(result.mode)) {
     showUiFeedback(`Abriendo ${result.suggestion?.label ?? 'app'} para "${task.title}".`, 'info');
     return result;
   }

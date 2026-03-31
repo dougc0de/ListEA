@@ -27,6 +27,7 @@ export const CAPTURE_SOURCES = Object.freeze({
   MANUAL: 'manual',
   SHARE: 'share',
   SHORTCUT: 'shortcut',
+  SCREENSHOT: 'screenshot',
 });
 
 export const TASK_DATE_PRECISION = Object.freeze({

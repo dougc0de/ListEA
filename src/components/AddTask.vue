@@ -1,7 +1,9 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
+import { ScreenshotTaskCaptureService } from '../services/screenshotTaskCaptureService';
 import {
+  CAPTURE_SOURCES,
   TASK_DATE_PRECISION,
   TaskContextPresenter,
   buildTaskDateTime,
@@ -35,9 +37,16 @@ const composerOpen = ref(false);
 const titleError = ref('');
 const recurrenceError = ref('');
 const titleField = ref(null);
+const captureSource = ref(CAPTURE_SOURCES.MANUAL);
+const screenshotInput = ref(null);
+const screenshotBusy = ref(false);
+const screenshotProgress = ref(0);
+const screenshotStatus = ref('');
+const screenshotError = ref('');
 
 const interpreter = new QuickCaptureInterpreter();
 const presenter = new TaskContextPresenter();
+const screenshotCaptureService = new ScreenshotTaskCaptureService();
 const captureTemplates = Object.freeze([
   { id: 'call', label: 'Llamada' },
   { id: 'email-follow-up', label: 'Correo pendiente' },
@@ -54,6 +63,20 @@ const parsedSubtasks = computed(() =>
 );
 
 const capturePreview = computed(() => interpreter.interpret(title.value));
+const showScreenshotFeedback = computed(() => (
+  screenshotBusy.value
+  || Boolean(screenshotStatus.value)
+  || Boolean(screenshotError.value)
+));
+const screenshotProgressWidth = computed(() => `${Math.max(4, Math.round(screenshotProgress.value * 100))}%`);
+const screenshotButtonLabel = computed(() => (
+  screenshotBusy.value ? 'Leyendo screenshot...' : 'Convertir screenshot en tarea'
+));
+const composerHelperText = computed(() => (
+  captureSource.value === CAPTURE_SOURCES.SCREENSHOT
+    ? 'Ajusta lo detectado y guarda.'
+    : 'Primero idea, luego estructura.'
+));
 const priorityLabels = Object.freeze({
   high: 'alta',
   medium: 'media',
@@ -72,6 +95,9 @@ const recurrenceLabels = Object.freeze({
 
 const previewItems = computed(() => {
   const items = [];
+  if (capturePreview.value.title && capturePreview.value.title !== title.value.trim()) {
+    items.push(`Accion sugerida: ${capturePreview.value.title}`);
+  }
   if (capturePreview.value.dueAt) {
     items.push(`Fecha detectada: ${presenter.formatDate(capturePreview.value.dueAt, capturePreview.value.dueAtPrecision)}`);
   }
@@ -82,6 +108,7 @@ const previewItems = computed(() => {
     items.push(`Contexto detectado: ${capturePreview.value.project || capturePreview.value.area}`);
   }
   if (capturePreview.value.tags.length) items.push(`Etiquetas: ${capturePreview.value.tags.join(', ')}`);
+  if (capturePreview.value.notes) items.push('Notas separadas automaticamente');
   if (capturePreview.value.status === 'waiting') items.push('Estado sugerido: seguimiento');
   if (capturePreview.value.status === 'blocked') items.push('Estado sugerido: bloqueada');
   if (capturePreview.value.priority !== 'medium') {
@@ -108,8 +135,10 @@ function setDateField(dateRef, timeRef, hasTimeRef, value = '', precision = '') 
   timeRef.value = hasTimeRef.value ? toTimeInputValue(value) : '';
 }
 
-function openComposer() {
+function openComposer({ focus = true } = {}) {
   composerOpen.value = true;
+  if (!focus) return;
+
   nextTick(() => {
     focusTitleField();
   });
@@ -120,6 +149,9 @@ function closeComposer() {
   advancedOpen.value = false;
   titleError.value = '';
   recurrenceError.value = '';
+  screenshotStatus.value = '';
+  screenshotError.value = '';
+  screenshotProgress.value = 0;
 }
 
 function focusTitleField() {
@@ -159,9 +191,14 @@ function resetForm() {
   advancedOpen.value = false;
   titleError.value = '';
   recurrenceError.value = '';
+  captureSource.value = CAPTURE_SOURCES.MANUAL;
+  screenshotStatus.value = '';
+  screenshotError.value = '';
+  screenshotProgress.value = 0;
 }
 
 function applyTemplate(templateId) {
+  captureSource.value = CAPTURE_SOURCES.MANUAL;
   advancedOpen.value = true;
   titleError.value = '';
   recurrenceError.value = '';
@@ -252,6 +289,99 @@ function clearDateField(field) {
   followUpHasTime.value = false;
 }
 
+function handleScreenshotProgress(progressUpdate = {}) {
+  const nextStatus = `${progressUpdate.status ?? ''}`.trim();
+  const nextProgress = Number(progressUpdate.progress);
+
+  if (nextStatus) {
+    screenshotStatus.value = nextStatus;
+  }
+
+  if (Number.isFinite(nextProgress)) {
+    screenshotProgress.value = Math.max(screenshotProgress.value, Math.min(Math.max(nextProgress, 0), 1));
+  }
+}
+
+function shouldRevealAdvancedFromCapture(interpreted = {}) {
+  return Boolean(
+    interpreted.notes
+    || interpreted.project
+    || interpreted.area
+    || interpreted.dueAt
+    || interpreted.followUpAt
+    || interpreted.tags?.length
+    || interpreted.effortMinutes
+    || interpreted.status === 'waiting'
+    || interpreted.status === 'blocked'
+    || interpreted.priority === 'high'
+    || interpreted.priority === 'low'
+    || interpreted.recurrence?.preset !== 'none',
+  );
+}
+
+function applyScreenshotCapture(result) {
+  const interpreted = result?.interpretation ?? {};
+
+  resetForm();
+  captureSource.value = CAPTURE_SOURCES.SCREENSHOT;
+  title.value = interpreted.title || `${result?.rawText ?? ''}`.split('\n')[0]?.trim() || '';
+  notes.value = interpreted.notes || '';
+  project.value = interpreted.project || '';
+  area.value = interpreted.area || '';
+  setDateField(dueDate, dueTime, dueHasTime, interpreted.dueAt, interpreted.dueAtPrecision);
+  setDateField(followUpDate, followUpTime, followUpHasTime, interpreted.followUpAt, interpreted.followUpAtPrecision);
+  priority.value = interpreted.priority && interpreted.priority !== 'medium' ? interpreted.priority : '';
+  status.value = interpreted.status || 'active';
+  effortMinutes.value = interpreted.effortMinutes ? String(interpreted.effortMinutes) : '';
+  tags.value = Array.isArray(interpreted.tags) ? interpreted.tags.join(', ') : '';
+  recurrencePreset.value = interpreted.recurrence?.preset || 'none';
+  recurrenceInterval.value = interpreted.recurrence?.interval || 1;
+  recurrenceMode.value = interpreted.recurrence?.mode || 'fixed';
+  recurrenceResetNotes.value = interpreted.recurrence?.resetNotes ?? true;
+  advancedOpen.value = shouldRevealAdvancedFromCapture(interpreted);
+}
+
+function openScreenshotPicker() {
+  screenshotError.value = '';
+  screenshotStatus.value = '';
+  screenshotProgress.value = 0;
+  screenshotInput.value?.click();
+}
+
+async function handleScreenshotSelection(event) {
+  const [file] = Array.from(event?.target?.files ?? []);
+  if (event?.target) {
+    event.target.value = '';
+  }
+
+  if (!file) {
+    return;
+  }
+
+  screenshotBusy.value = true;
+  screenshotError.value = '';
+  screenshotStatus.value = 'Preparando screenshot';
+  screenshotProgress.value = 0.04;
+  openComposer({ focus: false });
+
+  try {
+    const result = await screenshotCaptureService.convert(file, {
+      onProgress: handleScreenshotProgress,
+    });
+
+    applyScreenshotCapture(result);
+    screenshotStatus.value = 'Screenshot convertido';
+    screenshotProgress.value = 1;
+    await nextTick();
+    focusTitleField();
+  } catch (error) {
+    screenshotError.value = error?.message || 'No pudimos convertir el screenshot en tarea.';
+    advancedOpen.value = true;
+  } finally {
+    screenshotBusy.value = false;
+  }
+}
+
 function onSubmit() {
   const interpreted = capturePreview.value;
   const nextTitle = title.value.trim() || (interpreted.title || '').trim();
@@ -285,7 +415,7 @@ function onSubmit() {
 
   emit('add', {
     title: nextTitle,
-    notes: notes.value.trim(),
+    notes: notes.value.trim() || interpreted.notes || '',
     project: project.value.trim() || interpreted.project || '',
     area: area.value.trim() || interpreted.area || '',
     dueAt: resolvedDue.value,
@@ -297,7 +427,7 @@ function onSubmit() {
     effortMinutes: effortMinutes.value || interpreted.effortMinutes || 20,
     tags: [tags.value, interpreted.tags.join(',')].filter(Boolean).join(','),
     subtasks: parsedSubtasks.value,
-    source: 'manual',
+    source: captureSource.value,
     capturedAt: new Date().toISOString(),
     needsTriage: false,
     recurrence: {
@@ -323,15 +453,37 @@ defineExpose({
 
 <template>
   <transition name="noteComposer" mode="out-in">
-    <button
+    <section
       v-if="!composerOpen"
       key="launcher"
-      type="button"
-      class="launcherButtonOnly"
-      @click="openComposer"
+      class="launcherCard"
     >
-      Agregar tarea
-    </button>
+      <button
+        type="button"
+        class="launcherPrimaryButton"
+        @click="openComposer"
+      >
+        Agregar tarea
+      </button>
+      <button
+        type="button"
+        class="launcherSecondaryButton"
+        :disabled="screenshotBusy"
+        @click="openScreenshotPicker"
+      >
+        {{ screenshotButtonLabel }}
+      </button>
+
+      <div v-if="showScreenshotFeedback" class="screenshotFeedback" :class="{ error: screenshotError }" aria-live="polite">
+        <div class="screenshotFeedbackMeta">
+          <span>{{ screenshotError || screenshotStatus }}</span>
+          <strong v-if="screenshotBusy">{{ screenshotProgressWidth }}</strong>
+        </div>
+        <div v-if="screenshotBusy" class="screenshotProgressTrack" aria-hidden="true">
+          <span class="screenshotProgressFill" :style="{ width: screenshotProgressWidth }" />
+        </div>
+      </div>
+    </section>
 
     <section v-else key="composer" class="composerCard">
       <div class="composerHeading">
@@ -340,6 +492,9 @@ defineExpose({
           <h2>Escribe como si fuera una nota.</h2>
         </div>
         <div class="composerHeadingActions">
+          <button type="button" class="ghostButton" :disabled="screenshotBusy" @click="openScreenshotPicker">
+            Screenshot
+          </button>
           <button type="button" class="ghostButton" @click="advancedOpen = !advancedOpen">
             {{ advancedOpen ? 'Ocultar detalle' : 'Agregar detalle' }}
           </button>
@@ -350,6 +505,16 @@ defineExpose({
       </div>
 
       <form class="composerForm" @submit.prevent="onSubmit">
+        <div v-if="showScreenshotFeedback" class="screenshotFeedback" :class="{ error: screenshotError }" aria-live="polite">
+          <div class="screenshotFeedbackMeta">
+            <span>{{ screenshotError || screenshotStatus }}</span>
+            <strong v-if="screenshotBusy">{{ screenshotProgressWidth }}</strong>
+          </div>
+          <div v-if="screenshotBusy" class="screenshotProgressTrack" aria-hidden="true">
+            <span class="screenshotProgressFill" :style="{ width: screenshotProgressWidth }" />
+          </div>
+        </div>
+
         <div class="templateRow">
           <button
             v-for="template in captureTemplates"
@@ -518,16 +683,24 @@ defineExpose({
         </div>
 
         <div class="composerActions">
-          <p class="helperText">Primero idea, luego estructura.</p>
-          <button class="submitButton" type="submit">Agregar tarea</button>
+          <p class="helperText">{{ composerHelperText }}</p>
+          <button class="submitButton" type="submit" :disabled="screenshotBusy">Agregar tarea</button>
         </div>
       </form>
     </section>
   </transition>
+
+  <input
+    ref="screenshotInput"
+    class="hiddenScreenshotInput"
+    type="file"
+    accept="image/*,.png,.jpg,.jpeg,.webp,.heic,.heif"
+    @change="handleScreenshotSelection"
+  />
 </template>
 
 <style scoped>
-.launcherButtonOnly,
+.launcherCard,
 .composerCard {
   display: flex;
   flex-direction: column;
@@ -539,7 +712,8 @@ defineExpose({
   box-shadow: var(--card-shadow);
 }
 
-.launcherButtonOnly {
+.launcherPrimaryButton,
+.launcherSecondaryButton {
   margin: 0.5rem;
   width: clamp(180px, 50%, 320px);
   align-self: center;
@@ -550,10 +724,18 @@ defineExpose({
   border-radius: 999px;
   border: 1px solid var(--line);
   cursor: pointer;
-  background: var(--accent);
-  color: var(--accent-contrast);
   font-weight: 700;
   font-size: 1rem;
+}
+
+.launcherPrimaryButton {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.launcherSecondaryButton {
+  background: var(--surface-soft);
+  color: var(--text-main);
 }
 
 .composerHeading {
@@ -661,6 +843,47 @@ defineExpose({
   font-size: 0.85rem;
 }
 
+.screenshotFeedback {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--text-main);
+}
+
+.screenshotFeedback.error {
+  border-color: color-mix(in srgb, #8b3a21 32%, var(--line));
+  background: color-mix(in srgb, #8b3a21 10%, var(--surface));
+}
+
+.screenshotFeedbackMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+.screenshotProgressTrack {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 18%, var(--surface));
+}
+
+.screenshotProgressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 54%, white));
+  transition: width 180ms ease;
+}
+
 .advancedPanel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -746,14 +969,26 @@ defineExpose({
   filter: blur(6px);
 }
 
+.hiddenScreenshotInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
 @media (max-width: 960px) {
-  .launcherButtonOnly {
+  .launcherPrimaryButton,
+  .launcherSecondaryButton {
     width: min(60%, 280px);
   }
 }
 
 @media (max-width: 720px) {
-  .launcherButtonOnly,
+  .launcherCard,
   .composerCard {
     gap: 12px;
     padding: 12px;
@@ -775,7 +1010,8 @@ defineExpose({
 
   .ghostButton,
   .submitButton,
-  .launcherButtonOnly {
+  .launcherPrimaryButton,
+  .launcherSecondaryButton {
     width: 100%;
   }
 

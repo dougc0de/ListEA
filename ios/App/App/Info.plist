@@ -27,6 +27,12 @@
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>whatsapp</string>
+		<string>instagram</string>
+		<string>fb</string>
+		<string>fb-messenger</string>
+		<string>linkedin</string>
+		<string>twitter</string>
+		<string>discord</string>
 		<string>tg</string>
 		<string>slack</string>
 		<string>googlegmail</string>
@@ -37,6 +43,18 @@
 		<string>googlecalendar</string>
 		<string>comgooglemaps</string>
 		<string>waze</string>
+		<string>notion</string>
+		<string>trello</string>
+		<string>asana</string>
+		<string>clickup</string>
+		<string>monday</string>
+		<string>jira</string>
+		<string>github</string>
+		<string>googledrive</string>
+		<string>googledocs</string>
+		<string>googlesheets</string>
+		<string>dbapi-2</string>
+		<string>canva</string>
 		<string>tel</string>
 		<string>sms</string>
 	</array>

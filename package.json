@@ -22,7 +22,9 @@
     "@capacitor/ios": "^8.2.0",
     "@capacitor/local-notifications": "^8.0.2",
     "chart.js": "^4.5.1",
+    "chrono-node": "^2.9.0",
     "jspdf": "^3.0.3",
+    "tesseract.js": "^7.0.0",
     "vue": "^3.5.22"
   },
   "devDependencies": {

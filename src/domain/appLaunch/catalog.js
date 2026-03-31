@@ -48,12 +48,33 @@ function normalizeTarget(target) {
   return KNOWN_TARGETS.has(target) ? target : LAUNCH_TARGETS.HOME;
 }
 
+function normalizePlatformHint(platform = 'web') {
+  return ['android', 'ios'].includes(`${platform ?? ''}`.trim()) ? `${platform}`.trim() : 'web';
+}
+
+function buildSchemeUrl(scheme = '') {
+  const normalizedScheme = normalizeText(scheme);
+  if (!normalizedScheme) return '';
+  if (normalizedScheme.includes(':')) return normalizedScheme;
+  if (['tel', 'sms', 'mailto'].includes(normalizedScheme)) {
+    return `${normalizedScheme}:`;
+  }
+  return `${normalizedScheme}://`;
+}
+
 function getHostFromUrl(value = '') {
   try {
     return new URL(value).hostname.toLowerCase();
   } catch {
     return '';
   }
+}
+
+function buildUrlWithParams(baseUrl, params = {}) {
+  const entries = Object.entries(params).filter(([, value]) => `${value ?? ''}`.trim());
+  if (!entries.length) return baseUrl;
+  const search = new URLSearchParams(entries);
+  return `${baseUrl}?${search.toString()}`;
 }
 
 function buildTargetLabel(target, label) {
@@ -159,7 +180,63 @@ export class SupportedMobileAppDescriptor {
 
     const schemes = Array.isArray(platformConfig.schemes) ? platformConfig.schemes : [];
     const firstScheme = normalizeText(schemes[0] ?? '');
-    return firstScheme ? (firstScheme.includes('://') ? firstScheme : `${firstScheme}://`) : '';
+    return buildSchemeUrl(firstScheme);
+  }
+
+  getBrowserOpenTarget(platform = 'web', target = LAUNCH_TARGETS.HOME, fallbackAction = null) {
+    const normalizedPlatform = normalizePlatformHint(platform);
+    if (normalizedPlatform === 'web') return '';
+
+    const platformConfig = this.platforms?.[normalizedPlatform] ?? {};
+    const browserOpenTargets = platformConfig.browserOpen && typeof platformConfig.browserOpen === 'object'
+      ? platformConfig.browserOpen
+      : {};
+    const normalizedTarget = normalizeTarget(target);
+    const browserTarget = normalizeText(
+      browserOpenTargets[normalizedTarget]
+      ?? browserOpenTargets[LAUNCH_TARGETS.HOME]
+      ?? '',
+    );
+    const openTarget = browserTarget || this.getOpenTarget(normalizedPlatform, normalizedTarget);
+    const schemeCandidates = Array.isArray(platformConfig.schemes) ? platformConfig.schemes : [];
+    const fallbackScheme = buildSchemeUrl(schemeCandidates[0] ?? '');
+    const resolvedTarget = /^[a-z][a-z0-9+.-]*:/i.test(openTarget)
+      ? openTarget
+      : (fallbackScheme || '');
+
+    if (!resolvedTarget) {
+      return '';
+    }
+
+    const fallbackUrl = normalizeText(fallbackAction?.url ?? '');
+    if (!fallbackUrl) {
+      return resolvedTarget;
+    }
+
+    if (this.id === 'whatsapp') {
+      try {
+        const parsedFallbackUrl = new URL(fallbackUrl);
+        const rawPhone = parsedFallbackUrl.pathname.replace(/\//g, '').trim();
+        const text = parsedFallbackUrl.searchParams.get('text') ?? '';
+        if (normalizeTarget(target) === LAUNCH_TARGETS.CHAT) {
+          return buildUrlWithParams(resolvedTarget, {
+            phone: rawPhone,
+            text,
+          });
+        }
+      } catch {
+        return resolvedTarget;
+      }
+    }
+
+    try {
+      const parsedFallbackUrl = new URL(fallbackUrl);
+      return parsedFallbackUrl.search
+        ? `${resolvedTarget}${parsedFallbackUrl.search}`
+        : resolvedTarget;
+    } catch {
+      return resolvedTarget;
+    }
   }
 
   hasNativeTargets(target = LAUNCH_TARGETS.HOME) {

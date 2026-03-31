@@ -3,6 +3,12 @@
 
     <queries>
         <package android:name="com.whatsapp" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.orca" />
+        <package android:name="com.linkedin.android" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.discord" />
         <package android:name="org.telegram.messenger" />
         <package android:name="com.Slack" />
         <package android:name="com.google.android.gm" />
@@ -13,10 +19,46 @@
         <package android:name="com.google.android.calendar" />
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.waze" />
+        <package android:name="notion.id" />
+        <package android:name="com.trello" />
+        <package android:name="com.asana.app" />
+        <package android:name="app.clickup" />
+        <package android:name="com.monday.native" />
+        <package android:name="com.atlassian.android.jira.core" />
+        <package android:name="com.github.android" />
+        <package android:name="com.google.android.apps.docs" />
+        <package android:name="com.google.android.apps.docs.editors.docs" />
+        <package android:name="com.google.android.apps.docs.editors.sheets" />
+        <package android:name="com.dropbox.android" />
+        <package android:name="com.canva.editor" />
 
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="whatsapp" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="instagram" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="fb" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="fb-messenger" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="linkedin" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="twitter" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="discord" />
         </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -57,6 +99,54 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="waze" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="notion" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="trello" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="asana" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="clickup" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="monday" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="jira" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="github" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="googledrive" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="googledocs" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="googlesheets" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="dbapi-2" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="canva" />
         </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />

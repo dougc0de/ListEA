@@ -20,6 +20,22 @@ describe('TaskActivityLedger', () => {
     expect(ledger.events[0].type).toBe(ACTIVITY_TYPES.COMPLETED);
     expect(ledger.events[1].type).toBe(ACTIVITY_TYPES.DELETED);
   });
+
+  it('records app launches as local activity without affecting completion math', () => {
+    const factory = new TaskFactory();
+    const task = factory.create({ id: 'task-2', title: 'Responder en LinkedIn' });
+    const ledger = new TaskActivityLedger();
+
+    ledger.recordLaunched(task, {
+      app: { id: 'linkedin' },
+      mode: 'scheme',
+    }, '2026-03-23T12:00:00.000Z');
+
+    expect(ledger.events).toHaveLength(1);
+    expect(ledger.events[0].type).toBe(ACTIVITY_TYPES.LAUNCHED);
+    expect(ledger.events[0].appId).toBe('linkedin');
+    expect(ledger.events[0].launchMode).toBe('scheme');
+  });
 });
 
 describe('TaskActivityDashboard', () => {

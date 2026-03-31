@@ -10,6 +10,24 @@ export class AppLaunchRuntime {
   }
 }
 
+export class BrowserPlatformDetector {
+  constructor({ userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '' } = {}) {
+    this.userAgent = `${userAgent ?? ''}`.trim();
+  }
+
+  resolve() {
+    if (/android/i.test(this.userAgent)) {
+      return 'android';
+    }
+
+    if (/(iphone|ipad|ipod)/i.test(this.userAgent)) {
+      return 'ios';
+    }
+
+    return 'web';
+  }
+}
+
 export class CapacitorAppLaunchGateway {
   async getRuntime() {
     return new AppLaunchRuntime({
@@ -45,9 +63,11 @@ export class TaskAppLaunchService {
   constructor({
     resolver = new TaskAppLaunchResolver(),
     gateway = new CapacitorAppLaunchGateway(),
+    browserPlatformDetector = new BrowserPlatformDetector(),
   } = {}) {
     this.resolver = resolver;
     this.gateway = gateway;
+    this.browserPlatformDetector = browserPlatformDetector;
   }
 
   resolve(task = {}) {
@@ -62,19 +82,19 @@ export class TaskAppLaunchService {
     return this.resolver.resolvePrimary(task);
   }
 
-  async resolveNativeTarget(suggestion) {
+  async resolveNativeTarget(suggestion, runtime = null) {
     if (!suggestion?.app) return null;
 
-    const runtime = await this.gateway.getRuntime();
-    if (!runtime.native) return null;
+    const resolvedRuntime = runtime ?? await this.gateway.getRuntime();
+    if (!resolvedRuntime.native) return null;
 
-    const queryTargets = suggestion.app.getQueryTargets(runtime.platform);
+    const queryTargets = suggestion.app.getQueryTargets(resolvedRuntime.platform);
     for (const queryTarget of queryTargets) {
       if (await this.gateway.canOpen(queryTarget)) {
-        const openTarget = suggestion.app.getOpenTarget(runtime.platform, suggestion.target);
+        const openTarget = suggestion.app.getOpenTarget(resolvedRuntime.platform, suggestion.target);
         if (openTarget) {
           return {
-            runtime,
+            runtime: resolvedRuntime,
             target: openTarget,
           };
         }
@@ -82,6 +102,26 @@ export class TaskAppLaunchService {
     }
 
     return null;
+  }
+
+  resolveBrowserTarget(suggestion) {
+    if (!suggestion?.app) return null;
+
+    const browserPlatform = this.browserPlatformDetector.resolve();
+    if (browserPlatform === 'web') return null;
+
+    const target = suggestion.app.getBrowserOpenTarget(
+      browserPlatform,
+      suggestion.target,
+      suggestion.fallbackAction,
+    );
+
+    return target
+      ? {
+        platform: browserPlatform,
+        target,
+      }
+      : null;
   }
 
   async open(task = {}, { suggestionId = '', premiumEnabled = false } = {}) {
@@ -99,12 +139,28 @@ export class TaskAppLaunchService {
     }
 
     if (request.premiumEnabled && suggestion.supportsNativeLaunch()) {
-      const nativeTarget = await this.resolveNativeTarget(suggestion);
+      const runtime = await this.gateway.getRuntime();
+      const nativeTarget = runtime.native
+        ? await this.resolveNativeTarget(suggestion, runtime)
+        : null;
       if (nativeTarget) {
         const completed = await this.gateway.open(nativeTarget.target);
         return {
           completed,
           mode: completed ? 'native' : 'error',
+          suggestion,
+        };
+      }
+
+      const browserTarget = !runtime.native ? this.resolveBrowserTarget(suggestion) : null;
+      if (browserTarget) {
+        const completed = openTaskExternalAction(
+          { url: browserTarget.target },
+          { allowCustomScheme: true },
+        );
+        return {
+          completed,
+          mode: completed ? 'scheme' : 'error',
           suggestion,
         };
       }

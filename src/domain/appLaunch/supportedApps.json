@@ -11,15 +11,25 @@
     "platforms": {
       "ios": {
         "schemes": ["whatsapp"],
+        "browserOpen": {
+          "home": "whatsapp://",
+          "chat": "whatsapp://send"
+        },
         "open": {
-          "home": "whatsapp://"
+          "home": "whatsapp://",
+          "chat": "whatsapp://send"
         }
       },
       "android": {
         "packageName": "com.whatsapp",
         "schemes": ["whatsapp"],
+        "browserOpen": {
+          "home": "whatsapp://",
+          "chat": "whatsapp://send"
+        },
         "open": {
-          "home": "com.whatsapp"
+          "home": "com.whatsapp",
+          "chat": "whatsapp://send"
         }
       },
       "web": {
@@ -30,6 +40,240 @@
     },
     "fallback": {
       "url": "https://wa.me/"
+    }
+  },
+  {
+    "id": "instagram",
+    "label": "Instagram",
+    "keywords": ["instagram", "insta", "ig"],
+    "category": "social",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["instagram.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["instagram"],
+        "browserOpen": {
+          "home": "instagram://app"
+        },
+        "open": {
+          "home": "instagram://app"
+        }
+      },
+      "android": {
+        "packageName": "com.instagram.android",
+        "schemes": ["instagram"],
+        "browserOpen": {
+          "home": "instagram://app"
+        },
+        "open": {
+          "home": "com.instagram.android"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.instagram.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.instagram.com/"
+    }
+  },
+  {
+    "id": "facebook",
+    "label": "Facebook",
+    "keywords": ["facebook", "fb"],
+    "category": "social",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["facebook.com", "fb.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["fb"],
+        "browserOpen": {
+          "home": "fb://"
+        },
+        "open": {
+          "home": "fb://"
+        }
+      },
+      "android": {
+        "packageName": "com.facebook.katana",
+        "schemes": ["fb"],
+        "browserOpen": {
+          "home": "fb://"
+        },
+        "open": {
+          "home": "com.facebook.katana"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.facebook.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.facebook.com/"
+    }
+  },
+  {
+    "id": "messenger",
+    "label": "Messenger",
+    "keywords": ["messenger", "facebook messenger"],
+    "category": "messaging",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["m.me", "messenger.com"],
+    "targets": ["home", "chat"],
+    "platforms": {
+      "ios": {
+        "schemes": ["fb-messenger"],
+        "browserOpen": {
+          "home": "fb-messenger://"
+        },
+        "open": {
+          "home": "fb-messenger://"
+        }
+      },
+      "android": {
+        "packageName": "com.facebook.orca",
+        "schemes": ["fb-messenger"],
+        "browserOpen": {
+          "home": "fb-messenger://"
+        },
+        "open": {
+          "home": "com.facebook.orca"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.messenger.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.messenger.com/"
+    }
+  },
+  {
+    "id": "linkedin",
+    "label": "LinkedIn",
+    "keywords": ["linkedin"],
+    "category": "social",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["linkedin.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["linkedin"],
+        "browserOpen": {
+          "home": "linkedin://"
+        },
+        "open": {
+          "home": "linkedin://"
+        }
+      },
+      "android": {
+        "packageName": "com.linkedin.android",
+        "schemes": ["linkedin"],
+        "browserOpen": {
+          "home": "linkedin://"
+        },
+        "open": {
+          "home": "com.linkedin.android"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.linkedin.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.linkedin.com/"
+    }
+  },
+  {
+    "id": "x",
+    "label": "X",
+    "keywords": ["twitter", "tweet", "postear en x", "x.com"],
+    "category": "social",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["twitter.com", "x.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["twitter"],
+        "browserOpen": {
+          "home": "twitter://"
+        },
+        "open": {
+          "home": "twitter://"
+        }
+      },
+      "android": {
+        "packageName": "com.twitter.android",
+        "schemes": ["twitter"],
+        "browserOpen": {
+          "home": "twitter://"
+        },
+        "open": {
+          "home": "com.twitter.android"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://x.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://x.com/"
+    }
+  },
+  {
+    "id": "discord",
+    "label": "Discord",
+    "keywords": ["discord"],
+    "category": "messaging",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["discord.com", "discord.gg"],
+    "targets": ["home", "chat"],
+    "platforms": {
+      "ios": {
+        "schemes": ["discord"],
+        "browserOpen": {
+          "home": "discord://"
+        },
+        "open": {
+          "home": "discord://"
+        }
+      },
+      "android": {
+        "packageName": "com.discord",
+        "schemes": ["discord"],
+        "browserOpen": {
+          "home": "discord://"
+        },
+        "open": {
+          "home": "com.discord"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://discord.com/app"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://discord.com/app"
     }
   },
   {
@@ -44,6 +288,9 @@
     "platforms": {
       "ios": {
         "schemes": ["tg"],
+        "browserOpen": {
+          "home": "tg://"
+        },
         "open": {
           "home": "tg://"
         }
@@ -51,6 +298,9 @@
       "android": {
         "packageName": "org.telegram.messenger",
         "schemes": ["tg"],
+        "browserOpen": {
+          "home": "tg://"
+        },
         "open": {
           "home": "org.telegram.messenger"
         }
@@ -77,6 +327,9 @@
     "platforms": {
       "ios": {
         "schemes": ["slack"],
+        "browserOpen": {
+          "home": "slack://"
+        },
         "open": {
           "home": "slack://"
         }
@@ -84,6 +337,9 @@
       "android": {
         "packageName": "com.Slack",
         "schemes": ["slack"],
+        "browserOpen": {
+          "home": "slack://"
+        },
         "open": {
           "home": "com.Slack"
         }
@@ -110,6 +366,9 @@
     "platforms": {
       "ios": {
         "schemes": ["googlegmail"],
+        "browserOpen": {
+          "home": "googlegmail://"
+        },
         "open": {
           "home": "googlegmail://"
         }
@@ -117,6 +376,9 @@
       "android": {
         "packageName": "com.google.android.gm",
         "schemes": ["googlegmail"],
+        "browserOpen": {
+          "home": "googlegmail://"
+        },
         "open": {
           "home": "com.google.android.gm"
         }
@@ -143,6 +405,9 @@
     "platforms": {
       "ios": {
         "schemes": ["ms-outlook"],
+        "browserOpen": {
+          "home": "ms-outlook://"
+        },
         "open": {
           "home": "ms-outlook://"
         }
@@ -150,6 +415,9 @@
       "android": {
         "packageName": "com.microsoft.office.outlook",
         "schemes": ["ms-outlook"],
+        "browserOpen": {
+          "home": "ms-outlook://"
+        },
         "open": {
           "home": "com.microsoft.office.outlook"
         }
@@ -176,6 +444,9 @@
     "platforms": {
       "ios": {
         "schemes": ["msteams"],
+        "browserOpen": {
+          "home": "msteams://"
+        },
         "open": {
           "home": "msteams://"
         }
@@ -183,6 +454,9 @@
       "android": {
         "packageName": "com.microsoft.teams",
         "schemes": ["msteams"],
+        "browserOpen": {
+          "home": "msteams://"
+        },
         "open": {
           "home": "com.microsoft.teams"
         }
@@ -209,6 +483,9 @@
     "platforms": {
       "ios": {
         "schemes": ["zoomus"],
+        "browserOpen": {
+          "home": "zoomus://"
+        },
         "open": {
           "home": "zoomus://"
         }
@@ -216,6 +493,9 @@
       "android": {
         "packageName": "us.zoom.videomeetings",
         "schemes": ["zoomus"],
+        "browserOpen": {
+          "home": "zoomus://"
+        },
         "open": {
           "home": "us.zoom.videomeetings"
         }
@@ -242,6 +522,9 @@
     "platforms": {
       "ios": {
         "schemes": ["googlemeet"],
+        "browserOpen": {
+          "home": "googlemeet://"
+        },
         "open": {
           "home": "googlemeet://"
         }
@@ -249,6 +532,9 @@
       "android": {
         "packageName": "com.google.android.apps.meetings",
         "schemes": ["googlemeet"],
+        "browserOpen": {
+          "home": "googlemeet://"
+        },
         "open": {
           "home": "com.google.android.apps.meetings"
         }
@@ -275,6 +561,9 @@
     "platforms": {
       "ios": {
         "schemes": ["googlecalendar"],
+        "browserOpen": {
+          "home": "googlecalendar://"
+        },
         "open": {
           "home": "googlecalendar://"
         }
@@ -282,6 +571,9 @@
       "android": {
         "packageName": "com.google.android.calendar",
         "schemes": ["googlecalendar"],
+        "browserOpen": {
+          "home": "googlecalendar://"
+        },
         "open": {
           "home": "com.google.android.calendar"
         }
@@ -308,6 +600,9 @@
     "platforms": {
       "ios": {
         "schemes": ["comgooglemaps"],
+        "browserOpen": {
+          "home": "comgooglemaps://"
+        },
         "open": {
           "home": "comgooglemaps://"
         }
@@ -315,6 +610,9 @@
       "android": {
         "packageName": "com.google.android.apps.maps",
         "schemes": ["geo", "google.navigation", "comgooglemaps"],
+        "browserOpen": {
+          "home": "comgooglemaps://"
+        },
         "open": {
           "home": "com.google.android.apps.maps"
         }
@@ -341,6 +639,9 @@
     "platforms": {
       "ios": {
         "schemes": ["waze"],
+        "browserOpen": {
+          "home": "waze://"
+        },
         "open": {
           "home": "waze://"
         }
@@ -348,6 +649,9 @@
       "android": {
         "packageName": "com.waze",
         "schemes": ["waze"],
+        "browserOpen": {
+          "home": "waze://"
+        },
         "open": {
           "home": "com.waze"
         }
@@ -360,6 +664,474 @@
     },
     "fallback": {
       "url": "https://www.waze.com/"
+    }
+  },
+  {
+    "id": "notion",
+    "label": "Notion",
+    "keywords": ["notion"],
+    "category": "productivity",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["notion.so"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["notion"],
+        "browserOpen": {
+          "home": "notion://"
+        },
+        "open": {
+          "home": "notion://"
+        }
+      },
+      "android": {
+        "packageName": "notion.id",
+        "schemes": ["notion"],
+        "browserOpen": {
+          "home": "notion://"
+        },
+        "open": {
+          "home": "notion.id"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.notion.so/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.notion.so/"
+    }
+  },
+  {
+    "id": "trello",
+    "label": "Trello",
+    "keywords": ["trello"],
+    "category": "project-management",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["trello.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["trello"],
+        "browserOpen": {
+          "home": "trello://"
+        },
+        "open": {
+          "home": "trello://"
+        }
+      },
+      "android": {
+        "packageName": "com.trello",
+        "schemes": ["trello"],
+        "browserOpen": {
+          "home": "trello://"
+        },
+        "open": {
+          "home": "com.trello"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://trello.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://trello.com/"
+    }
+  },
+  {
+    "id": "asana",
+    "label": "Asana",
+    "keywords": ["asana"],
+    "category": "project-management",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["app.asana.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["asana"],
+        "browserOpen": {
+          "home": "asana://"
+        },
+        "open": {
+          "home": "asana://"
+        }
+      },
+      "android": {
+        "packageName": "com.asana.app",
+        "schemes": ["asana"],
+        "browserOpen": {
+          "home": "asana://"
+        },
+        "open": {
+          "home": "com.asana.app"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://app.asana.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://app.asana.com/"
+    }
+  },
+  {
+    "id": "clickup",
+    "label": "ClickUp",
+    "keywords": ["clickup", "click up"],
+    "category": "project-management",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["app.clickup.com", "clickup.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["clickup"],
+        "browserOpen": {
+          "home": "clickup://"
+        },
+        "open": {
+          "home": "clickup://"
+        }
+      },
+      "android": {
+        "packageName": "app.clickup",
+        "schemes": ["clickup"],
+        "browserOpen": {
+          "home": "clickup://"
+        },
+        "open": {
+          "home": "app.clickup"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://app.clickup.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://app.clickup.com/"
+    }
+  },
+  {
+    "id": "monday",
+    "label": "monday.com",
+    "keywords": ["monday", "monday.com"],
+    "category": "project-management",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["monday.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["monday"],
+        "browserOpen": {
+          "home": "monday://"
+        },
+        "open": {
+          "home": "monday://"
+        }
+      },
+      "android": {
+        "packageName": "com.monday.native",
+        "schemes": ["monday"],
+        "browserOpen": {
+          "home": "monday://"
+        },
+        "open": {
+          "home": "com.monday.native"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://monday.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://monday.com/"
+    }
+  },
+  {
+    "id": "jira",
+    "label": "Jira",
+    "keywords": ["jira"],
+    "category": "project-management",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["atlassian.net", "jira.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["jira"],
+        "browserOpen": {
+          "home": "jira://"
+        },
+        "open": {
+          "home": "jira://"
+        }
+      },
+      "android": {
+        "packageName": "com.atlassian.android.jira.core",
+        "schemes": ["jira"],
+        "browserOpen": {
+          "home": "jira://"
+        },
+        "open": {
+          "home": "com.atlassian.android.jira.core"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.atlassian.com/software/jira"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.atlassian.com/software/jira"
+    }
+  },
+  {
+    "id": "github",
+    "label": "GitHub",
+    "keywords": ["github"],
+    "category": "developer",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["github.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["github"],
+        "browserOpen": {
+          "home": "github://"
+        },
+        "open": {
+          "home": "github://"
+        }
+      },
+      "android": {
+        "packageName": "com.github.android",
+        "schemes": ["github"],
+        "browserOpen": {
+          "home": "github://"
+        },
+        "open": {
+          "home": "com.github.android"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://github.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://github.com/"
+    }
+  },
+  {
+    "id": "google-drive",
+    "label": "Google Drive",
+    "keywords": ["google drive", "drive"],
+    "category": "files",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["drive.google.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["googledrive"],
+        "browserOpen": {
+          "home": "googledrive://"
+        },
+        "open": {
+          "home": "googledrive://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.apps.docs",
+        "schemes": ["googledrive"],
+        "browserOpen": {
+          "home": "googledrive://"
+        },
+        "open": {
+          "home": "com.google.android.apps.docs"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://drive.google.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://drive.google.com/"
+    }
+  },
+  {
+    "id": "google-docs",
+    "label": "Google Docs",
+    "keywords": ["google docs", "gdocs", "docs.google"],
+    "category": "files",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["docs.google.com/document"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["googledocs"],
+        "browserOpen": {
+          "home": "googledocs://"
+        },
+        "open": {
+          "home": "googledocs://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.apps.docs.editors.docs",
+        "schemes": ["googledocs"],
+        "browserOpen": {
+          "home": "googledocs://"
+        },
+        "open": {
+          "home": "com.google.android.apps.docs.editors.docs"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://docs.google.com/document/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://docs.google.com/document/"
+    }
+  },
+  {
+    "id": "google-sheets",
+    "label": "Google Sheets",
+    "keywords": ["google sheets", "gsheets", "sheets.google"],
+    "category": "files",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["docs.google.com/spreadsheets"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["googlesheets"],
+        "browserOpen": {
+          "home": "googlesheets://"
+        },
+        "open": {
+          "home": "googlesheets://"
+        }
+      },
+      "android": {
+        "packageName": "com.google.android.apps.docs.editors.sheets",
+        "schemes": ["googlesheets"],
+        "browserOpen": {
+          "home": "googlesheets://"
+        },
+        "open": {
+          "home": "com.google.android.apps.docs.editors.sheets"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://docs.google.com/spreadsheets/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://docs.google.com/spreadsheets/"
+    }
+  },
+  {
+    "id": "dropbox",
+    "label": "Dropbox",
+    "keywords": ["dropbox"],
+    "category": "files",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["dropbox.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["dbapi-2"],
+        "browserOpen": {
+          "home": "dbapi-2://"
+        },
+        "open": {
+          "home": "dbapi-2://"
+        }
+      },
+      "android": {
+        "packageName": "com.dropbox.android",
+        "schemes": ["dbapi-2"],
+        "browserOpen": {
+          "home": "dbapi-2://"
+        },
+        "open": {
+          "home": "com.dropbox.android"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.dropbox.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.dropbox.com/"
+    }
+  },
+  {
+    "id": "canva",
+    "label": "Canva",
+    "keywords": ["canva"],
+    "category": "creative",
+    "premium": true,
+    "actionIds": [],
+    "urlHosts": ["canva.com"],
+    "targets": ["home"],
+    "platforms": {
+      "ios": {
+        "schemes": ["canva"],
+        "browserOpen": {
+          "home": "canva://"
+        },
+        "open": {
+          "home": "canva://"
+        }
+      },
+      "android": {
+        "packageName": "com.canva.editor",
+        "schemes": ["canva"],
+        "browserOpen": {
+          "home": "canva://"
+        },
+        "open": {
+          "home": "com.canva.editor"
+        }
+      },
+      "web": {
+        "open": {
+          "home": "https://www.canva.com/"
+        }
+      }
+    },
+    "fallback": {
+      "url": "https://www.canva.com/"
     }
   },
   {
