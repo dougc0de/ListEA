@@ -578,25 +578,23 @@ onBeforeUnmount(destroyCharts);
 <style scoped>
 .dashboardPage {
   display: grid;
-  gap: 14px;
+  gap: var(--section-gap);
 }
 
 .heroCard,
 .dashboardCard {
-  border-radius: 28px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--card-shadow);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .heroCard {
-  padding: 22px 20px;
+  padding: 0 0 14px;
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) auto;
   gap: 16px;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 18%, transparent), transparent 36%),
-    linear-gradient(135deg, color-mix(in srgb, var(--surface) 92%, white), var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
 }
 
 .heroCopy h2,
@@ -643,7 +641,7 @@ onBeforeUnmount(destroyCharts);
 }
 
 .dashboardCard {
-  padding: 18px;
+  padding: 6px 0 0;
   display: grid;
   gap: 16px;
 }
@@ -750,18 +748,16 @@ onBeforeUnmount(destroyCharts);
 }
 
 .visibilityPanel {
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-soft) 78%, white);
+  padding: 0 0 0 14px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  background: transparent;
 }
 
 .proHint {
   margin: 0;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  padding: 0 0 0 14px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  background: transparent;
   color: var(--text-muted);
   text-align: left;
 }
@@ -795,10 +791,9 @@ onBeforeUnmount(destroyCharts);
 
 .rangeError {
   margin: 0;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, #de6f4d 28%, var(--line));
-  background: color-mix(in srgb, #de6f4d 10%, var(--surface));
+  padding: 0 0 0 14px;
+  border-left: 3px solid color-mix(in srgb, #de6f4d 40%, var(--line));
+  background: transparent;
   color: #8b3a21;
   text-align: left;
   font-weight: 600;
@@ -807,16 +802,17 @@ onBeforeUnmount(destroyCharts);
 .summaryCard,
 .chartCard,
 .activityCard {
-  border-radius: 22px;
-  background: var(--surface-soft);
+  border-radius: 0;
+  background: transparent;
 }
 
 .summaryCard {
-  padding: 14px;
+  padding: 8px 0 8px 14px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 130px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 18%, var(--line));
 }
 
 .summaryCard strong {
@@ -830,7 +826,8 @@ onBeforeUnmount(destroyCharts);
 
 .chartCard,
 .activityCard {
-  padding: 14px;
+  padding: 14px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
 }
 
 .chartHead,
@@ -894,9 +891,9 @@ onBeforeUnmount(destroyCharts);
 
 .activityDescription {
   margin: 0 0 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  padding: 0 0 0 14px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: transparent;
   color: var(--text-muted);
   text-align: left;
 }
@@ -939,7 +936,8 @@ onBeforeUnmount(destroyCharts);
   justify-content: space-between;
   padding: 12px 14px;
   border-radius: 18px;
-  background: color-mix(in srgb, var(--surface) 76%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+  background: color-mix(in srgb, var(--surface) 66%, transparent);
 }
 
 .eventCopy {
@@ -992,8 +990,8 @@ onBeforeUnmount(destroyCharts);
 @media (max-width: 640px) {
   .heroCard,
   .dashboardCard {
-    padding: 16px 14px;
-    border-radius: 22px;
+    padding: 0;
+    border-radius: 0;
   }
 
   .eventItem,

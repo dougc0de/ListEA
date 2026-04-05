@@ -22,7 +22,7 @@ const currentUtilityView = computed(() =>
 const MENU_ICONS = Object.freeze({
   today: 'M12 3.75a.75.75 0 0 1 .75.75v1.1h3.2a2.8 2.8 0 0 1 2.8 2.8v7.6a2.8 2.8 0 0 1-2.8 2.8H8.05a2.8 2.8 0 0 1-2.8-2.8v-7.6a2.8 2.8 0 0 1 2.8-2.8h3.2V4.5a.75.75 0 0 1 .75-.75Zm3.95 4.3H8.05a1.3 1.3 0 0 0-1.3 1.3v.8h10.5v-.8a1.3 1.3 0 0 0-1.3-1.3Zm1.3 3.9H6.75v4.95a1.3 1.3 0 0 0 1.3 1.3h7.9a1.3 1.3 0 0 0 1.3-1.3v-4.95Z',
   'follow-up': 'M12 3.25a8.75 8.75 0 1 1-6.19 2.56A8.72 8.72 0 0 1 12 3.25Zm0 1.5a7.25 7.25 0 1 0 5.13 2.12A7.2 7.2 0 0 0 12 4.75Zm-.75 3.5a.75.75 0 0 1 1.5 0v3.28l2.1 1.22a.75.75 0 1 1-.75 1.3l-2.48-1.43a.75.75 0 0 1-.37-.65V8.25Z',
-  backlog: 'M5.25 6A2.25 2.25 0 0 1 7.5 3.75h9A2.25 2.25 0 0 1 18.75 6v12a.75.75 0 0 1-1.28.53l-1.34-1.34-1.6 1.34a.75.75 0 0 1-.96 0l-1.57-1.32-1.57 1.32a.75.75 0 0 1-.96 0l-1.6-1.34-1.34 1.34A.75.75 0 0 1 5.25 18V6Zm1.5 0v10.19l.59-.59a.75.75 0 0 1 .98-.06l1.63 1.36 1.57-1.32a.75.75 0 0 1 .96 0l1.57 1.32 1.63-1.36a.75.75 0 0 1 .98.06l.59.59V6a.75.75 0 0 0-.75-.75h-9a.75.75 0 0 0-.75.75Zm2.5 2.25a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75Zm0 3a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75Z',
+  calendar: 'M7.75 3.5a.75.75 0 0 1 .75.75V5h7V4.25a.75.75 0 0 1 1.5 0V5h.25A2.75 2.75 0 0 1 20 7.75v9.5A2.75 2.75 0 0 1 17.25 20h-10.5A2.75 2.75 0 0 1 4 17.25v-9.5A2.75 2.75 0 0 1 6.75 5H7V4.25a.75.75 0 0 1 .75-.75ZM5.5 9.5v7.75c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25V9.5h-13Zm8.75 2.25a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-.75.75h-4.5a.75.75 0 0 1-.75-.75v-3a.75.75 0 0 1 .75-.75h4.5Z',
   dashboard: 'M4 6.75A2.75 2.75 0 0 1 6.75 4h3.5A2.75 2.75 0 0 1 13 6.75v3.5A2.75 2.75 0 0 1 10.25 13h-3.5A2.75 2.75 0 0 1 4 10.25v-3.5Zm10.75-2.75h2.5A2.75 2.75 0 0 1 20 6.75v1.5A2.75 2.75 0 0 1 17.25 11h-2.5A2.75 2.75 0 0 1 12 8.25v-1.5A2.75 2.75 0 0 1 14.75 4ZM4 15.75A2.75 2.75 0 0 1 6.75 13h1.5A2.75 2.75 0 0 1 11 15.75v2.5A2.75 2.75 0 0 1 8.25 21h-1.5A2.75 2.75 0 0 1 4 18.25v-2.5ZM14.75 12h2.5A2.75 2.75 0 0 1 20 14.75v3.5A2.75 2.75 0 0 1 17.25 21h-2.5A2.75 2.75 0 0 1 12 18.25v-3.5A2.75 2.75 0 0 1 14.75 12Z',
   settings: 'M10.42 3.97a1.75 1.75 0 0 1 3.16 0l.29.64c.17.38.58.59.99.52l.7-.11a1.75 1.75 0 0 1 1.83 2.57l-.35.61a.96.96 0 0 0 0 .96l.35.61a1.75 1.75 0 0 1-1.83 2.57l-.7-.11a.92.92 0 0 0-.99.52l-.29.64a1.75 1.75 0 0 1-3.16 0l-.29-.64a.92.92 0 0 0-.99-.52l-.7.11a1.75 1.75 0 0 1-1.83-2.57l.35-.61a.96.96 0 0 0 0-.96l-.35-.61A1.75 1.75 0 0 1 8.44 5.02l.7.11c.41.07.82-.14.99-.52l.29-.64ZM12 8.25a2.25 2.25 0 1 0 0 4.5a2.25 2.25 0 0 0 0-4.5Z',
   more: 'M12 5.75a1.25 1.25 0 1 1 0 2.5a1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5a1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5a1.25 1.25 0 0 1 0-2.5Z',
@@ -112,7 +112,7 @@ watch(
         <img src="../assets/logo.png" alt="Logo de ListEA" class="brandLogo" />
         <div class="brandCopy">
           <strong>ListEA</strong>
-          <span>Hoy y seguimiento</span>
+          <span>Hoy, seguimiento y calendario</span>
         </div>
       </button>
 
@@ -212,13 +212,14 @@ watch(
 }
 
 .menuBar {
-  width: min(100%, 960px);
-  margin: 0 auto;
-  min-height: 60px;
+  width: 100%;
+  margin: 0;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding: 0 var(--shell-pad-inline);
 }
 
 .brandButton {
@@ -299,27 +300,30 @@ watch(
 .drawer {
   position: fixed;
   top: 0;
-  left: 50%;
-  transform: translate(-50%, calc(-100% - 18px));
-  width: min(100vw - 16px, 860px);
+  left: 0;
+  transform: translateY(calc(-100% - 18px));
+  width: 100%;
   max-height: min(70vh, 520px);
-  padding: calc(72px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  padding:
+    calc(72px + env(safe-area-inset-top))
+    var(--shell-pad-inline)
+    calc(14px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, white);
   transition: transform 220ms ease, opacity 220ms ease;
   box-shadow: 0 20px 50px rgba(18, 28, 44, 0.14);
   z-index: 31;
   overflow-y: auto;
   opacity: 0;
-  border-radius: 0 0 28px 28px;
-  border: 1px solid var(--line);
+  border-radius: 0 0 32px 32px;
+  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
   border-top: 0;
 }
 
 .drawer.active {
-  transform: translate(-50%, 0);
+  transform: translateY(0);
   opacity: 1;
 }
 
@@ -434,12 +438,11 @@ watch(
 
 @media (max-width: 640px) {
   .menuBar {
-    width: calc(100% - 16px);
     min-height: 56px;
+    padding-inline: 12px;
   }
 
   .drawer {
-    width: calc(100% - 12px);
     padding: calc(68px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
     border-radius: 0 0 24px 24px;
   }

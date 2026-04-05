@@ -60,6 +60,10 @@
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ListEA usa el microfono para convertir tu voz en tareas locales.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>ListEA usa reconocimiento de voz para estructurar tareas a partir de lo que dices.</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>

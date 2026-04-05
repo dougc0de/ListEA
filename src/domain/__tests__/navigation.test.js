@@ -6,12 +6,13 @@ describe('NavigationCatalog', () => {
     const catalog = new NavigationCatalog();
     const views = catalog.getMenuViews();
 
-    expect(catalog.getPrimaryViews().map(view => view.id)).toEqual(['today', 'follow-up', 'backlog']);
+    expect(catalog.getPrimaryViews().map(view => view.id)).toEqual(['today', 'follow-up', 'calendar']);
     expect(catalog.getUtilityViews().map(view => view.id)).toEqual(['dashboard', 'settings']);
-    expect(views.map(view => view.id)).toEqual(['today', 'follow-up', 'backlog', 'dashboard', 'settings']);
-    expect(views.find(view => view.id === 'backlog')?.label).toBe('Agenda');
+    expect(views.map(view => view.id)).toEqual(['today', 'follow-up', 'calendar', 'dashboard', 'settings']);
+    expect(views.find(view => view.id === 'calendar')?.label).toBe('Calendario');
     expect(views.find(view => view.id === 'follow-up')?.label).toBe('Seguimiento');
     expect(views.find(view => view.id === 'settings')?.utility).toBe(true);
+    expect(new NavigationCatalog().getFallbackView('backlog')).toBe('calendar');
     expect(new NavigationCatalog().getFallbackView('unknown')).toBe('today');
   });
 });

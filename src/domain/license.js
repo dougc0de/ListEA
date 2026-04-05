@@ -18,6 +18,7 @@ export const BILLING_SOURCES = Object.freeze({
 
 export const ENTITLEMENT_KEYS = Object.freeze({
   ADVANCED_DASHBOARD: 'advancedDashboard',
+  PREMIUM_CALENDAR: 'premiumCalendar',
   PDF_EXPORT: 'pdfExport',
   PREMIUM_INSIGHTS: 'premiumInsights',
   ADVANCED_REMINDERS: 'advancedReminders',
@@ -25,10 +26,12 @@ export const ENTITLEMENT_KEYS = Object.freeze({
   PREMIUM_THEMES: 'premiumThemes',
   LOCAL_ENCRYPTED_BACKUP: 'localEncryptedBackup',
   SMART_APP_LAUNCH: 'smartAppLaunch',
+  VOICE_CAPTURE: 'voiceCapture',
 });
 
 export const FREE_ENTITLEMENTS = Object.freeze({
   [ENTITLEMENT_KEYS.ADVANCED_DASHBOARD]: false,
+  [ENTITLEMENT_KEYS.PREMIUM_CALENDAR]: false,
   [ENTITLEMENT_KEYS.PDF_EXPORT]: false,
   [ENTITLEMENT_KEYS.PREMIUM_INSIGHTS]: false,
   [ENTITLEMENT_KEYS.ADVANCED_REMINDERS]: false,
@@ -36,6 +39,7 @@ export const FREE_ENTITLEMENTS = Object.freeze({
   [ENTITLEMENT_KEYS.PREMIUM_THEMES]: false,
   [ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP]: false,
   [ENTITLEMENT_KEYS.SMART_APP_LAUNCH]: false,
+  [ENTITLEMENT_KEYS.VOICE_CAPTURE]: false,
 });
 
 export const PRO_ENTITLEMENTS = Object.freeze(

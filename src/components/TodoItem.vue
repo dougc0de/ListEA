@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
 import { TaskAppLaunchResolver } from '../domain/taskAppLaunch';
 import {
@@ -15,6 +15,7 @@ const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-
 const props = defineProps({
   todo: { type: Object, required: true },
   taskActions: { type: Array, default: () => [] },
+  forceEdit: { type: Boolean, default: false },
 });
 
 const presenter = new TaskContextPresenter();
@@ -24,6 +25,8 @@ const appLaunchResolver = new TaskAppLaunchResolver();
 const isEditing = ref(false);
 const detailsOpen = ref(false);
 const overflowOpen = ref(false);
+const cardRef = ref(null);
+const titleEditorRef = ref(null);
 const editableTitle = ref(props.todo.title);
 const editableNotes = ref(props.todo.notes ?? '');
 const editableProject = ref(props.todo.project ?? '');
@@ -72,8 +75,8 @@ const hiddenSubtaskCount = computed(() => Math.max(subtaskRows.value.length - su
 const externalAppActions = computed(() => appLaunchResolver.resolve(props.todo));
 const primaryTaskAction = computed(() => props.taskActions[0] ?? null);
 const secondaryTaskActions = computed(() => props.taskActions.slice(1));
-const primaryExternalAction = computed(() => externalAppActions.value[0] ?? null);
-const secondaryExternalActions = computed(() => externalAppActions.value.slice(1));
+const visibleExternalActions = computed(() => externalAppActions.value.slice(0, 2));
+const secondaryExternalActions = computed(() => externalAppActions.value.slice(2));
 
 function setEditableDateParts(dateRef, timeRef, hasTimeRef, value = '', precision = '') {
   dateRef.value = toDateInputValue(value);
@@ -117,6 +120,24 @@ watch(
   },
   { deep: true },
 );
+
+watch(
+  () => props.forceEdit,
+  shouldForceEdit => {
+    if (!shouldForceEdit || props.todo.isCompleted()) return;
+    startEditing();
+  },
+);
+
+function focusEditor() {
+  nextTick(() => {
+    cardRef.value?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'center',
+    });
+    titleEditorRef.value?.focus?.({ preventScroll: true });
+  });
+}
 
 function saveTask() {
   const nextTitle = editableTitle.value.trim();
@@ -182,6 +203,7 @@ function startEditing() {
   detailsOpen.value = true;
   isEditing.value = true;
   overflowOpen.value = false;
+  focusEditor();
 }
 
 function cancelEdit() {
@@ -211,7 +233,7 @@ function openExternalAction(action) {
 </script>
 
 <template>
-  <article class="taskCard" :class="todo.status">
+  <article ref="cardRef" class="taskCard" :class="todo.status" :data-task-id="todo.id">
     <div class="taskHeader">
       <label class="checkWrap">
         <input
@@ -225,6 +247,7 @@ function openExternalAction(action) {
         <div class="titleRow">
           <textarea
             v-if="isEditing"
+            ref="titleEditorRef"
             v-model="editableTitle"
             class="titleEditor"
             rows="2"
@@ -245,8 +268,14 @@ function openExternalAction(action) {
     </div>
 
     <div v-if="!isEditing" class="actionRow">
-      <button v-if="primaryExternalAction" type="button" class="primaryButton actionPrimary" @click="openExternalAction(primaryExternalAction)">
-        {{ primaryExternalAction.label }}
+      <button
+        v-for="action in visibleExternalActions"
+        :key="action.id"
+        type="button"
+        :class="action === visibleExternalActions[0] ? 'primaryButton actionPrimary' : 'ghostButton externalVisibleButton'"
+        @click="openExternalAction(action)"
+      >
+        {{ action.label }}
       </button>
       <button
         v-if="primaryTaskAction"
@@ -635,6 +664,10 @@ function openExternalAction(action) {
 
 .actionPrimary {
   flex: 1 1 180px;
+}
+
+.externalVisibleButton {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--line));
 }
 
 .moreButton.active {

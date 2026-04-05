@@ -71,8 +71,8 @@ export class ProfessionalReviewAnalyzer {
         title: 'Posibles duplicados',
         message: `${duplicateCount} titulo(s) repetidos conviene fusionarlos o aclararlos para evitar ruido.`,
         count: duplicateCount,
-        actionLabel: 'Ver agenda',
-        targetView: 'backlog',
+        actionLabel: 'Ver calendario',
+        targetView: 'calendar',
       });
     }
 

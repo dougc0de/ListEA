@@ -28,6 +28,7 @@ export const CAPTURE_SOURCES = Object.freeze({
   SHARE: 'share',
   SHORTCUT: 'shortcut',
   SCREENSHOT: 'screenshot',
+  VOICE: 'voice',
 });
 
 export const TASK_DATE_PRECISION = Object.freeze({
@@ -565,7 +566,7 @@ export class TaskFactory {
         },
       }),
       this.create({
-        title: 'Revisar agenda sin fecha',
+        title: 'Revisar calendario sin fecha',
         area: 'Personal',
         priority: TASK_PRIORITY.MEDIUM,
         effortMinutes: 15,

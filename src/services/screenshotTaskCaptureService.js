@@ -1,4 +1,13 @@
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
+import {
+  AppLaunchAgent,
+  FollowUpAgent,
+  ReminderActionAgent,
+  ScreenshotCaptureAgent,
+  TASK_ASSISTANT_SOURCES,
+  TaskAssistantOrchestrator,
+  TextStructuringAgent,
+} from '../domain/taskAssistant';
 
 const DEFAULT_OCR_LANGUAGES = Object.freeze(['spa', 'eng']);
 const SUPPORTED_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif']);
@@ -144,11 +153,21 @@ export class ScreenshotTaskCaptureService {
     interpreter = new QuickCaptureInterpreter(),
     sanitizer = new ScreenshotTextSanitizer(),
     maxFileSizeBytes = DEFAULT_MAX_FILE_SIZE_BYTES,
+    orchestrator = new TaskAssistantOrchestrator({
+      agents: [
+        new ScreenshotCaptureAgent(),
+        new TextStructuringAgent({ interpreter }),
+        new AppLaunchAgent(),
+        new FollowUpAgent(),
+        new ReminderActionAgent(),
+      ],
+    }),
   } = {}) {
     this.ocrGateway = ocrGateway;
     this.interpreter = interpreter;
     this.sanitizer = sanitizer;
     this.maxFileSizeBytes = maxFileSizeBytes;
+    this.orchestrator = orchestrator;
   }
 
   async convert(file, { onProgress } = {}) {
@@ -166,7 +185,18 @@ export class ScreenshotTaskCaptureService {
       throw new ScreenshotCaptureError('No se detecto texto util en el screenshot.', 'no-text-detected');
     }
 
-    const interpretation = this.interpreter.interpret(normalizedText);
+    const assistantContext = await this.orchestrator.run({
+      sourceType: TASK_ASSISTANT_SOURCES.SCREENSHOT,
+      rawInput: normalizedText,
+      extractedText: normalizedText,
+      metadata: {
+        capturedAt: new Date().toISOString(),
+      },
+      capabilities: {
+        screenshot: true,
+      },
+    });
+    const interpretation = assistantContext.interpretation ?? this.interpreter.interpret(normalizedText);
     const title = interpretation.title || normalizeText(normalizedText.split('\n')[0]);
 
     onProgress?.(new ScreenshotCaptureProgress({
@@ -180,6 +210,8 @@ export class ScreenshotTaskCaptureService {
         ...interpretation,
         title,
       },
+      appSuggestions: assistantContext.appSuggestions,
+      assistantResult: assistantContext.result,
     };
   }
 

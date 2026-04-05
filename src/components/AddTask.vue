@@ -1,7 +1,12 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { ENTITLEMENT_KEYS } from '../domain/license';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
 import { ScreenshotTaskCaptureService } from '../services/screenshotTaskCaptureService';
+import {
+  VOICE_CAPTURE_STATES,
+  VoiceTaskCaptureService,
+} from '../services/voiceTaskCaptureService';
 import {
   CAPTURE_SOURCES,
   TASK_DATE_PRECISION,
@@ -11,7 +16,11 @@ import {
   toTimeInputValue,
 } from '../domain/tasks';
 
-const emit = defineEmits(['add']);
+const props = defineProps({
+  voiceCaptureEnabled: { type: Boolean, default: false },
+});
+
+const emit = defineEmits(['add', 'voice-add', 'request-upgrade']);
 
 const title = ref('');
 const notes = ref('');
@@ -43,10 +52,19 @@ const screenshotBusy = ref(false);
 const screenshotProgress = ref(0);
 const screenshotStatus = ref('');
 const screenshotError = ref('');
+const voiceState = ref(VOICE_CAPTURE_STATES.IDLE);
+const voiceWaveform = ref(Array.from({ length: 18 }, () => 0.12));
+const voiceTranscript = ref('');
+const voiceStatus = ref('');
+const voiceError = ref('');
+const voiceSupported = ref(true);
+const voiceCapabilityChecked = ref(false);
+const voiceSession = ref(null);
 
 const interpreter = new QuickCaptureInterpreter();
 const presenter = new TaskContextPresenter();
 const screenshotCaptureService = new ScreenshotTaskCaptureService();
+const voiceTaskCaptureService = new VoiceTaskCaptureService();
 const captureTemplates = Object.freeze([
   { id: 'call', label: 'Llamada' },
   { id: 'email-follow-up', label: 'Correo pendiente' },
@@ -72,6 +90,26 @@ const screenshotProgressWidth = computed(() => `${Math.max(4, Math.round(screens
 const screenshotButtonLabel = computed(() => (
   screenshotBusy.value ? 'Leyendo screenshot...' : 'Convertir screenshot en tarea'
 ));
+const voiceCaptureActive = computed(() => [
+  VOICE_CAPTURE_STATES.STARTING,
+  VOICE_CAPTURE_STATES.RECORDING,
+  VOICE_CAPTURE_STATES.STOPPING,
+].includes(voiceState.value));
+const showVoiceFeedback = computed(() => (
+  voiceCaptureActive.value
+  || Boolean(voiceStatus.value)
+  || Boolean(voiceError.value)
+  || Boolean(voiceTranscript.value)
+));
+const voiceButtonLabel = computed(() => {
+  if (!props.voiceCaptureEnabled) return 'Voz Pro';
+  if (voiceState.value === VOICE_CAPTURE_STATES.STARTING) return 'Preparando voz...';
+  if (voiceState.value === VOICE_CAPTURE_STATES.RECORDING) return 'Detener y guardar';
+  if (voiceState.value === VOICE_CAPTURE_STATES.STOPPING) return 'Guardando...';
+  return 'Hablar tarea';
+});
+const voiceStatusTone = computed(() => (voiceError.value ? 'error' : 'info'));
+const voiceCanOpenDraft = computed(() => Boolean(voiceTranscript.value.trim()) && Boolean(voiceError.value));
 const composerHelperText = computed(() => (
   captureSource.value === CAPTURE_SOURCES.SCREENSHOT
     ? 'Ajusta lo detectado y guarda.'
@@ -139,6 +177,52 @@ function openComposer({ focus = true } = {}) {
   composerOpen.value = true;
   if (!focus) return;
 
+  nextTick(() => {
+    focusTitleField();
+  });
+}
+
+function applyDraft(draft = {}) {
+  if (!draft || typeof draft !== 'object') return;
+
+  if (draft.title !== undefined) title.value = `${draft.title ?? ''}`;
+  if (draft.notes !== undefined) notes.value = `${draft.notes ?? ''}`;
+  if (draft.project !== undefined) project.value = `${draft.project ?? ''}`;
+  if (draft.area !== undefined) area.value = `${draft.area ?? ''}`;
+  if (draft.priority !== undefined) priority.value = `${draft.priority ?? ''}`;
+  if (draft.status !== undefined) status.value = `${draft.status ?? 'active'}` || 'active';
+  if (draft.effortMinutes !== undefined) effortMinutes.value = draft.effortMinutes ? `${draft.effortMinutes}` : '';
+  if (draft.tags !== undefined) {
+    tags.value = Array.isArray(draft.tags) ? draft.tags.join(', ') : `${draft.tags ?? ''}`;
+  }
+  if (draft.subtasks !== undefined) {
+    subtasks.value = Array.isArray(draft.subtasks) ? draft.subtasks.join('\n') : `${draft.subtasks ?? ''}`;
+  }
+  if (draft.dueAt !== undefined) {
+    setDateField(dueDate, dueTime, dueHasTime, draft.dueAt, draft.dueAtPrecision);
+  }
+  if (draft.followUpAt !== undefined) {
+    setDateField(followUpDate, followUpTime, followUpHasTime, draft.followUpAt, draft.followUpAtPrecision);
+  }
+  if (draft.recurrence !== undefined) {
+    recurrencePreset.value = draft.recurrence?.preset || 'none';
+    recurrenceInterval.value = draft.recurrence?.interval || 1;
+    recurrenceMode.value = draft.recurrence?.mode || 'fixed';
+    recurrenceResetNotes.value = draft.recurrence?.resetNotes ?? true;
+  }
+  advancedOpen.value = Boolean(
+    draft.notes
+    || draft.project
+    || draft.area
+    || draft.dueAt
+    || draft.followUpAt,
+  );
+}
+
+function openComposerWithDraft(draft = {}) {
+  resetForm();
+  openComposer({ focus: false });
+  applyDraft(draft);
   nextTick(() => {
     focusTitleField();
   });
@@ -342,6 +426,7 @@ function applyScreenshotCapture(result) {
 }
 
 function openScreenshotPicker() {
+  if (voiceCaptureActive.value) return;
   screenshotError.value = '';
   screenshotStatus.value = '';
   screenshotProgress.value = 0;
@@ -380,6 +465,126 @@ async function handleScreenshotSelection(event) {
   } finally {
     screenshotBusy.value = false;
   }
+}
+
+function resetVoiceFeedback({ keepTranscript = false } = {}) {
+  voiceStatus.value = '';
+  voiceError.value = '';
+  voiceWaveform.value = Array.from({ length: 18 }, () => 0.12);
+  if (!keepTranscript) {
+    voiceTranscript.value = '';
+  }
+}
+
+function handleVoiceTranscriptUpdate(payload = {}) {
+  const transcript = `${payload.transcript ?? ''}`.trim();
+  if (!transcript) return;
+  voiceTranscript.value = transcript;
+  voiceStatus.value = payload.isFinal ? 'Tarea detectada.' : 'Escuchando...';
+}
+
+function handleVoiceWaveformUpdate(nextWaveform = []) {
+  voiceWaveform.value = Array.isArray(nextWaveform) && nextWaveform.length
+    ? nextWaveform
+    : Array.from({ length: 18 }, () => 0.12);
+}
+
+function handleVoiceStateUpdate(nextState) {
+  voiceState.value = nextState || VOICE_CAPTURE_STATES.IDLE;
+}
+
+async function syncVoiceSupport() {
+  try {
+    voiceSupported.value = await voiceTaskCaptureService.isSupported();
+  } catch {
+    voiceSupported.value = false;
+  } finally {
+    voiceCapabilityChecked.value = true;
+  }
+}
+
+async function startVoiceCapture() {
+  if (!props.voiceCaptureEnabled) {
+    emit('request-upgrade', ENTITLEMENT_KEYS.VOICE_CAPTURE);
+    return;
+  }
+
+  if (screenshotBusy.value) return;
+  if (voiceCaptureActive.value) return;
+
+  if (!voiceCapabilityChecked.value) {
+    await syncVoiceSupport();
+  }
+
+  if (!voiceSupported.value) {
+    voiceError.value = 'La captura por voz no esta disponible en este dispositivo o navegador.';
+    return;
+  }
+
+  resetVoiceFeedback();
+  voiceStatus.value = 'Preparando microfono...';
+  const session = voiceTaskCaptureService.createSession({
+    onStateChange: handleVoiceStateUpdate,
+    onTranscript: handleVoiceTranscriptUpdate,
+    onWaveform: handleVoiceWaveformUpdate,
+  });
+
+  voiceSession.value = session;
+
+  try {
+    await session.start();
+    voiceStatus.value = 'Habla ahora. Cuando detengas, ListEA guarda la tarea.';
+  } catch (error) {
+    voiceSession.value = null;
+    voiceState.value = VOICE_CAPTURE_STATES.ERROR;
+    voiceError.value = error?.message || 'No pudimos iniciar la captura por voz.';
+  }
+}
+
+async function stopVoiceCapture() {
+  if (!voiceSession.value) return;
+
+  try {
+    const result = await voiceSession.value.stop();
+    voiceStatus.value = 'Tarea guardada desde voz.';
+    emit('voice-add', result);
+  } catch (error) {
+    voiceError.value = error?.message || 'No pudimos guardar la tarea por voz.';
+  } finally {
+    voiceSession.value = null;
+    if (voiceState.value !== VOICE_CAPTURE_STATES.ERROR) {
+      voiceState.value = VOICE_CAPTURE_STATES.IDLE;
+    }
+  }
+}
+
+async function cancelVoiceCapture() {
+  if (voiceSession.value) {
+    await voiceSession.value.cancel();
+  }
+  voiceSession.value = null;
+  voiceState.value = VOICE_CAPTURE_STATES.IDLE;
+  resetVoiceFeedback();
+}
+
+async function handleVoiceCaptureButton() {
+  if (voiceCaptureActive.value) {
+    await stopVoiceCapture();
+    return;
+  }
+
+  await startVoiceCapture();
+}
+
+function openVoiceDraftFallback() {
+  const interpreted = interpreter.interpret(voiceTranscript.value);
+  openComposerWithDraft({
+    ...interpreted,
+    title: interpreted.title || voiceTranscript.value.trim(),
+    source: CAPTURE_SOURCES.VOICE,
+  });
+  voiceError.value = '';
+  voiceStatus.value = 'Borrador abierto para que ajustes los detalles.';
 }
 
 function onSubmit() {
@@ -446,8 +651,17 @@ function onSubmit() {
 
 defineExpose({
   openComposer,
+  openComposerWithDraft,
   closeComposer,
   focusTitleField,
+});
+
+onMounted(() => {
+  syncVoiceSupport();
+});
+
+onBeforeUnmount(() => {
+  voiceSession.value?.cancel?.();
 });
 </script>
 
@@ -473,6 +687,14 @@ defineExpose({
       >
         {{ screenshotButtonLabel }}
       </button>
+      <button
+        type="button"
+        class="launcherSecondaryButton"
+        :disabled="screenshotBusy || voiceState === VOICE_CAPTURE_STATES.STARTING || voiceState === VOICE_CAPTURE_STATES.STOPPING"
+        @click="handleVoiceCaptureButton"
+      >
+        {{ voiceButtonLabel }}
+      </button>
 
       <div v-if="showScreenshotFeedback" class="screenshotFeedback" :class="{ error: screenshotError }" aria-live="polite">
         <div class="screenshotFeedbackMeta">
@@ -492,6 +714,14 @@ defineExpose({
           <h2>Escribe como si fuera una nota.</h2>
         </div>
         <div class="composerHeadingActions">
+          <button
+            type="button"
+            class="ghostButton"
+            :disabled="screenshotBusy || voiceState === VOICE_CAPTURE_STATES.STARTING || voiceState === VOICE_CAPTURE_STATES.STOPPING"
+            @click="handleVoiceCaptureButton"
+          >
+            {{ voiceButtonLabel }}
+          </button>
           <button type="button" class="ghostButton" :disabled="screenshotBusy" @click="openScreenshotPicker">
             Screenshot
           </button>
@@ -690,6 +920,52 @@ defineExpose({
     </section>
   </transition>
 
+  <section v-if="showVoiceFeedback" class="voiceFeedback" :class="{ error: voiceStatusTone === 'error' }" aria-live="polite">
+    <div class="voiceFeedbackHeader">
+      <div>
+        <p class="eyebrow">Voz</p>
+        <strong>{{ voiceError || voiceStatus || 'ListEA escuchando...' }}</strong>
+      </div>
+      <div class="voiceFeedbackActions">
+        <button
+          v-if="voiceCaptureActive"
+          type="button"
+          class="submitButton voiceActionButton"
+          @click="stopVoiceCapture"
+        >
+          Detener
+        </button>
+        <button
+          v-if="voiceCaptureActive"
+          type="button"
+          class="ghostButton voiceActionButton"
+          @click="cancelVoiceCapture"
+        >
+          Cancelar
+        </button>
+        <button
+          v-if="voiceCanOpenDraft"
+          type="button"
+          class="ghostButton voiceActionButton"
+          @click="openVoiceDraftFallback"
+        >
+          Abrir borrador
+        </button>
+      </div>
+    </div>
+
+    <div class="voiceWaveform" aria-hidden="true">
+      <span
+        v-for="(bar, index) in voiceWaveform"
+        :key="`wave-${index}`"
+        class="voiceWaveBar"
+        :style="{ transform: `scaleY(${bar})` }"
+      />
+    </div>
+
+    <p v-if="voiceTranscript" class="voiceTranscript">{{ voiceTranscript }}</p>
+  </section>
+
   <input
     ref="screenshotInput"
     class="hiddenScreenshotInput"
@@ -705,8 +981,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px 18px;
-  border-radius: 28px;
+  padding: clamp(18px, 4vw, 34px);
+  border-radius: 30px;
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--card-shadow);
@@ -714,8 +990,8 @@ defineExpose({
 
 .launcherPrimaryButton,
 .launcherSecondaryButton {
-  margin: 0.5rem;
-  width: clamp(180px, 50%, 320px);
+  margin: 0.35rem auto;
+  width: min(100%, 420px);
   align-self: center;
   align-items: center;
   justify-content: center;
@@ -884,6 +1160,69 @@ defineExpose({
   transition: width 180ms ease;
 }
 
+.voiceFeedback {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0 0;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  background: transparent;
+  box-shadow: none;
+}
+
+.voiceFeedback.error {
+  border-color: color-mix(in srgb, #8b3a21 34%, var(--line));
+}
+
+.voiceFeedbackHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.voiceFeedbackHeader strong,
+.voiceTranscript {
+  display: block;
+  text-align: left;
+}
+
+.voiceFeedbackActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voiceActionButton {
+  min-height: 40px;
+  padding-inline: 14px;
+}
+
+.voiceWaveform {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  gap: 6px;
+  align-items: end;
+  min-height: 58px;
+}
+
+.voiceWaveBar {
+  height: 100%;
+  min-height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 62%, white), var(--accent));
+  transform-origin: center bottom;
+  transition: transform 120ms ease;
+}
+
+.voiceTranscript {
+  margin: 0;
+  color: var(--text-main);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .advancedPanel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -983,7 +1322,7 @@ defineExpose({
 @media (max-width: 960px) {
   .launcherPrimaryButton,
   .launcherSecondaryButton {
-    width: min(60%, 280px);
+    width: min(100%, 360px);
   }
 }
 
@@ -991,8 +1330,8 @@ defineExpose({
   .launcherCard,
   .composerCard {
     gap: 12px;
-    padding: 12px;
-    border-radius: 18px;
+    padding: 16px 14px;
+    border-radius: 24px;
   }
 
   .primaryField {
@@ -1002,7 +1341,8 @@ defineExpose({
   .composerHeading,
   .composerActions,
   .advancedPanel,
-  .composerHeadingActions {
+  .composerHeadingActions,
+  .voiceFeedbackHeader {
     grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
@@ -1031,6 +1371,14 @@ defineExpose({
   .templateChip,
   .previewChip {
     flex: 0 0 auto;
+  }
+
+  .voiceFeedbackActions {
+    width: 100%;
+  }
+
+  .voiceFeedbackActions button {
+    flex: 1 1 0;
   }
 
   .helperText {

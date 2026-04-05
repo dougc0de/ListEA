@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AddTask from './AddTask.vue';
 import ProductivityDashboard from './ProductivityDashboard.vue';
+import TaskCalendar from './TaskCalendar.vue';
 import TodoList from './TodoList.vue';
 import {
   cancelReminder,
@@ -84,9 +85,10 @@ const searchQuery = ref('');
 const mounted = ref(false);
 const avatarSnippet = ref(null);
 const uiFeedback = ref(null);
+const editingTaskId = ref('');
 const upgradePrompt = ref(null);
-const backlogCompletedOpen = ref(true);
 const addTaskRef = ref(null);
+const calendarRef = ref(null);
 const searchInputRef = ref(null);
 const focusListPanelRef = ref(null);
 const reviewPanelRef = ref(null);
@@ -125,12 +127,16 @@ const UPGRADE_COPY = Object.freeze({
     title: 'ListEA Pro desbloquea panel avanzado',
     message: 'Los rangos personalizados y la lectura semanal viven solo en tu dispositivo y forman parte de ListEA Pro.',
   },
+  [ENTITLEMENT_KEYS.PREMIUM_CALENDAR]: {
+    title: 'ListEA Pro desbloquea el calendario profesional',
+    message: 'Vista mensual, carga diaria y seguimiento visual viven solo en tu dispositivo y forman parte de ListEA Pro.',
+  },
   [ENTITLEMENT_KEYS.PDF_EXPORT]: {
     title: 'ListEA Pro desbloquea el PDF local',
     message: 'El reporte PDF se genera localmente y esta incluido en ListEA Pro.',
   },
   [ENTITLEMENT_KEYS.PREMIUM_INSIGHTS]: {
-    title: 'ListEA Pro desbloquea insights del backlog',
+    title: 'ListEA Pro desbloquea insights del calendario',
     message: 'La lectura automatica de saturacion, duplicados y tareas sin decision forma parte de ListEA Pro.',
   },
   [ENTITLEMENT_KEYS.ADVANCED_REMINDERS]: {
@@ -153,6 +159,10 @@ const UPGRADE_COPY = Object.freeze({
     title: 'ListEA Pro desbloquea apertura inteligente de apps',
     message: 'ListEA Pro detecta apps compatibles instaladas y las abre directamente desde tus tareas y recordatorios.',
   },
+  [ENTITLEMENT_KEYS.VOICE_CAPTURE]: {
+    title: 'ListEA Pro desbloquea voz a tarea',
+    message: 'Hablas, ListEA estructura la tarea localmente y la deja lista para editar o ejecutar desde tu telefono.',
+  },
 });
 const FOLLOW_UP_TASK_ACTIONS = Object.freeze([
   { id: 'follow-up-tomorrow', label: 'Manana', tone: 'ghost' },
@@ -160,10 +170,12 @@ const FOLLOW_UP_TASK_ACTIONS = Object.freeze([
   { id: 'follow-up-next-week', label: 'Prox. semana', tone: 'ghost' },
   { id: 'follow-up-resolved', label: 'Resuelto', tone: 'primary' },
 ]);
+const calendarPreviewDays = Object.freeze(Array.from({ length: 35 }, (_, index) => index + 1));
 
 let avatarSnippetTimerId = 0;
 let avatarSnippetHideTimerId = 0;
 let uiFeedbackTimerId = 0;
+let taskFocusTimerId = 0;
 
 function sortTasksByRelevance(list) {
   return list.slice().sort((left, right) => {
@@ -271,7 +283,7 @@ function resolveTaskWorkspaceView(task) {
   const preferredFilter = visibilityPlanner.getPreferredFilter(task, {
     referenceDate: new Date(),
   });
-  return preferredFilter ? 'today' : 'backlog';
+  return preferredFilter ? 'today' : 'calendar';
 }
 
 function loadState() {
@@ -289,13 +301,14 @@ function persistState() {
   });
 }
 
-function addTask(payload) {
+function addTask(payload, { message = '', action = null } = {}) {
   const task = taskFactory.create(payload);
-  if (!task.title) return;
+  if (!task.title) return null;
 
   tasks.value = [task, ...tasks.value];
-  showUiFeedback(`Tarea "${task.title}" guardada.`, 'success');
+  showUiFeedback(message || `Tarea "${task.title}" guardada.`, 'success', action);
   revealTask(task);
+  return task;
 }
 
 function captureTaskFromExternalSource(text, metadata = {}) {
@@ -584,6 +597,10 @@ function openComposerFromShortcut() {
   addTaskRef.value?.openComposer?.();
 }
 
+function openComposerFromCalendar(draft = {}) {
+  addTaskRef.value?.openComposerWithDraft?.(draft);
+}
+
 function resolvePrimaryLaunchSuggestion(task) {
   return taskAppLaunchService.resolvePrimary(task);
 }
@@ -614,13 +631,19 @@ function clearUiFeedbackTimer() {
   uiFeedbackTimerId = 0;
 }
 
+function clearTaskFocusTimer() {
+  if (!taskFocusTimerId || typeof window === 'undefined') return;
+  window.clearTimeout(taskFocusTimerId);
+  taskFocusTimerId = 0;
+}
+
 function dismissUiFeedback() {
   clearUiFeedbackTimer();
   uiFeedback.value = null;
 }
 
-function showUiFeedback(message, tone = 'success') {
-  uiFeedback.value = { message, tone };
+function showUiFeedback(message, tone = 'success', action = null) {
+  uiFeedback.value = { message, tone, action };
   clearUiFeedbackTimer();
 
   if (typeof window === 'undefined') return;
@@ -630,12 +653,68 @@ function showUiFeedback(message, tone = 'success') {
   }, 4200);
 }
 
+function focusTaskCard(taskId, { edit = false, attempt = 0 } = {}) {
+  if (typeof document === 'undefined' || !taskId) return;
+
+  const taskCard = document.querySelector(`[data-task-id="${taskId}"]`);
+  if (!taskCard) {
+    if (attempt >= 4 || typeof window === 'undefined') return;
+    taskFocusTimerId = window.setTimeout(() => {
+      taskFocusTimerId = 0;
+      focusTaskCard(taskId, {
+        edit,
+        attempt: attempt + 1,
+      });
+    }, 140);
+    return;
+  }
+
+  taskCard.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+  });
+
+  if (edit && typeof window !== 'undefined') {
+    editingTaskId.value = taskId;
+    window.setTimeout(() => {
+      if (editingTaskId.value === taskId) {
+        editingTaskId.value = '';
+      }
+    }, 260);
+  }
+}
+
+function scheduleTaskFocus(taskId, { edit = false } = {}) {
+  if (!taskId || typeof window === 'undefined') return;
+  clearTaskFocusTimer();
+  taskFocusTimerId = window.setTimeout(async () => {
+    taskFocusTimerId = 0;
+    await nextTick();
+    focusTaskCard(taskId, { edit });
+  }, 140);
+}
+
+function handleUiFeedbackAction() {
+  const action = uiFeedback.value?.action;
+  if (!action) return;
+
+  if (action.id === 'edit-task') {
+    focusTaskById(action.taskId, action.preferredView, {
+      edit: true,
+      showFeedback: false,
+    });
+  }
+
+  dismissUiFeedback();
+}
+
 function revealTask(task) {
   searchQuery.value = '';
   const targetView = resolveTaskWorkspaceView(task);
 
   if (targetView === 'follow-up') {
     emit('navigate', targetView);
+    scheduleTaskFocus(task.id);
     return;
   }
 
@@ -648,13 +727,15 @@ function revealTask(task) {
       activeFilterId.value = nextFilter;
     }
     emit('navigate', 'today');
+    scheduleTaskFocus(task.id);
     return;
   }
 
-  emit('navigate', 'backlog');
+  emit('navigate', 'calendar');
+  scheduleTaskFocus(task.id);
 }
 
-function focusTaskById(taskId, preferredView = '') {
+function focusTaskById(taskId, preferredView = '', { edit = false, showFeedback = true } = {}) {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
 
@@ -671,7 +752,34 @@ function focusTaskById(taskId, preferredView = '') {
   }
 
   emit('navigate', targetView || 'today');
-  showUiFeedback(`Abriendo "${task.title}".`, 'info');
+  scheduleTaskFocus(taskId, { edit });
+  if (showFeedback) {
+    showUiFeedback(`Abriendo "${task.title}".`, 'info');
+  }
+}
+
+function handleVoiceCaptured(result = {}) {
+  const draft = result?.draft ?? null;
+  if (!draft?.title) {
+    showUiFeedback('No pudimos guardar una tarea clara desde la voz.', 'error');
+    return;
+  }
+
+  const task = addTask(draft, {
+    message: `Tarea "${draft.title}" guardada desde voz.`,
+  });
+  if (!task) return;
+
+  showUiFeedback(
+    `Tarea "${task.title}" guardada desde voz.`,
+    'success',
+    {
+      id: 'edit-task',
+      label: 'Editar detalles',
+      taskId: task.id,
+      preferredView: resolveTaskWorkspaceView(task),
+    },
+  );
 }
 
 function updateTaskWithDate(task, nextDate, feedbackMessage) {
@@ -857,7 +965,10 @@ function moveReminderTaskToTomorrow(taskId) {
   dismissAvatarSnippet({ reschedule: true });
 }
 
-async function openTaskLaunch(task, suggestionId = '', { showPremiumHint = true } = {}) {
+async function openTaskLaunch(task, suggestionId = '', {
+  showPremiumHint = true,
+  userInitiated = false,
+} = {}) {
   if (!task) {
     return { completed: false, mode: 'none', suggestion: null };
   }
@@ -866,6 +977,7 @@ async function openTaskLaunch(task, suggestionId = '', { showPremiumHint = true 
   const result = await taskAppLaunchService.open(task, {
     suggestionId,
     premiumEnabled,
+    userInitiated,
   });
 
   if (result.completed && result.suggestion) {
@@ -881,13 +993,13 @@ async function openTaskLaunch(task, suggestionId = '', { showPremiumHint = true 
   }
 
   if (result.completed && ['fallback', 'web'].includes(result.mode)) {
-    if (!premiumEnabled && result.suggestion?.supportsNativeLaunch() && showPremiumHint) {
+    if (!premiumEnabled && !userInitiated && result.suggestion?.supportsNativeLaunch() && showPremiumHint) {
       requestUpgrade(ENTITLEMENT_KEYS.SMART_APP_LAUNCH);
     }
     return result;
   }
 
-  if (!premiumEnabled && result.suggestion?.supportsNativeLaunch()) {
+  if (!premiumEnabled && !userInitiated && result.suggestion?.supportsNativeLaunch()) {
     if (showPremiumHint) {
       requestUpgrade(ENTITLEMENT_KEYS.SMART_APP_LAUNCH);
     }
@@ -904,6 +1016,7 @@ async function openReminderPrimaryAction(taskId, preferredView = '') {
   const primarySuggestion = resolvePrimaryLaunchSuggestion(task);
   const result = await openTaskLaunch(task, primarySuggestion?.id ?? '', {
     showPremiumHint: false,
+    userInitiated: true,
   });
   if (result.completed) {
     dismissAvatarSnippet({ reschedule: false });
@@ -917,7 +1030,9 @@ async function handleTaskLaunchRequest({ taskId, suggestionId }) {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
 
-  const result = await openTaskLaunch(task, suggestionId);
+  const result = await openTaskLaunch(task, suggestionId, {
+    userInitiated: true,
+  });
   if (!result.completed) {
     showUiFeedback(`No fue posible abrir una app para "${task.title}".`, 'error');
   }
@@ -1166,7 +1281,7 @@ function handleLaunchIntent(intent) {
 
 const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
 const effectiveAvatarPreferences = computed(() => buildEffectiveAvatarPreferences());
-const showTaskWorkspace = computed(() => ['today', 'follow-up', 'backlog'].includes(resolvedView.value));
+const showTaskWorkspace = computed(() => ['today', 'follow-up', 'calendar'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
 const focusTasks = computed(() =>
   sortTasksByRelevance(openTasks.value.filter(task => resolveTaskWorkspaceView(task) === 'today')),
@@ -1209,7 +1324,7 @@ const filteredTasks = computed(() => {
   });
   return sortTasksByRelevance(applySearch(filtered));
 });
-const agendaTasks = computed(() => sortTasksByRelevance(applySearch(openTasks.value)));
+const calendarSourceTasks = computed(() => applySearch(tasks.value));
 const professionalReviewItems = computed(() => professionalReviewAnalyzer.analyze(openTasks.value, {
   referenceDate: new Date(),
 }));
@@ -1240,6 +1355,7 @@ const summary = computed(() => ({
   today: filterService.apply(focusTasks.value, FILTER_IDS.TODAY, { referenceDate: new Date() }).length,
   followUp: followUpTasks.value.length,
   blocked: openTasks.value.filter(task => task.status === TASK_STATUS.BLOCKED).length,
+  withoutDate: openTasks.value.filter(task => !task.getRelevantDate()).length,
 }));
 const heroCopy = computed(() => {
   if (resolvedView.value === 'follow-up') {
@@ -1250,11 +1366,11 @@ const heroCopy = computed(() => {
     };
   }
 
-  if (resolvedView.value === 'backlog') {
+  if (resolvedView.value === 'calendar') {
     return {
-      eyebrow: 'Agenda',
-      title: 'Ordena tu agenda sin perder contexto.',
-      description: 'Backlog vivo, privado y listo para decidir.',
+      eyebrow: 'Calendario',
+      title: 'Planifica semana y mes sin perder seguimiento.',
+      description: 'Fechas objetivo, follow-ups y cierres en un calendario privado.',
     };
   }
 
@@ -1270,6 +1386,14 @@ const summaryCards = computed(() => {
       { id: 'followUp', label: 'Seguimientos', value: summary.value.followUp },
       { id: 'blocked', label: 'Bloqueadas', value: summary.value.blocked },
       { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
+    ];
+  }
+
+  if (resolvedView.value === 'calendar') {
+    return [
+      { id: 'pending', label: 'Abiertas', value: summary.value.pending },
+      { id: 'followUp', label: 'Seguimientos', value: summary.value.followUp },
+      { id: 'withoutDate', label: 'Sin fecha', value: summary.value.withoutDate },
     ];
   }
 
@@ -1291,14 +1415,22 @@ const viewQuickActions = computed(() => {
     return [
       { id: 'search', label: 'Buscar' },
       { id: 'review', label: 'Revision' },
-      { id: 'open-backlog', label: 'Agenda' },
+      { id: 'open-calendar', label: 'Calendario' },
     ];
   }
 
-  if (resolvedView.value === 'backlog') {
+  if (resolvedView.value === 'calendar') {
+    if (!hasFeature(ENTITLEMENT_KEYS.PREMIUM_CALENDAR)) {
+      return [
+        { id: 'upgrade-calendar', label: 'ListEA Pro' },
+        { id: 'search', label: 'Buscar' },
+        { id: 'open-dashboard', label: 'Panel' },
+      ];
+    }
+
     return [
+      { id: 'calendar-today', label: 'Hoy' },
       { id: 'search', label: 'Buscar' },
-      { id: 'review', label: 'Revision' },
       { id: 'open-dashboard', label: 'Panel' },
     ];
   }
@@ -1320,6 +1452,16 @@ function handleQuickAction(actionId) {
     return;
   }
 
+  if (actionId === 'calendar-today') {
+    if (!hasFeature(ENTITLEMENT_KEYS.PREMIUM_CALENDAR)) {
+      requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_CALENDAR);
+      return;
+    }
+
+    calendarRef.value?.goToToday?.();
+    return;
+  }
+
   if (actionId === 'search') {
     focusSearchField();
     return;
@@ -1336,8 +1478,13 @@ function handleQuickAction(actionId) {
     return;
   }
 
-  if (actionId === 'open-backlog') {
-    emit('navigate', 'backlog');
+  if (actionId === 'open-calendar') {
+    emit('navigate', 'calendar');
+    return;
+  }
+
+  if (actionId === 'upgrade-calendar') {
+    requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_CALENDAR);
     return;
   }
 
@@ -1408,6 +1555,7 @@ onBeforeUnmount(() => {
   clearAvatarSnippetTimer();
   clearAvatarSnippetHideTimer();
   clearUiFeedbackTimer();
+  clearTaskFocusTimer();
 });
 </script>
 
@@ -1438,7 +1586,14 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <AddTask v-if="showTaskWorkspace" ref="addTaskRef" @add="addTask" />
+    <AddTask
+      v-if="showTaskWorkspace"
+      ref="addTaskRef"
+      :voice-capture-enabled="hasFeature(ENTITLEMENT_KEYS.VOICE_CAPTURE)"
+      @add="addTask"
+      @voice-add="handleVoiceCaptured"
+      @request-upgrade="requestUpgrade"
+    />
 
     <transition name="timeSwap">
       <div
@@ -1449,9 +1604,19 @@ onBeforeUnmount(() => {
         role="status"
       >
         <p>{{ uiFeedback.message }}</p>
-        <button type="button" class="ghostButton feedbackClose" @click="dismissUiFeedback">
-          Cerrar
-        </button>
+        <div class="feedbackActions">
+          <button
+            v-if="uiFeedback.action"
+            type="button"
+            class="ghostButton"
+            @click="handleUiFeedbackAction"
+          >
+            {{ uiFeedback.action.label }}
+          </button>
+          <button type="button" class="ghostButton feedbackClose" @click="dismissUiFeedback">
+            Cerrar
+          </button>
+        </div>
       </div>
     </transition>
 
@@ -1562,6 +1727,7 @@ onBeforeUnmount(() => {
           <div :key="selectedTimeFilter.id" class="focusListWrap">
             <TodoList
               :todos="filteredTasks"
+              :editing-task-id="editingTaskId"
               :empty-message="focusEmptyMessage"
               @toggle="toggleTask"
               @remove="removeTask"
@@ -1587,6 +1753,7 @@ onBeforeUnmount(() => {
 
         <TodoList
           :todos="completedTasks"
+          :editing-task-id="editingTaskId"
           empty-message="Todavia no hay tareas completadas."
           @toggle="toggleTask"
           @remove="removeTask"
@@ -1611,6 +1778,7 @@ onBeforeUnmount(() => {
         <p class="panelText">Todo lo que espera respuesta o nueva fecha vive aqui.</p>
         <TodoList
           :todos="followUpTasks"
+          :editing-task-id="editingTaskId"
           :task-actions="FOLLOW_UP_TASK_ACTIONS"
           empty-message="No hay seguimientos ni bloqueos pendientes."
           @toggle="toggleTask"
@@ -1644,81 +1812,91 @@ onBeforeUnmount(() => {
       </article>
     </section>
 
-    <section v-else-if="resolvedView === 'backlog'" class="backlogGrid">
-      <article ref="reviewPanelRef" class="panelCard insightsPanel">
-        <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Agenda</p>
-            <h3>Senales que conviene resolver primero</h3>
-          </div>
-        </div>
-
-        <div v-if="visibleBacklogInsights.length" class="insightList">
-          <article v-for="insight in visibleBacklogInsights" :key="insight.id" class="insightCard">
-            <strong>{{ insight.title }}</strong>
-            <p>{{ insight.message }}</p>
-          </article>
-        </div>
-        <div v-else-if="backlogInsights.length" class="upgradePanel">
-          <strong>ListEA Pro lee tu backlog sin sacar datos del dispositivo.</strong>
-          <p class="panelText">Detecta duplicados y tareas sin decision, siempre en local.</p>
-          <button type="button" class="ghostButton" @click="requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS)">
-            Ver ListEA Pro
-          </button>
-        </div>
-        <p v-else class="emptyText">No hay alertas relevantes en la agenda.</p>
-      </article>
-
-      <article class="panelCard">
-        <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Agenda</p>
-            <h3>Tareas activas ordenadas por fecha y prioridad</h3>
-          </div>
-          <div class="headerActions">
-            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
-          </div>
-        </div>
-
-        <TodoList
-          :todos="agendaTasks"
-          empty-message="No hay tareas activas en tu agenda."
+    <section v-else-if="resolvedView === 'calendar'" class="calendarGridView">
+      <template v-if="hasFeature(ENTITLEMENT_KEYS.PREMIUM_CALENDAR)">
+        <TaskCalendar
+          ref="calendarRef"
+          :tasks="calendarSourceTasks"
+          :editing-task-id="editingTaskId"
           @toggle="toggleTask"
           @remove="removeTask"
           @update="updateTask"
           @toggle-subtask="toggleSubtask"
           @open-external="handleTaskLaunchRequest"
+          @create-on-date="openComposerFromCalendar"
         />
-      </article>
 
-      <article class="panelCard">
-        <div class="sectionHeader">
-          <div class="headerToggleWrap">
-            <button
-              type="button"
-              class="sectionToggle"
-              :aria-expanded="backlogCompletedOpen ? 'true' : 'false'"
-              @click="backlogCompletedOpen = !backlogCompletedOpen"
-            >
-              <span class="eyebrow">Completadas recientes</span>
-              <span class="sectionToggleTitle">Completadas recientes</span>
-            </button>
-            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
+        <article
+          v-if="visibleBacklogInsights.length"
+          ref="reviewPanelRef"
+          class="panelCard insightsPanel"
+        >
+          <div class="sectionHeader">
+            <div>
+              <p class="eyebrow">Lectura del calendario</p>
+              <h3>Senales que conviene resolver primero</h3>
+            </div>
           </div>
-          <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
+
+          <div class="insightList">
+            <article v-for="insight in visibleBacklogInsights" :key="insight.id" class="insightCard">
+              <strong>{{ insight.title }}</strong>
+              <p>{{ insight.message }}</p>
+            </article>
+          </div>
+        </article>
+      </template>
+
+      <article v-else class="panelCard calendarUpgradeCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Calendario premium</p>
+            <h3>Planifica semana y mes desde una vista visual</h3>
+          </div>
         </div>
 
-        <div v-if="backlogCompletedOpen">
-          <p class="panelText recentCompletedLabel">Lista reciente de tareas completadas</p>
-          <TodoList
-            :todos="completedTasks"
-            empty-message="Todavia no hay tareas completadas."
-            @toggle="toggleTask"
-            @remove="removeTask"
-            @update="updateTask"
-            @toggle-subtask="toggleSubtask"
-            @open-external="handleTaskLaunchRequest"
-          />
+        <p class="panelText">
+          ListEA Pro desbloquea un calendario local con carga diaria, seguimientos y cierres para que organices sin salir del dispositivo.
+        </p>
+
+        <div class="calendarPreviewCard" aria-hidden="true">
+          <div class="calendarPreviewHead">
+            <strong>Abril 2026</strong>
+            <span>Vista mensual</span>
+          </div>
+          <div class="calendarPreviewWeekdays">
+            <span>Lun</span>
+            <span>Mar</span>
+            <span>Mie</span>
+            <span>Jue</span>
+            <span>Vie</span>
+            <span>Sab</span>
+            <span>Dom</span>
+          </div>
+          <div class="calendarPreviewDays">
+            <span
+              v-for="day in calendarPreviewDays"
+              :key="day"
+              class="calendarPreviewDay"
+              :class="{ active: [8, 11, 15, 19, 24].includes(day) }"
+            >
+              {{ day }}
+            </span>
+          </div>
+        </div>
+
+        <div class="calendarBenefitList">
+          <span class="previewChip">Mes completo en un vistazo</span>
+          <span class="previewChip">Seguimientos visibles</span>
+          <span class="previewChip">Nueva tarea desde un dia</span>
+        </div>
+
+        <div class="upgradePanel compactUpgrade">
+          <strong>ListEA Pro convierte tu backlog en calendario de trabajo.</strong>
+          <p class="panelText">Tu planeacion, ritmo mensual y seguimiento viven localmente.</p>
+          <button type="button" class="primaryButton" @click="requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_CALENDAR)">
+            Ver ListEA Pro
+          </button>
         </div>
       </article>
     </section>
@@ -1754,7 +1932,7 @@ onBeforeUnmount(() => {
               {{ isProActive ? 'Pago unico local preparado para este dispositivo.' : 'Tus tareas siguen completas y privadas en el plan Free.' }}
             </span>
           </div>
-          <p class="panelText">Pro suma revision avanzada, avisos, apertura inteligente, paletas y respaldo cifrado.</p>
+          <p class="panelText">Pro suma calendario premium, revision avanzada, avisos, apertura inteligente, voz a tarea, paletas y respaldo cifrado.</p>
           <div class="buttonRow">
             <button v-if="!isProActive" type="button" class="primaryButton" @click="activateProLocally">
               Activar ListEA Pro local
@@ -1984,31 +2162,30 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .tasksShell {
-  width: min(100%, 960px);
-  margin: 0 auto 20px;
+  width: 100%;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--section-gap);
+  padding-inline: var(--shell-pad-inline);
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
 .topBar,
 .panelCard {
-  border-radius: 28px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  box-shadow: var(--card-shadow);
-  overflow: hidden;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .topBar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
   gap: 14px;
-  padding: 16px;
-  background:
-    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%),
-    var(--surface);
+  padding: 8px 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
 }
 
 .topCopy {
@@ -2018,7 +2195,7 @@ onBeforeUnmount(() => {
 }
 
 .topHint {
-  max-width: 36ch;
+  max-width: 52ch;
 }
 
 .topCopy h1,
@@ -2049,13 +2226,13 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
   line-height: 1.45;
   text-wrap: pretty;
-  max-width: 60ch;
+  max-width: 72ch;
 }
 
 .topStats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 12px;
   align-self: stretch;
   grid-auto-rows: 1fr;
 }
@@ -2071,8 +2248,8 @@ onBeforeUnmount(() => {
   min-height: 40px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  background: color-mix(in srgb, var(--surface) 58%, transparent);
   color: var(--text-main);
 }
 
@@ -2081,24 +2258,25 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 88%, white);
-  box-shadow: var(--card-shadow);
-  backdrop-filter: blur(12px);
+  padding: 2px 0 0 16px;
+  border-radius: 0;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .feedbackBanner[data-tone='success'] {
-  border-color: color-mix(in srgb, #5f8d64 34%, var(--line));
+  border-left-color: color-mix(in srgb, #5f8d64 48%, var(--line));
 }
 
 .feedbackBanner[data-tone='error'] {
-  border-color: color-mix(in srgb, #de6f4d 38%, var(--line));
+  border-left-color: color-mix(in srgb, #de6f4d 52%, var(--line));
 }
 
 .feedbackBanner[data-tone='info'] {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  border-left-color: color-mix(in srgb, var(--accent) 56%, var(--line));
 }
 
 .feedbackBanner p {
@@ -2107,15 +2285,23 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.feedbackActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .upgradeBanner,
 .upgradePanel {
   display: grid;
   gap: 12px;
-  padding: 14px 16px;
-  border-radius: 20px;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
-  background: color-mix(in srgb, var(--surface) 86%, white);
-  box-shadow: var(--card-shadow);
+  padding: 14px 0 0;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: transparent;
+  box-shadow: none;
 }
 
 .upgradeBanner strong,
@@ -2163,11 +2349,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  gap: 2px;
-  min-height: 76px;
-  padding: 12px;
-  border-radius: 18px;
-  background: var(--surface-soft);
+  gap: 4px;
+  min-height: 88px;
+  padding: 16px 18px;
+  border-radius: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+  background: color-mix(in srgb, white 94%, var(--surface));
+  box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
   text-align: left;
 }
 
@@ -2289,10 +2477,11 @@ onBeforeUnmount(() => {
   position: sticky;
   top: calc(62px + env(safe-area-inset-top));
   z-index: 18;
-  padding: 8px;
-  border-radius: 22px;
-  border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  padding: 10px 0 12px;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: color-mix(in srgb, var(--app-bg-solid) 72%, transparent);
   backdrop-filter: blur(14px);
 }
 
@@ -2305,19 +2494,16 @@ onBeforeUnmount(() => {
 }
 
 .timeFilterTile {
-  min-height: 82px;
-  border-radius: 20px;
-  border: 1px solid var(--line);
-}
-
-.timeFilterTile {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
   gap: 10px;
-  padding: 14px;
-  background: var(--surface-soft);
+  min-height: 72px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
   color: var(--text-main);
   text-align: left;
 }
@@ -2340,7 +2526,7 @@ onBeforeUnmount(() => {
 }
 
 .timeFilterTile.active {
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
   border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
 }
 
@@ -2376,7 +2562,7 @@ onBeforeUnmount(() => {
 
 .focusBoardGrid,
 .workflowGrid,
-.backlogGrid,
+.calendarGridView,
 .dashboardGrid,
 .settingsGrid {
   display: grid;
@@ -2391,8 +2577,8 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
 }
 
-.backlogGrid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.calendarGridView {
+  grid-template-columns: 1fr;
 }
 
 .dashboardGrid {
@@ -2404,7 +2590,75 @@ onBeforeUnmount(() => {
 }
 
 .panelCard {
-  padding: 18px;
+  padding: 4px 0 0;
+}
+
+.calendarUpgradeCard {
+  display: grid;
+  gap: 16px;
+  background: transparent;
+}
+
+.calendarPreviewCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0 0;
+  border-radius: 24px;
+  border: 0;
+  background: transparent;
+}
+
+.calendarPreviewHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.calendarPreviewHead span {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.calendarPreviewWeekdays,
+.calendarPreviewDays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.calendarPreviewWeekdays {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.calendarPreviewDay {
+  min-height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 8%, var(--line));
+  background: color-mix(in srgb, var(--surface) 92%, white);
+  font-weight: 600;
+}
+
+.calendarPreviewDay.active {
+  background: color-mix(in srgb, var(--accent) 14%, white);
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+}
+
+.calendarBenefitList {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.compactUpgrade {
+  display: grid;
+  gap: 10px;
 }
 
 .laneHeader,
@@ -2495,7 +2749,7 @@ onBeforeUnmount(() => {
   min-height: 62px;
   gap: 6px;
   padding: 10px 12px;
-  background: color-mix(in srgb, var(--surface-soft) 82%, white);
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, var(--line));
 }
 
@@ -2522,9 +2776,10 @@ onBeforeUnmount(() => {
 }
 
 .insightCard {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: var(--surface-soft);
+  padding: 14px 0 0;
+  border-radius: 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: transparent;
 }
 
 .reviewCard {
@@ -2532,10 +2787,11 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
-  background: color-mix(in srgb, var(--surface-soft) 88%, white);
+  padding: 14px 0 0;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: transparent;
 }
 
 .reviewCard button {
@@ -2594,8 +2850,8 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   border-radius: 18px;
-  border: 1px solid var(--line);
-  background: var(--surface-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
   color: var(--text-main);
   text-align: left;
 }
@@ -2611,8 +2867,8 @@ onBeforeUnmount(() => {
   justify-items: start;
   gap: 6px;
   border-radius: 18px;
-  border: 1px solid var(--line);
-  background: var(--surface-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
   color: var(--text-main);
   text-align: left;
 }
@@ -2716,14 +2972,10 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 860px) {
-  .tasksShell {
-    width: min(100%, 860px);
-  }
-
   .topBar,
   .workflowGrid,
   .focusBoardGrid,
-  .backlogGrid,
+  .calendarGridView,
   .settingsGrid,
   .timeFilterGrid {
     grid-template-columns: 1fr;
@@ -2746,14 +2998,19 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .tasksShell {
-    width: calc(100% - 14px);
-    gap: 10px;
+    gap: 12px;
+    padding-inline: 12px;
   }
 
   .topBar,
   .panelCard {
-    padding: 12px;
-    border-radius: 20px;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .calendarPreviewWeekdays,
+  .calendarPreviewDays {
+    gap: 6px;
   }
 
   .focusListPanel {
@@ -2784,9 +3041,10 @@ onBeforeUnmount(() => {
   }
 
   .statCard {
-    min-width: 124px;
-    min-height: 68px;
-    padding: 10px;
+    min-width: 140px;
+    min-height: 78px;
+    padding: 14px 16px;
+    border-radius: 20px;
   }
 
   .quickActionRow {
@@ -2826,6 +3084,10 @@ onBeforeUnmount(() => {
     align-items: flex-start;
   }
 
+  .feedbackActions {
+    width: 100%;
+  }
+
   .upgradeActions {
     flex-direction: column;
     align-items: stretch;
@@ -2833,8 +3095,8 @@ onBeforeUnmount(() => {
 
   .filterBar {
     top: calc(56px + env(safe-area-inset-top));
-    padding: 6px;
-    border-radius: 18px;
+    padding: 8px 0 10px;
+    border-radius: 0;
   }
 
   .focusFilterBar {

@@ -9,10 +9,13 @@ export class AppView {
 
 export class NavigationCatalog {
   constructor() {
+    this.legacyViewAliases = Object.freeze({
+      backlog: 'calendar',
+    });
     this.views = [
       new AppView({ id: 'today', label: 'Hoy', icon: 'today' }),
       new AppView({ id: 'follow-up', label: 'Seguimiento', icon: 'follow-up' }),
-      new AppView({ id: 'backlog', label: 'Agenda', icon: 'backlog' }),
+      new AppView({ id: 'calendar', label: 'Calendario', icon: 'calendar' }),
       new AppView({ id: 'dashboard', label: 'Panel', icon: 'dashboard', utility: true }),
       new AppView({ id: 'settings', label: 'Ajustes', icon: 'settings', utility: true }),
     ];
@@ -31,7 +34,8 @@ export class NavigationCatalog {
   }
 
   getFallbackView(currentViewId) {
-    return this.views.find(view => view.id === currentViewId)?.id ?? 'today';
+    const normalizedViewId = this.legacyViewAliases[currentViewId] ?? currentViewId;
+    return this.views.find(view => view.id === normalizedViewId)?.id ?? 'today';
   }
 }
 

@@ -18,7 +18,39 @@ function openWithAnchor(url, target = '_self') {
   document.body.removeChild(anchor);
 }
 
-export function openTaskExternalAction(action, { allowCustomScheme = false } = {}) {
+function scheduleFallbackNavigation(fallbackUrl = '') {
+  const resolvedFallbackUrl = `${fallbackUrl ?? ''}`.trim();
+  if (!resolvedFallbackUrl || typeof window === 'undefined' || typeof document === 'undefined') {
+    return;
+  }
+
+  let fallbackConsumed = false;
+  const clearFallback = () => {
+    fallbackConsumed = true;
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('pagehide', clearFallback);
+    window.clearTimeout(timerId);
+  };
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      clearFallback();
+    }
+  };
+  const timerId = window.setTimeout(() => {
+    if (fallbackConsumed || document.visibilityState === 'hidden') {
+      clearFallback();
+      return;
+    }
+
+    clearFallback();
+    window.location.assign(resolvedFallbackUrl);
+  }, 900);
+
+  document.addEventListener('visibilitychange', handleVisibilityChange, { passive: true });
+  window.addEventListener('pagehide', clearFallback, { once: true });
+}
+
+export function openTaskExternalAction(action, { allowCustomScheme = false, fallbackUrl = '' } = {}) {
   const url = `${action?.url ?? ''}`.trim();
   if (!url || typeof window === 'undefined' || typeof document === 'undefined') {
     return false;
@@ -43,6 +75,16 @@ export function openTaskExternalAction(action, { allowCustomScheme = false } = {
     }
 
     openWithAnchor(url, '_blank');
+    return true;
+  }
+
+  if (allowCustomScheme && !ALLOWED_PROTOCOLS.has(protocol)) {
+    scheduleFallbackNavigation(fallbackUrl);
+    try {
+      window.location.assign(url);
+    } catch {
+      openWithAnchor(url);
+    }
     return true;
   }
 

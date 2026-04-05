@@ -44,6 +44,10 @@ function buildTaskSearchText(task = {}) {
     .trim();
 }
 
+function normalizeSearchText(value) {
+  return normalizeText(value).toLowerCase();
+}
+
 function normalizeTarget(target) {
   return KNOWN_TARGETS.has(target) ? target : LAUNCH_TARGETS.HOME;
 }
@@ -112,8 +116,24 @@ export class SupportedMobileAppDescriptor {
   }
 
   matchesTask(task = {}) {
-    if (!this.keywordPattern) return false;
-    return this.keywordPattern.test(buildTaskSearchText(task));
+    return this.getTaskMatchIndex(task) !== -1;
+  }
+
+  getTaskMatchIndex(task = {}) {
+    if (!this.keywords.length) return -1;
+
+    const searchText = buildTaskSearchText(task);
+    if (!searchText) return -1;
+
+    const matchIndexes = this.keywords
+      .map(keyword => searchText.search(new RegExp(`(?:^|\\b)${escapeForRegex(normalizeSearchText(keyword))}(?:\\b|$)`, 'i')))
+      .filter(index => index >= 0);
+
+    if (!matchIndexes.length) {
+      return -1;
+    }
+
+    return Math.min(...matchIndexes);
   }
 
   matchesAction(action = {}) {
@@ -345,6 +365,8 @@ export class SupportedMobileAppCatalog {
   }
 
   findAllByTask(task = {}) {
-    return this.apps.filter(app => app.matchesTask(task));
+    return this.apps
+      .filter(app => app.matchesTask(task))
+      .sort((left, right) => left.getTaskMatchIndex(task) - right.getTaskMatchIndex(task));
   }
 }

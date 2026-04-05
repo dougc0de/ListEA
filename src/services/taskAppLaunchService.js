@@ -124,7 +124,11 @@ export class TaskAppLaunchService {
       : null;
   }
 
-  async open(task = {}, { suggestionId = '', premiumEnabled = false } = {}) {
+  async open(task = {}, {
+    suggestionId = '',
+    premiumEnabled = false,
+    userInitiated = false,
+  } = {}) {
     const request = new AppLaunchIntentRequest({
       task,
       suggestionId,
@@ -138,7 +142,10 @@ export class TaskAppLaunchService {
       return { completed: false, mode: 'none', suggestion: null };
     }
 
-    if (request.premiumEnabled && suggestion.supportsNativeLaunch()) {
+    const canAttemptDirectLaunch = suggestion.supportsNativeLaunch()
+      && (request.premiumEnabled || userInitiated);
+
+    if (canAttemptDirectLaunch) {
       const runtime = await this.gateway.getRuntime();
       const nativeTarget = runtime.native
         ? await this.resolveNativeTarget(suggestion, runtime)
@@ -156,7 +163,10 @@ export class TaskAppLaunchService {
       if (browserTarget) {
         const completed = openTaskExternalAction(
           { url: browserTarget.target },
-          { allowCustomScheme: true },
+          {
+            allowCustomScheme: true,
+            fallbackUrl: suggestion.webFallbackUrl || suggestion.fallbackAction?.url || '',
+          },
         );
         return {
           completed,
@@ -175,7 +185,7 @@ export class TaskAppLaunchService {
       };
     }
 
-    if (suggestion.webFallbackUrl && request.premiumEnabled) {
+    if (suggestion.webFallbackUrl && (request.premiumEnabled || userInitiated)) {
       const completed = openTaskExternalAction({ url: suggestion.webFallbackUrl });
       return {
         completed,
@@ -186,7 +196,7 @@ export class TaskAppLaunchService {
 
     return {
       completed: false,
-      mode: request.premiumEnabled ? 'none' : 'premium-only',
+      mode: (request.premiumEnabled || userInitiated) ? 'none' : 'premium-only',
       suggestion,
     };
   }

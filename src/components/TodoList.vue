@@ -5,6 +5,7 @@ const props = defineProps({
   todos: { type: Array, required: true },
   emptyMessage: { type: String, default: 'No hay tareas.' },
   taskActions: { type: Array, default: () => [] },
+  editingTaskId: { type: String, default: '' },
 });
 
 const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action', 'open-external']);
@@ -21,6 +22,7 @@ const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-
       :key="todo.id"
       :todo="todo"
       :task-actions="props.taskActions"
+      :force-edit="props.editingTaskId === todo.id"
       @toggle="emit('toggle', $event)"
       @remove="emit('remove', $event)"
       @update="emit('update', $event)"
@@ -40,11 +42,9 @@ const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-
 
 .empty {
   margin: 0;
-  padding: 22px 18px;
-  border-radius: 18px;
-  border: 1px dashed var(--line);
-  background: var(--surface-soft);
+  padding: 18px 0 0;
+  border-top: 1px dashed var(--line);
   color: var(--text-muted);
-  text-align: center;
+  text-align: left;
 }
 </style>
