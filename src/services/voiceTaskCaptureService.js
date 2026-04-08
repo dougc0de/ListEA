@@ -26,6 +26,7 @@ export const VOICE_CAPTURE_STATES = Object.freeze({
 
 const DEFAULT_LANGUAGE = 'es-MX';
 const DEFAULT_WAVE_POINTS = 18;
+const STOP_TIMEOUT_MS = 1800;
 
 function normalizeText(value) {
   return `${value ?? ''}`.replace(/\s+/g, ' ').trim();
@@ -85,6 +86,26 @@ function normalizePermissionState(permission = '') {
 
 function createEmptyWaveform(points = DEFAULT_WAVE_POINTS) {
   return Array.from({ length: points }, () => 0.12);
+}
+
+async function resolveWithTimeout(promise, fallbackValue, timeoutMs = STOP_TIMEOUT_MS) {
+  if (!promise || typeof promise.then !== 'function') {
+    return fallbackValue;
+  }
+
+  let timeoutId = 0;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise(resolve => {
+        timeoutId = setTimeout(() => resolve(fallbackValue), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 function normalizeMatches(matches = []) {
@@ -422,6 +443,7 @@ export class VoiceCaptureSession {
       ],
     }),
     language = DEFAULT_LANGUAGE,
+    stopTimeoutMs = STOP_TIMEOUT_MS,
     onWaveform,
     onTranscript,
     onStateChange,
@@ -431,6 +453,7 @@ export class VoiceCaptureSession {
     this.recorderGateway = recorderGateway;
     this.orchestrator = orchestrator;
     this.language = language;
+    this.stopTimeoutMs = Number.isFinite(Number(stopTimeoutMs)) ? Number(stopTimeoutMs) : STOP_TIMEOUT_MS;
     this.onWaveform = onWaveform;
     this.onTranscript = onTranscript;
     this.onStateChange = onStateChange;
@@ -489,9 +512,12 @@ export class VoiceCaptureSession {
       },
     });
 
-    this.recorderSession = await this.recorderGateway.startSession({
-      onFrequency: waveform => this.setWaveform(waveform),
-    });
+    // Avoid competing microphone sessions on native runtimes.
+    if (!Capacitor.isNativePlatform()) {
+      this.recorderSession = await this.recorderGateway.startSession({
+        onFrequency: waveform => this.setWaveform(waveform),
+      });
+    }
 
     this.startedAt = Date.now();
     this.setState(VOICE_CAPTURE_STATES.RECORDING);
@@ -547,8 +573,16 @@ export class VoiceCaptureSession {
     };
 
     try {
-      await this.speechSession?.stop?.();
-      recorderSummary = await this.recorderSession?.stop?.() ?? recorderSummary;
+      await resolveWithTimeout(
+        this.speechSession?.stop?.(),
+        undefined,
+        this.stopTimeoutMs,
+      );
+      recorderSummary = await resolveWithTimeout(
+        this.recorderSession?.stop?.(),
+        recorderSummary,
+        this.stopTimeoutMs,
+      ) ?? recorderSummary;
       const result = await this.buildResult(recorderSummary);
       this.setState(VOICE_CAPTURE_STATES.IDLE);
       return result;
@@ -563,8 +597,8 @@ export class VoiceCaptureSession {
 
   async cancel() {
     await Promise.allSettled([
-      this.speechSession?.cancel?.(),
-      this.recorderSession?.cancel?.(),
+      resolveWithTimeout(this.speechSession?.cancel?.(), undefined, this.stopTimeoutMs),
+      resolveWithTimeout(this.recorderSession?.cancel?.(), undefined, this.stopTimeoutMs),
     ]);
     this.speechSession = null;
     this.recorderSession = null;
@@ -589,11 +623,13 @@ export class VoiceTaskCaptureService {
         new ReminderActionAgent(),
       ],
     }),
+    stopTimeoutMs = STOP_TIMEOUT_MS,
   } = {}) {
     this.interpreter = interpreter;
     this.speechGateway = speechGateway;
     this.recorderGateway = recorderGateway;
     this.orchestrator = orchestrator;
+    this.stopTimeoutMs = Number.isFinite(Number(stopTimeoutMs)) ? Number(stopTimeoutMs) : STOP_TIMEOUT_MS;
   }
 
   async isSupported() {
@@ -606,6 +642,7 @@ export class VoiceTaskCaptureService {
       speechGateway: this.speechGateway,
       recorderGateway: this.recorderGateway,
       orchestrator: this.orchestrator,
+      stopTimeoutMs: this.stopTimeoutMs,
       ...options,
     });
   }

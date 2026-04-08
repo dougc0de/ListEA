@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    isNativePlatform: vi.fn(() => false),
+  },
+}));
 vi.mock('@capacitor-community/speech-recognition', () => ({
   SpeechRecognition: {},
 }));
@@ -17,6 +22,7 @@ import {
   VoiceCaptureError,
   VoiceTaskCaptureService,
 } from '../voiceTaskCaptureService';
+import { Capacitor } from '@capacitor/core';
 
 function createSpeechGateway({
   supported = true,
@@ -136,5 +142,51 @@ describe('VoiceTaskCaptureService', () => {
 
     await expect(session.stop()).rejects.toThrow('No detectamos una tarea clara en tu audio.');
     expect(session.state).toBe(VOICE_CAPTURE_STATES.ERROR);
+  });
+
+  it('falls back cleanly when the speech stop hook hangs and still saves from the last transcript', async () => {
+    const speechGateway = {
+      isSupported: vi.fn().mockResolvedValue(true),
+      ensurePermissions: vi.fn().mockResolvedValue({ speechRecognition: 'granted' }),
+      startSession: vi.fn().mockImplementation(async ({ onTranscript, onStateChange }) => {
+        onStateChange?.('started');
+        onTranscript?.({
+          text: 'Mandar mensaje por WhatsApp a Maria',
+          isFinal: false,
+        });
+        return {
+          stop: vi.fn(() => new Promise(() => {})),
+          cancel: vi.fn().mockResolvedValue(undefined),
+        };
+      }),
+    };
+    const service = new VoiceTaskCaptureService({
+      speechGateway,
+      recorderGateway: createRecorderGateway({ active: false }),
+      stopTimeoutMs: 10,
+    });
+
+    const session = service.createSession();
+    await session.start();
+    const result = await session.stop();
+
+    expect(result.draft.title).toContain('Mandar mensaje');
+    expect(session.state).toBe(VOICE_CAPTURE_STATES.IDLE);
+  });
+
+  it('skips the parallel recorder layer on native platforms to avoid microphone contention', async () => {
+    const nativeSpy = vi.spyOn(Capacitor, 'isNativePlatform').mockReturnValue(true);
+    const recorderGateway = createRecorderGateway();
+    const service = new VoiceTaskCaptureService({
+      speechGateway: createSpeechGateway(),
+      recorderGateway,
+    });
+
+    const session = service.createSession();
+    await session.start();
+
+    expect(recorderGateway.startSession).not.toHaveBeenCalled();
+    await session.cancel();
+    nativeSpy.mockRestore();
   });
 });

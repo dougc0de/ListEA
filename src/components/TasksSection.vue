@@ -1083,14 +1083,14 @@ async function enableNotificationsFlow() {
     return;
   }
 
+  preferences.value.notificationsEnabled = true;
+
   const exactPermission = await getExactAlarmPermission();
   preferences.value.exactAlarmPermission = exactPermission;
 
   if (exactPermission !== 'granted') {
     preferences.value.exactAlarmPermission = await enableExactReminders();
   }
-
-  preferences.value.notificationsEnabled = preferences.value.exactAlarmPermission === 'granted';
 }
 
 async function disableNotificationsFlow() {
@@ -1953,6 +1953,7 @@ onBeforeUnmount(() => {
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
         <p class="panelText">Recordatorios: {{ preferences.notificationsEnabled ? 'activados' : 'desactivados' }}</p>
         <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
+        <p class="panelText">Los recordatorios normales siguen funcionando aunque Android no conceda alarma exacta.</p>
         <div class="settingsStack">
           <label class="checkboxRow">
             <input
