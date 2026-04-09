@@ -50,6 +50,21 @@ describe('TaskFactory', () => {
 
     expect(task.source).toBe('screenshot');
   });
+
+  it('tracks postponed count as a persisted non-negative field', () => {
+    const factory = new TaskFactory();
+    const task = factory.create({
+      title: 'Reagendada varias veces',
+      postponedCount: 2,
+    });
+
+    task.applyPatch({
+      postponedCount: 3,
+    });
+
+    expect(task.postponedCount).toBe(3);
+    expect(task.toJSON().postponedCount).toBe(3);
+  });
 });
 
 describe('TaskContextPresenter', () => {

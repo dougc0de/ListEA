@@ -15,6 +15,7 @@ describe('TaskFilterService', () => {
       FILTER_IDS.THIS_WEEK,
       FILTER_IDS.OVERDUE,
       FILTER_IDS.NO_DATE,
+      FILTER_IDS.COMPLETED,
       FILTER_IDS.BLOCKED,
       FILTER_IDS.WAITING,
       FILTER_IDS.QUICK,
@@ -39,10 +40,16 @@ describe('TaskFilterService', () => {
     const planner = new TaskVisibilityPlanner();
     const todayTask = factory.create({ title: 'Hoy', dueAt: '2026-03-23T10:00:00.000Z' });
     const noDateTask = factory.create({ title: 'Sin fecha' });
+    const completedTask = factory.create({
+      title: 'Cerrada',
+      status: 'completed',
+      completedAt: '2026-03-22T10:00:00.000Z',
+    });
     const futureTask = factory.create({ title: 'Futuro', dueAt: '2026-04-10T10:00:00.000Z' });
 
     expect(planner.getPreferredFilter(todayTask, { referenceDate: new Date('2026-03-23T09:00:00.000Z') })).toBe(FILTER_IDS.TODAY);
     expect(planner.getPreferredFilter(noDateTask, { referenceDate: new Date('2026-03-23T09:00:00.000Z') })).toBe(FILTER_IDS.NO_DATE);
+    expect(planner.getPreferredFilter(completedTask, { referenceDate: new Date('2026-03-23T09:00:00.000Z') })).toBe(FILTER_IDS.COMPLETED);
     expect(planner.getPreferredFilter(futureTask, { referenceDate: new Date('2026-03-23T09:00:00.000Z') })).toBe(null);
   });
 });

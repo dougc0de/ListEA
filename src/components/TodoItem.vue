@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import { ExecutionAdvisor } from '../domain/insights';
+import { TaskHealthAnalyzer } from '../domain/operability';
 import { TaskAppLaunchResolver } from '../domain/taskAppLaunch';
 import {
   TASK_DATE_PRECISION,
@@ -20,6 +21,7 @@ const props = defineProps({
 
 const presenter = new TaskContextPresenter();
 const advisor = new ExecutionAdvisor();
+const healthAnalyzer = new TaskHealthAnalyzer();
 const appLaunchResolver = new TaskAppLaunchResolver();
 
 const isEditing = ref(false);
@@ -51,6 +53,8 @@ const editError = ref('');
 
 const contextChips = computed(() => presenter.buildTaskContext(props.todo));
 const nextAction = computed(() => advisor.suggest(props.todo));
+const taskHealth = computed(() => healthAnalyzer.analyze(props.todo));
+const taskGuidance = computed(() => [taskHealth.value.reason, nextAction.value].filter(Boolean).join(' '));
 const recurrenceLabel = computed(() => {
   const labels = {
     daily: 'Cada dia',
@@ -255,6 +259,7 @@ function openExternalAction(action) {
           />
           <h3 v-else :class="{ completedTitle: todo.isCompleted() }">{{ todo.title }}</h3>
           <span class="statusBadge">{{ presenter.getStatusLabel(todo.status) }}</span>
+          <span class="healthBadge" :data-state="taskHealth.state">{{ taskHealth.label }}</span>
         </div>
 
         <div class="chipRow">
@@ -263,7 +268,7 @@ function openExternalAction(action) {
         </div>
 
         <p v-if="todo.notes && !isEditing" class="notesPreview">{{ todo.notes }}</p>
-        <p v-if="detailsOpen || isEditing" class="advisorText">{{ nextAction }}</p>
+        <p v-if="detailsOpen || isEditing" class="advisorText">{{ taskGuidance }}</p>
       </div>
     </div>
 
@@ -589,7 +594,8 @@ function openExternalAction(action) {
 }
 
 .statusBadge,
-.contextChip {
+.contextChip,
+.healthBadge {
   display: inline-flex;
   align-items: center;
   min-height: 32px;
@@ -599,6 +605,30 @@ function openExternalAction(action) {
   color: var(--text-main);
   font-size: 0.8rem;
   flex-shrink: 0;
+}
+
+.healthBadge[data-state='new'] {
+  background: color-mix(in srgb, #6da86a 16%, var(--surface));
+}
+
+.healthBadge[data-state='active'] {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.healthBadge[data-state='at-risk'] {
+  background: color-mix(in srgb, #e2a85e 20%, var(--surface));
+}
+
+.healthBadge[data-state='stalled'] {
+  background: color-mix(in srgb, #8f82b5 18%, var(--surface));
+}
+
+.healthBadge[data-state='overdue'] {
+  background: color-mix(in srgb, #d98164 22%, var(--surface));
+}
+
+.healthBadge[data-state='completed'] {
+  background: color-mix(in srgb, #6da86a 12%, var(--surface));
 }
 
 .recurrenceChip {

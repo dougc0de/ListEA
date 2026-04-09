@@ -2,16 +2,30 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import Chart from 'chart.js/auto';
 import { DASHBOARD_GRANULARITY, TaskActivityDashboard } from '../domain/activity';
+import { ProfessionalControlCenter } from '../domain/controlCenter';
+import {
+  BacklogRescuePlanner,
+  ProductivityPatternAnalyzer,
+  TaskHealthAnalyzer,
+} from '../domain/operability';
 
 const props = defineProps({
   analytics: { type: Object, required: true },
+  briefHistory: { type: Array, default: () => [] },
   entitlements: { type: Object, default: () => ({}) },
   licenseTier: { type: String, default: 'free' },
+  operationalBrief: { type: Object, default: null },
   tasks: { type: Array, default: () => [] },
 });
-const emit = defineEmits(['clear-analytics', 'upgrade']);
+const emit = defineEmits(['clear-analytics', 'upgrade', 'navigate']);
 
 const dashboardService = new TaskActivityDashboard();
+const controlCenterService = new ProfessionalControlCenter();
+const taskHealthAnalyzer = new TaskHealthAnalyzer();
+const backlogRescuePlanner = new BacklogRescuePlanner({
+  healthAnalyzer: taskHealthAnalyzer,
+});
+const patternAnalyzer = new ProductivityPatternAnalyzer();
 const viewMode = ref('day');
 const customGranularity = ref(DASHBOARD_GRANULARITY.DAY);
 const customStart = ref('');
@@ -36,6 +50,22 @@ const categoryCatalog = [
 let trendChart;
 let mixChart;
 const canUseAdvancedDashboard = computed(() => Boolean(props.entitlements?.advancedDashboard));
+const canUseControlCenter = computed(() => Boolean(props.entitlements?.premiumInsights));
+const weeklyBrief = computed(() => (props.operationalBrief && typeof props.operationalBrief === 'object')
+  ? props.operationalBrief
+  : null);
+const briefDeltaItems = computed(() => {
+  if (!weeklyBrief.value?.comparison) {
+    return [];
+  }
+
+  return [
+    { id: 'at-risk', label: 'Riesgos', value: weeklyBrief.value.comparison.atRiskDelta },
+    { id: 'responses', label: 'Respuestas', value: weeklyBrief.value.comparison.responsesDelta },
+    { id: 'blocked', label: 'Bloqueos', value: weeklyBrief.value.comparison.blockedDelta },
+    { id: 'completion', label: 'Cumplimiento', value: weeklyBrief.value.comparison.completionRateDelta },
+  ];
+});
 
 function formatDateInputValue(value) {
   const date = value instanceof Date ? new Date(value) : new Date(value);
@@ -112,15 +142,38 @@ const trendLabel = computed(() => dashboard.value.range.granularity === DASHBOAR
 
 const rangeHelper = computed(() => {
   if (viewMode.value === 'week') {
-    return 'Vista agrupada por semanas para detectar ritmo real.';
+    return 'Agrupa por semanas para leer ritmo real.';
   }
 
   if (viewMode.value === 'custom') {
-    return 'Ajusta fechas para mirar solo el tramo que te importa.';
+    return 'Ajusta el tramo exacto que quieres revisar.';
   }
 
-  return 'Puedes elegir que bloques ver en el panel con los selectores de abajo.';
+  return 'Lectura corta y privada del trabajo reciente.';
 });
+
+const controlCenter = computed(() => controlCenterService.build(props.tasks, props.analytics, {
+  referenceDate: new Date(),
+  rangeStart: dashboard.value.range.startDate,
+  rangeEnd: dashboard.value.range.endDate,
+  completionRate: dashboard.value.summary.completionRate,
+}));
+const backlogRescue = computed(() => backlogRescuePlanner.build(props.tasks, {
+  referenceDate: new Date(),
+}));
+const patternStats = computed(() => patternAnalyzer.analyze(props.tasks, props.analytics, {
+  referenceDate: new Date(),
+}));
+const taskHealthSummary = computed(() => taskHealthAnalyzer.summarize(props.tasks, {
+  referenceDate: new Date(),
+}));
+
+const overviewCards = computed(() => [
+  { id: 'at-risk', label: 'En riesgo', value: controlCenter.value.summary.atRisk },
+  { id: 'responses', label: 'Por responder', value: controlCenter.value.summary.responses },
+  { id: 'blocked', label: 'Bloqueos', value: controlCenter.value.summary.staleBlocked },
+  { id: 'completion', label: 'Cumplimiento', value: `${controlCenter.value.summary.completionRate}%` },
+]);
 
 const summaryCards = computed(() => categoryCatalog
   .map(category => ({
@@ -424,18 +477,257 @@ onBeforeUnmount(destroyCharts);
     <article class="heroCard">
       <div class="heroCopy">
         <p class="eyebrow">Panel</p>
-        <h2>Panel de revision</h2>
+        <h2>Centro de control privado</h2>
         <p class="heroText">
-          Todo sale del historial local-first y de tus tareas activas.
+          Decide que mover hoy con datos locales, compromisos en riesgo y senales de seguimiento reales.
         </p>
+      </div>
+      <div class="heroStats">
+        <article v-for="card in overviewCards" :key="card.id" class="heroStat">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+        </article>
+      </div>
+    </article>
+
+    <article class="dashboardCard controlCenterCard">
+      <div class="controlHeader">
+        <div>
+          <p class="eyebrow">Centro de control</p>
+          <h3>Lo que conviene mover primero</h3>
+        </div>
+        <div class="controlActions">
+          <span class="rangePill">{{ dashboard.range.label }}</span>
+        </div>
+      </div>
+
+      <div class="pulseRow">
+        <article v-for="item in controlCenter.pulse" :key="item.id" class="pulseCard">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+        </article>
+      </div>
+
+      <div v-if="canUseControlCenter" class="controlGrid">
+        <article v-if="weeklyBrief" class="decisionCard weeklyBriefCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Lectura operativa semanal</strong>
+              <span>{{ weeklyBrief.range?.label }}</span>
+            </div>
+            <button type="button" class="ghostButton" @click="emit('navigate', 'today')">
+              Ir a hoy
+            </button>
+          </div>
+
+          <div class="weeklyBriefSummary">
+            <article class="weeklyBriefStat">
+              <span>Cumplimiento</span>
+              <strong>{{ weeklyBrief.summary?.completionRate ?? 0 }}%</strong>
+            </article>
+            <article class="weeklyBriefStat">
+              <span>Riesgos</span>
+              <strong>{{ weeklyBrief.summary?.atRisk ?? 0 }}</strong>
+            </article>
+            <article class="weeklyBriefStat">
+              <span>Respuestas</span>
+              <strong>{{ weeklyBrief.summary?.responses ?? 0 }}</strong>
+            </article>
+          </div>
+
+          <div class="weeklyBriefHighlights">
+            <span v-for="highlight in weeklyBrief.highlights ?? []" :key="highlight" class="weeklyBriefChip">
+              {{ highlight }}
+            </span>
+          </div>
+
+          <div v-if="briefDeltaItems.length" class="weeklyBriefDeltaRow">
+            <article v-for="item in briefDeltaItems" :key="item.id" class="weeklyBriefDelta">
+              <span>{{ item.label }}</span>
+              <strong :data-tone="item.value > 0 ? 'warn' : 'good'">
+                {{ item.value > 0 ? '+' : '' }}{{ item.value }}
+              </strong>
+            </article>
+          </div>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Salud del trabajo</strong>
+              <span>Lectura local del estado real de tus tareas</span>
+            </div>
+          </div>
+
+          <div class="weeklyBriefSummary">
+            <article class="weeklyBriefStat">
+              <span>En riesgo</span>
+              <strong>{{ taskHealthSummary['at-risk'] ?? 0 }}</strong>
+            </article>
+            <article class="weeklyBriefStat">
+              <span>Estancadas</span>
+              <strong>{{ taskHealthSummary.stalled ?? 0 }}</strong>
+            </article>
+            <article class="weeklyBriefStat">
+              <span>Vencidas</span>
+              <strong>{{ taskHealthSummary.overdue ?? 0 }}</strong>
+            </article>
+          </div>
+
+          <p class="emptyText">ListEA mide salud sin IA ni nube: riesgo, estancamiento y vencimiento desde reglas locales.</p>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Compromisos en riesgo</strong>
+              <span>{{ controlCenter.summary.atRisk }} abiertos</span>
+            </div>
+            <button type="button" class="ghostButton" @click="emit('navigate', 'today')">
+              Abrir hoy
+            </button>
+          </div>
+
+          <div v-if="controlCenter.riskItems.length" class="decisionList">
+            <article v-for="item in controlCenter.riskItems" :key="item.id" class="decisionItem">
+              <div class="decisionCopy">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.meta }}</p>
+              </div>
+              <span class="decisionBadge">{{ item.badge }}</span>
+            </article>
+          </div>
+          <p v-else class="emptyText">No hay compromisos en riesgo ahora.</p>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Respuestas por enviar</strong>
+              <span>{{ controlCenter.summary.responses }} detectadas</span>
+            </div>
+            <button type="button" class="ghostButton" @click="emit('navigate', 'today')">
+              Ver tareas
+            </button>
+          </div>
+
+          <div v-if="controlCenter.responseItems.length" class="decisionList">
+            <article v-for="item in controlCenter.responseItems" :key="item.id" class="decisionItem">
+              <div class="decisionCopy">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.meta }}</p>
+              </div>
+              <span class="decisionBadge">{{ item.badge }}</span>
+            </article>
+          </div>
+          <p v-else class="emptyText">No vemos respuestas pendientes con app sugerida.</p>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Bloqueos viejos</strong>
+              <span>{{ controlCenter.summary.staleBlocked }} quietos</span>
+            </div>
+            <button type="button" class="ghostButton" @click="emit('navigate', 'follow-up')">
+              Seguimiento
+            </button>
+          </div>
+
+          <div v-if="controlCenter.blockedItems.length" class="decisionList">
+            <article v-for="item in controlCenter.blockedItems" :key="item.id" class="decisionItem">
+              <div class="decisionCopy">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.meta }}</p>
+              </div>
+              <span class="decisionBadge">{{ item.badge }}</span>
+            </article>
+          </div>
+          <p v-else class="emptyText">No hay bloqueos viejos ni seguimientos enfriados.</p>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Patrones locales</strong>
+              <span>Lo que tu forma de trabajar ya esta mostrando</span>
+            </div>
+          </div>
+
+          <div v-if="patternStats.insights.length" class="decisionList">
+            <article v-for="insight in patternStats.insights" :key="insight.id" class="decisionItem">
+              <div class="decisionCopy">
+                <strong>{{ insight.title }}</strong>
+                <p>{{ insight.message }}</p>
+              </div>
+              <span class="decisionBadge">{{ insight.tone === 'good' ? 'Patron' : 'Ajuste' }}</span>
+            </article>
+          </div>
+          <p v-else class="emptyText">Todavia no hay suficientes datos locales para detectar patrones confiables.</p>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Canales mas usados</strong>
+              <span>{{ controlCenter.summary.launches }} aperturas locales</span>
+            </div>
+          </div>
+
+          <div v-if="controlCenter.appUsage.length" class="decisionList">
+            <article v-for="item in controlCenter.appUsage" :key="item.id" class="decisionItem">
+              <div class="decisionCopy">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.meta }}</p>
+              </div>
+              <span class="decisionBadge">{{ item.badge }}</span>
+            </article>
+          </div>
+          <p v-else class="emptyText">Todavia no hay aperturas locales registradas en este rango.</p>
+        </article>
+
+        <article class="decisionCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Backlog rescue</strong>
+              <span>{{ backlogRescue.items.length }} sugerencia(s) listas</span>
+            </div>
+            <button type="button" class="ghostButton" @click="emit('navigate', 'today')">
+              Abrir inicio
+            </button>
+          </div>
+
+          <div v-if="backlogRescue.items.length" class="decisionList">
+            <article v-for="item in backlogRescue.items" :key="item.id" class="decisionItem">
+              <div class="decisionCopy">
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.reason }}</p>
+              </div>
+              <span class="decisionBadge">{{ item.actionLabel }}</span>
+            </article>
+          </div>
+          <p v-else class="emptyText">No hay rescates urgentes en backlog dentro del rango actual.</p>
+        </article>
+      </div>
+
+      <div v-else class="upgradeCard">
+        <div>
+          <strong>ListEA Pro convierte el panel en tu centro de control.</strong>
+          <p>
+            Compromisos en riesgo, respuestas por enviar, bloqueos viejos, lectura operativa semanal y uso por canal viven solo en tu dispositivo.
+          </p>
+        </div>
+        <button type="button" class="primaryButton" @click="emit('upgrade', 'premiumInsights')">
+          Ver ListEA Pro
+        </button>
       </div>
     </article>
 
     <article class="dashboardCard">
       <div class="controlHeader">
         <div>
-          <p class="eyebrow">Periodo</p>
-          <h3>Filtra por ritmo real</h3>
+          <p class="eyebrow">Historial local</p>
+          <h3>Ritmo y resultados</h3>
         </div>
         <div class="controlActions">
           <p class="controlCopy">{{ rangeHelper }}</p>
@@ -620,9 +912,13 @@ onBeforeUnmount(destroyCharts);
 }
 
 .heroText,
+.heroStat span,
+.pulseCard span,
 .controlCopy,
 .summaryCard span,
 .chartHead span,
+.decisionHead span,
+.decisionCopy p,
 .eventCopy p,
 .emptyText,
 .rangeError,
@@ -640,6 +936,35 @@ onBeforeUnmount(destroyCharts);
   margin-top: 0.5rem;
 }
 
+.heroStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.heroStat,
+.pulseCard,
+.decisionCard {
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+  background: color-mix(in srgb, white 93%, var(--surface));
+  box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
+}
+
+.heroStat {
+  min-height: 92px;
+  padding: 16px 18px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+
+.heroStat strong,
+.pulseCard strong {
+  font-size: clamp(1.35rem, 4vw, 1.9rem);
+  line-height: 1;
+}
+
 .dashboardCard {
   padding: 6px 0 0;
   display: grid;
@@ -652,6 +977,148 @@ onBeforeUnmount(destroyCharts);
   display: flex;
   flex-direction: row;
   gap: 12px;
+}
+
+.pulseRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pulseCard {
+  min-height: 84px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.controlGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.weeklyBriefCard {
+  grid-column: 1 / -1;
+}
+
+.decisionCard {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.decisionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.decisionHead strong,
+.decisionCopy strong {
+  display: block;
+  text-align: left;
+}
+
+.decisionList {
+  display: grid;
+  gap: 10px;
+}
+
+.decisionItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+  background: color-mix(in srgb, var(--surface) 66%, transparent);
+}
+
+.decisionCopy {
+  min-width: 0;
+}
+
+.decisionCopy p {
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+.weeklyBriefSummary,
+.weeklyBriefDeltaRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.weeklyBriefDeltaRow {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.weeklyBriefStat,
+.weeklyBriefDelta {
+  min-height: 80px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+  background: color-mix(in srgb, var(--surface) 66%, transparent);
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.weeklyBriefHighlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weeklyBriefChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+}
+
+.weeklyBriefStat strong,
+.weeklyBriefDelta strong {
+  font-size: 1.2rem;
+}
+
+.weeklyBriefDelta strong[data-tone='warn'] {
+  color: #b34b3b;
+}
+
+.weeklyBriefDelta strong[data-tone='good'] {
+  color: #4c7d60;
+}
+
+.upgradeCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+}
+
+.upgradeCard strong {
+  display: block;
+  text-align: left;
+}
+
+.upgradeCard p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  text-align: left;
 }
 
 .chartGrid {
@@ -688,9 +1155,12 @@ onBeforeUnmount(destroyCharts);
   gap: 8px;
 }
 
+.rangePill,
 .modeChip,
 .eventBadge,
-.ghostButton {
+.decisionBadge,
+.ghostButton,
+.primaryButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -700,7 +1170,17 @@ onBeforeUnmount(destroyCharts);
   border: 1px solid var(--line);
 }
 
-.modeChip {
+.rangePill,
+.decisionBadge,
+.eventBadge {
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rangePill,
+.modeChip,
+.decisionBadge {
   background: var(--surface-soft);
   color: var(--text-main);
 }
@@ -710,16 +1190,17 @@ onBeforeUnmount(destroyCharts);
   color: var(--text-main);
 }
 
-.ghostButton:disabled {
-  cursor: wait;
-  opacity: 0.72;
-  transform: none;
-}
-
+.primaryButton,
 .modeChip.active {
   background: var(--accent);
   color: var(--accent-contrast);
   border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+}
+
+.ghostButton:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
 }
 
 .modeChip.locked {
@@ -971,11 +1452,20 @@ onBeforeUnmount(destroyCharts);
 
 @media (max-width: 860px) {
   .heroCard,
-  .controlHeader,
   .summaryRow,
+  .pulseRow,
+  .controlGrid,
   .chartGrid,
-  .customControls {
+  .customControls,
+  .weeklyBriefSummary,
+  .weeklyBriefDeltaRow,
+  .heroStats {
     grid-template-columns: 1fr;
+  }
+
+  .controlHeader,
+  .customControls {
+    flex-direction: column;
   }
 
   .controlActions {
@@ -994,12 +1484,21 @@ onBeforeUnmount(destroyCharts);
     border-radius: 0;
   }
 
+  .heroStats {
+    grid-template-columns: 1fr;
+  }
+
+  .decisionHead,
+  .decisionItem,
+  .upgradeCard,
   .eventItem,
   .activityHead {
     flex-direction: column;
     align-items: flex-start;
   }
 
+  .ghostButton,
+  .primaryButton,
   .toggleChip {
     width: 100%;
     justify-content: flex-start;

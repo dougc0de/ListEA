@@ -157,6 +157,15 @@ function normalizeCaptureSource(source) {
   return Object.values(CAPTURE_SOURCES).includes(source) ? source : CAPTURE_SOURCES.MANUAL;
 }
 
+function normalizeNonNegativeInteger(value, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return fallback;
+  }
+
+  return Math.round(numeric);
+}
+
 function titleize(value) {
   return `${value ?? ''}`.trim();
 }
@@ -247,6 +256,7 @@ export class TaskEntity {
     this.completedAt = task.completedAt;
     this.reminderSent = task.reminderSent;
     this.avatarSnippetShownAt = task.avatarSnippetShownAt;
+    this.postponedCount = task.postponedCount;
     this.source = task.source;
     this.capturedAt = task.capturedAt;
     this.needsTriage = task.needsTriage;
@@ -374,6 +384,10 @@ export class TaskEntity {
       this.avatarSnippetShownAt = normalizeDateTime(patch.avatarSnippetShownAt);
     }
 
+    if (patch.postponedCount !== undefined) {
+      this.postponedCount = normalizeNonNegativeInteger(patch.postponedCount, this.postponedCount);
+    }
+
     if (patch.source !== undefined) {
       this.source = normalizeCaptureSource(patch.source);
     }
@@ -412,6 +426,7 @@ export class TaskEntity {
       completedAt: this.completedAt,
       reminderSent: this.reminderSent,
       avatarSnippetShownAt: this.avatarSnippetShownAt,
+      postponedCount: this.postponedCount,
       source: this.source,
       capturedAt: this.capturedAt,
       needsTriage: this.needsTriage,
@@ -450,6 +465,7 @@ export class TaskFactory {
       completedAt: normalizeDateTime(payload.completedAt),
       reminderSent: Boolean(payload.reminderSent),
       avatarSnippetShownAt: normalizeDateTime(payload.avatarSnippetShownAt),
+      postponedCount: normalizeNonNegativeInteger(payload.postponedCount),
       source: normalizeCaptureSource(payload.source),
       capturedAt: normalizeDateTime(payload.capturedAt) || normalizeDateTime(payload.createdAt) || now,
       needsTriage: Boolean(payload.needsTriage),

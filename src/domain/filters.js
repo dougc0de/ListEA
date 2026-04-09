@@ -5,6 +5,7 @@ export const FILTER_IDS = Object.freeze({
   THIS_WEEK: 'this-week',
   OVERDUE: 'overdue',
   NO_DATE: 'no-date',
+  COMPLETED: 'completed',
   BLOCKED: 'blocked',
   WAITING: 'waiting',
   QUICK: 'quick',
@@ -36,6 +37,7 @@ export class TaskFilterCatalog {
       { id: FILTER_IDS.THIS_WEEK, label: 'Esta semana' },
       { id: FILTER_IDS.OVERDUE, label: 'Vencidas' },
       { id: FILTER_IDS.NO_DATE, label: 'Sin fecha' },
+      { id: FILTER_IDS.COMPLETED, label: 'Completadas' },
       { id: FILTER_IDS.BLOCKED, label: 'Bloqueadas' },
       { id: FILTER_IDS.WAITING, label: 'En espera' },
       { id: FILTER_IDS.QUICK, label: 'Rapidas' },
@@ -64,6 +66,10 @@ export class TaskFilterCatalog {
 
 export class TaskFilterService {
   apply(tasks, filterId, { referenceDate = new Date() } = {}) {
+    if (filterId === FILTER_IDS.COMPLETED) {
+      return tasks.filter(task => task.status === TASK_STATUS.COMPLETED);
+    }
+
     const baseTasks = tasks.filter(task => task.status !== TASK_STATUS.COMPLETED);
 
     if (!filterId || filterId === FILTER_IDS.TODAY) {
@@ -133,6 +139,10 @@ export class TaskVisibilityPlanner {
 
   getPreferredFilter(task, { referenceDate = new Date() } = {}) {
     if (!task) return FILTER_IDS.TODAY;
+
+    if (task.status === TASK_STATUS.COMPLETED || task.isCompleted?.()) {
+      return FILTER_IDS.COMPLETED;
+    }
 
     const relevantDate = task.getRelevantDate?.();
     if (!relevantDate) {

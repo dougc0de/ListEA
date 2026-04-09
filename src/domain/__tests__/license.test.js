@@ -3,6 +3,8 @@ import {
   ENTITLEMENT_KEYS,
   LICENSE_TIERS,
   PURCHASE_MODELS,
+  SUBSCRIPTION_PRODUCT_IDS,
+  SUBSCRIPTION_VERIFICATION_STATES,
   activateLocalProLicense,
   buildLicenseState,
   hasEntitlement,
@@ -31,9 +33,13 @@ describe('license helpers', () => {
     });
 
     expect(license.licenseTier).toBe(LICENSE_TIERS.PRO);
-    expect(license.purchaseModel).toBe(PURCHASE_MODELS.ONE_TIME);
+    expect(license.purchaseModel).toBe(PURCHASE_MODELS.SUBSCRIPTION);
     expect(license.restoreAvailable).toBe(true);
+    expect(license.productId).toBe(SUBSCRIPTION_PRODUCT_IDS.PRO_MONTHLY);
+    expect(license.verificationState).toBe(SUBSCRIPTION_VERIFICATION_STATES.CACHED);
     expect(hasEntitlement(license, ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP)).toBe(true);
     expect(hasEntitlement(license, ENTITLEMENT_KEYS.SMART_APP_LAUNCH)).toBe(true);
+    expect(hasEntitlement(license, ENTITLEMENT_KEYS.MOBILE_ASSISTANT)).toBe(true);
+    expect(hasEntitlement(license, ENTITLEMENT_KEYS.WEEKLY_BRIEFING)).toBe(true);
   });
 });

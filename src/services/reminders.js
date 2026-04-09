@@ -67,6 +67,29 @@ async function getNativeEnvironment() {
 }
 
 function buildReminderPayload(todo) {
+  const explicitTaskId = `${todo.taskId ?? ''}`.trim();
+  const explicitTitle = `${todo.title ?? ''}`.trim();
+  const explicitBody = `${todo.body ?? ''}`.trim();
+  const explicitLargeBody = `${todo.largeBody ?? ''}`.trim();
+  const explicitSummaryText = `${todo.summaryText ?? ''}`.trim();
+  const explicitExtra = todo.extra && typeof todo.extra === 'object' ? todo.extra : {};
+
+  if (explicitTitle || explicitBody || explicitSummaryText) {
+    return {
+      title: explicitTitle || 'Recordatorio de ListEA',
+      body: explicitBody || explicitTitle || 'Hay una accion pendiente en ListEA',
+      largeBody: explicitLargeBody || explicitBody || explicitTitle || 'Hay una accion pendiente en ListEA',
+      summaryText: explicitSummaryText || 'ListEA',
+      extra: {
+        taskId: explicitTaskId || `${todo.id ?? ''}`.trim(),
+        preferredView: explicitExtra.preferredView ?? '',
+        lane: explicitExtra.lane ?? todo.lane ?? 'basic',
+        reminderKind: explicitExtra.reminderKind ?? '',
+        ...explicitExtra,
+      },
+    };
+  }
+
   const isFollowUpReminder = Boolean(todo.followUpAt && !todo.dueAt);
   const title = isFollowUpReminder ? 'Seguimiento pendiente' : 'Es momento de esta tarea';
   const body = todo.title?.trim() || 'Tienes una tarea pendiente en ListEA';
@@ -211,6 +234,7 @@ async function scheduleNativeReminder(todo) {
   if (!nativeEnvironment) return;
 
   const notificationCopy = buildReminderPayload(todo);
+  const scheduledAt = todo.reminderAt || todo.scheduledAt;
   await nativeEnvironment.gateway.schedule({
     id: toNativeNotificationId(todo.id),
     title: notificationCopy.title,
@@ -222,7 +246,7 @@ async function scheduleNativeReminder(todo) {
     group: 'listea-reminders',
     threadIdentifier: 'listea-reminders',
     summaryArgument: notificationCopy.summaryText,
-    at: new Date(todo.reminderAt),
+    at: new Date(scheduledAt),
   });
 }
 
@@ -237,14 +261,18 @@ function triggerWebNotification(todo) {
 }
 
 function scheduleWebReminder(todo, onTrigger) {
-  const dueAt = new Date(todo.reminderAt).getTime();
+  const dueAt = new Date(todo.reminderAt || todo.scheduledAt).getTime();
   const now = Date.now();
 
   if (Number.isNaN(dueAt)) return;
 
   if (dueAt <= now) {
     triggerWebNotification(todo);
-    onTrigger(todo.id);
+    onTrigger?.({
+      id: todo.id,
+      taskId: todo.taskId || todo.id,
+      lane: todo.lane || todo.extra?.lane || 'basic',
+    });
     return;
   }
 
@@ -252,14 +280,19 @@ function scheduleWebReminder(todo, onTrigger) {
   const timeoutId = window.setTimeout(() => {
     triggerWebNotification(todo);
     reminderTimeouts.delete(todo.id);
-    onTrigger(todo.id);
+    onTrigger?.({
+      id: todo.id,
+      taskId: todo.taskId || todo.id,
+      lane: todo.lane || todo.extra?.lane || 'basic',
+    });
   }, delay);
 
   reminderTimeouts.set(todo.id, timeoutId);
 }
 
 export async function scheduleReminder(todo, onTrigger) {
-  if (!todo.reminderAt) return;
+  const scheduledAt = todo.reminderAt || todo.scheduledAt;
+  if (!scheduledAt) return;
 
   const nativeEnvironment = await getNativeEnvironment();
   if (nativeEnvironment) {

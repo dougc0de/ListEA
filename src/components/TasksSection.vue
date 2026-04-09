@@ -5,7 +5,6 @@ import ProductivityDashboard from './ProductivityDashboard.vue';
 import TaskCalendar from './TaskCalendar.vue';
 import TodoList from './TodoList.vue';
 import {
-  cancelReminder,
   clearReminderInteractions,
   clearAllReminderTimers,
   enableExactReminders,
@@ -15,7 +14,6 @@ import {
   isNativeReminderRuntime,
   registerReminderInteractions,
   REMINDER_ACTION_IDS,
-  scheduleReminder,
 } from '../services/reminders';
 import {
   AvatarCoach,
@@ -23,6 +21,21 @@ import {
   AVATAR_SNIPPET_DURATIONS,
   AVATAR_TIMINGS,
 } from '../domain/avatar';
+import {
+  AssistantBriefService,
+  MobileAssistantPreferences,
+  OperationalReportService,
+  ReminderPolicyEngine,
+  REMINDER_LANES,
+  WEEKDAY_OPTIONS,
+} from '../domain/mobileAssistant';
+import {
+  BacklogRescuePlanner,
+  DailyRecoveryPlanner,
+  ReminderPersonalityCopywriter,
+  REMINDER_PERSONALITY_OPTIONS,
+  TaskHealthAnalyzer,
+} from '../domain/operability';
 import {
   FILTER_IDS,
   TaskFilterCatalog,
@@ -33,17 +46,17 @@ import { BacklogInsightAnalyzer } from '../domain/insights';
 import {
   ENTITLEMENT_KEYS,
   LICENSE_TIERS,
-  activateLocalProLicense,
-  downgradeToFreeLicense,
   hasEntitlement,
 } from '../domain/license';
 import { LocalTaskRepository } from '../domain/localFirst';
 import { NavigationCatalog } from '../domain/navigation';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
 import { RecurrenceEngine } from '../domain/recurrence';
-import { ProfessionalReviewAnalyzer } from '../domain/review';
 import { downloadBackupFile, parseBackupDocument, readBackupFile } from '../services/localBackup';
 import { LAUNCH_INTENT_TYPES } from '../services/launchIntents';
+import { ReminderActionContext, ReminderActionRouter } from '../services/reminderActionRouter';
+import { ReminderScheduleService } from '../services/reminderScheduleService';
+import { LISTEA_PRO_MONTHLY_PLAN, SubscriptionService } from '../services/subscriptionService';
 import { TaskAppLaunchService } from '../services/taskAppLaunchService';
 import {
   CAPTURE_SOURCES,
@@ -67,15 +80,28 @@ const repository = new LocalTaskRepository({
 });
 const recurrenceEngine = new RecurrenceEngine(taskFactory);
 const avatarCoach = new AvatarCoach();
+const reminderPolicyEngine = new ReminderPolicyEngine({ avatarCoach });
+const operationalReportService = new OperationalReportService();
+const assistantBriefService = new AssistantBriefService({ reportService: operationalReportService });
 const filterCatalog = new TaskFilterCatalog();
 const filterService = new TaskFilterService();
 const visibilityPlanner = new TaskVisibilityPlanner(filterService);
 const insightAnalyzer = new BacklogInsightAnalyzer();
+const taskHealthAnalyzer = new TaskHealthAnalyzer();
+const dailyRecoveryPlanner = new DailyRecoveryPlanner({
+  filterService,
+  healthAnalyzer: taskHealthAnalyzer,
+});
+const backlogRescuePlanner = new BacklogRescuePlanner({
+  healthAnalyzer: taskHealthAnalyzer,
+});
 const navigationCatalog = new NavigationCatalog();
 const contextPresenter = new TaskContextPresenter();
 const captureInterpreter = new QuickCaptureInterpreter();
-const professionalReviewAnalyzer = new ProfessionalReviewAnalyzer();
 const taskAppLaunchService = new TaskAppLaunchService();
+const reminderScheduleService = new ReminderScheduleService();
+const subscriptionService = new SubscriptionService();
+const reminderCopywriter = new ReminderPersonalityCopywriter();
 
 const tasks = ref([]);
 const analytics = ref(repository.normalizeAnalytics());
@@ -91,7 +117,6 @@ const addTaskRef = ref(null);
 const calendarRef = ref(null);
 const searchInputRef = ref(null);
 const focusListPanelRef = ref(null);
-const reviewPanelRef = ref(null);
 const paletteSelectorOpen = ref(false);
 const backupFileInput = ref(null);
 const backupPassphrase = ref('');
@@ -122,6 +147,13 @@ const paletteOptions = [
   { id: COLOR_PALETTES.SUNSET, label: 'Atardecer', description: 'Vibrante y moderna' },
 ];
 const BASIC_TIMINGS = new Set([AVATAR_TIMINGS.NEVER, AVATAR_TIMINGS.ON_TIME]);
+const PRE_REMINDER_OPTIONS = Object.freeze([
+  { value: 0, label: 'Sin aviso previo' },
+  { value: 5, label: '5 min antes' },
+  { value: 10, label: '10 min antes' },
+  { value: 15, label: '15 min antes' },
+  { value: 30, label: '30 min antes' },
+]);
 const UPGRADE_COPY = Object.freeze({
   [ENTITLEMENT_KEYS.ADVANCED_DASHBOARD]: {
     title: 'ListEA Pro desbloquea panel avanzado',
@@ -136,12 +168,20 @@ const UPGRADE_COPY = Object.freeze({
     message: 'El reporte PDF se genera localmente y esta incluido en ListEA Pro.',
   },
   [ENTITLEMENT_KEYS.PREMIUM_INSIGHTS]: {
-    title: 'ListEA Pro desbloquea insights del calendario',
-    message: 'La lectura automatica de saturacion, duplicados y tareas sin decision forma parte de ListEA Pro.',
+    title: 'ListEA Pro desbloquea el centro de control',
+    message: 'Compromisos en riesgo, respuestas por enviar y lectura operativa semanal forman parte de ListEA Pro.',
   },
   [ENTITLEMENT_KEYS.ADVANCED_REMINDERS]: {
     title: 'ListEA Pro desbloquea recordatorios avanzados',
-    message: 'Los avisos antes o despues de la hora objetivo forman parte de ListEA Pro.',
+    message: 'ListEA Pro suma avisos previos, alertas de riesgo y recordatorios con acciones fuera de la app.',
+  },
+  [ENTITLEMENT_KEYS.MOBILE_ASSISTANT]: {
+    title: 'ListEA Pro desbloquea el asistente movil',
+    message: 'Tu telefono te recuerda, te reubica y te deja actuar sin salir del flujo profesional.',
+  },
+  [ENTITLEMENT_KEYS.WEEKLY_BRIEFING]: {
+    title: 'ListEA Pro desbloquea la lectura operativa semanal',
+    message: 'Cada semana recibes un resumen local con compromisos en riesgo, respuestas pendientes y bloqueos viejos.',
   },
   [ENTITLEMENT_KEYS.AVATAR_PRO]: {
     title: 'ListEA Pro desbloquea el avatar avanzado',
@@ -276,6 +316,9 @@ function buildSnoozeDate(task, minutes = 10) {
 
 function resolveTaskWorkspaceView(task) {
   if (!task) return 'today';
+  if (task.isCompleted?.() || task.status === TASK_STATUS.COMPLETED) {
+    return 'today';
+  }
   if (task.status === TASK_STATUS.WAITING || task.status === TASK_STATUS.BLOCKED || task.followUpAt) {
     return 'follow-up';
   }
@@ -403,7 +446,7 @@ async function removeTasksByIds(ids, { trackAnalytics = true, showItemFeedback =
     });
   }
 
-  await Promise.all(removedTasks.map(task => cancelReminder(task.id)));
+  await reminderScheduleService.cancelByIds(reminderPolicyEngine.buildKnownReminderIds(removedTasks));
   tasks.value = tasks.value.filter(task => !idSet.has(task.id));
 }
 
@@ -432,6 +475,13 @@ function setAvatarPreferences(patch) {
   });
 }
 
+function setAssistantPreferences(patch) {
+  preferences.value.assistant = new MobileAssistantPreferences({
+    ...preferences.value.assistant,
+    ...patch,
+  });
+}
+
 function setAppearancePreferences(patch) {
   preferences.value = {
     ...preferences.value,
@@ -454,6 +504,20 @@ function buildEffectiveAvatarPreferences() {
     snippetTiming: preferences.value.avatar.snippetEnabled ? AVATAR_TIMINGS.ON_TIME : AVATAR_TIMINGS.NEVER,
     snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
     importantOnly: false,
+  });
+}
+
+function buildEffectiveAssistantPreferences() {
+  if (hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT) || hasFeature(ENTITLEMENT_KEYS.WEEKLY_BRIEFING)) {
+    return new MobileAssistantPreferences(preferences.value.assistant);
+  }
+
+  return new MobileAssistantPreferences({
+    ...preferences.value.assistant,
+    assistantEnabled: false,
+    preReminderOffset: 0,
+    directOpenCompatibleApp: false,
+    briefHistory: preferences.value.assistant?.briefHistory ?? [],
   });
 }
 
@@ -497,12 +561,23 @@ function applyLicenseState(nextLicense, feedbackMessage = '') {
       snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
       importantOnly: false,
     });
+  const nextAssistantPreferences = (hasEntitlement(nextLicense, ENTITLEMENT_KEYS.MOBILE_ASSISTANT)
+    || hasEntitlement(nextLicense, ENTITLEMENT_KEYS.WEEKLY_BRIEFING))
+    ? new MobileAssistantPreferences(preferences.value.assistant)
+    : new MobileAssistantPreferences({
+      ...preferences.value.assistant,
+      assistantEnabled: false,
+      preReminderOffset: 0,
+      directOpenCompatibleApp: false,
+      briefHistory: preferences.value.assistant?.briefHistory ?? [],
+    });
 
   preferences.value = {
     ...preferences.value,
     license: nextLicense,
     colorPalette: nextHasPremiumThemes ? preferences.value.colorPalette : COLOR_PALETTES.OCEAN,
     avatar: nextAvatarPreferences,
+    assistant: nextAssistantPreferences,
   };
 
   if (!nextHasPremiumThemes) {
@@ -516,31 +591,83 @@ function applyLicenseState(nextLicense, feedbackMessage = '') {
   }
 }
 
-function activateProLocally() {
+async function subscribeToPro() {
+  const nextLicense = await subscriptionService.purchaseMonthly(preferences.value.license);
   applyLicenseState(
-    activateLocalProLicense(preferences.value.license),
-    'ListEA Pro quedo activado localmente en este dispositivo.',
+    nextLicense,
+    'ListEA Pro mensual quedo activo en este dispositivo.',
   );
   dismissUpgradePrompt();
 }
 
-function restoreLocalPro() {
-  if (preferences.value.license?.restoreAvailable || preferences.value.license?.licenseTier === LICENSE_TIERS.PRO) {
+async function restoreSubscription() {
+  const nextLicense = await subscriptionService.restore(preferences.value.license);
+  if (nextLicense?.licenseTier === LICENSE_TIERS.PRO) {
     applyLicenseState(
-      activateLocalProLicense(preferences.value.license),
-      'ListEA Pro se restauro localmente en este dispositivo.',
+      nextLicense,
+      'ListEA Pro mensual se restauro en este dispositivo.',
     );
     return;
   }
 
-  showUiFeedback('Todavia no hay una compra local para restaurar en este dispositivo.', 'error');
+  showUiFeedback('Todavia no hay una suscripcion local para restaurar en este dispositivo.', 'error');
 }
 
-function revertToFreePlan() {
+async function revertToFreePlan() {
+  const nextLicense = await subscriptionService.downgrade(preferences.value.license);
   applyLicenseState(
-    downgradeToFreeLicense(preferences.value.license),
+    nextLicense,
     'ListEA volvio al plan Free sin tocar tus tareas ni tu historial local.',
   );
+}
+
+function setAssistantEnabled(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT) && value) {
+    requestUpgrade(ENTITLEMENT_KEYS.MOBILE_ASSISTANT);
+    return;
+  }
+
+  setAssistantPreferences({ assistantEnabled: value });
+}
+
+function setPreReminderOffset(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.ADVANCED_REMINDERS) && Number(value) > 0) {
+    requestUpgrade(ENTITLEMENT_KEYS.ADVANCED_REMINDERS);
+    return;
+  }
+
+  setAssistantPreferences({ preReminderOffset: Number(value) });
+}
+
+function setDirectOpenCompatibleApp(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT) && value) {
+    requestUpgrade(ENTITLEMENT_KEYS.MOBILE_ASSISTANT);
+    return;
+  }
+
+  setAssistantPreferences({ directOpenCompatibleApp: value });
+}
+
+function setWeeklyBriefDay(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.WEEKLY_BRIEFING)) {
+    requestUpgrade(ENTITLEMENT_KEYS.WEEKLY_BRIEFING);
+    return;
+  }
+
+  setAssistantPreferences({ weeklyBriefDay: Number(value) });
+}
+
+function setWeeklyBriefTime(value) {
+  if (!hasFeature(ENTITLEMENT_KEYS.WEEKLY_BRIEFING)) {
+    requestUpgrade(ENTITLEMENT_KEYS.WEEKLY_BRIEFING);
+    return;
+  }
+
+  setAssistantPreferences({ weeklyBriefTime: value });
+}
+
+function setReminderPersonality(value) {
+  setAssistantPreferences({ reminderPersonality: value });
 }
 
 function togglePaletteSelector() {
@@ -566,17 +693,6 @@ function scrollToFocusContent() {
   if (!panel) return;
 
   panel.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  });
-}
-
-function scrollToElement(targetRef) {
-  if (typeof window === 'undefined') return;
-  const element = targetRef?.value;
-  if (!element) return;
-
-  element.scrollIntoView({
     behavior: 'smooth',
     block: 'start',
   });
@@ -617,11 +733,6 @@ function applyAppearancePreferences() {
 
 function selectTimeFilter(filterId) {
   activeFilterId.value = filterId;
-  scrollToFocusContent();
-}
-
-function resetTimeFilter() {
-  activeFilterId.value = FILTER_IDS.TODAY;
   scrollToFocusContent();
 }
 
@@ -793,6 +904,7 @@ function updateTaskWithDate(task, nextDate, feedbackMessage) {
     reminderSent: false,
     avatarSnippetShownAt: '',
     needsTriage: false,
+    postponedCount: Number(task.postponedCount ?? 0) + 1,
   };
 
   if (dateField === 'followUpAt' && task.status === TASK_STATUS.ACTIVE) {
@@ -869,11 +981,18 @@ function showAvatarSnippet(task) {
   if (!task) return;
 
   const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
+  const assistantPreferences = buildEffectiveAssistantPreferences();
   const shownAt = new Date().toISOString();
   const primaryAction = resolvePrimaryLaunchSuggestion(task);
+  const baseSnippet = avatarCoach.buildTaskSnippet(task, effectiveAvatarPreferences, new Date(shownAt));
+  const personalizedSnippet = reminderCopywriter.buildSnippet(
+    task,
+    baseSnippet,
+    assistantPreferences.reminderPersonality,
+  );
   task.applyPatch({ avatarSnippetShownAt: shownAt });
   avatarSnippet.value = {
-    ...avatarCoach.buildTaskSnippet(task, effectiveAvatarPreferences, new Date(shownAt)),
+    ...personalizedSnippet,
     context: contextPresenter.buildTaskContext(task).slice(0, 3).join(' - '),
     preferredView: resolveTaskWorkspaceView(task),
     primaryAction,
@@ -933,11 +1052,13 @@ function syncAvatarSnippet() {
   }, Math.min(delay, 2147483647));
 }
 
-function showReminderBubble(taskId) {
+function showReminderBubble(taskId, { markSent = true } = {}) {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task || task.isCompleted() || avatarSnippet.value?.taskId === taskId) return;
 
-  task.applyPatch({ reminderSent: true });
+  if (markSent) {
+    task.applyPatch({ reminderSent: true });
+  }
   tasks.value = [...tasks.value];
   showAvatarSnippet(task);
 }
@@ -1013,14 +1134,19 @@ async function openReminderPrimaryAction(taskId, preferredView = '') {
   const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
 
-  const primarySuggestion = resolvePrimaryLaunchSuggestion(task);
-  const result = await openTaskLaunch(task, primarySuggestion?.id ?? '', {
-    showPremiumHint: false,
-    userInitiated: true,
-  });
-  if (result.completed) {
-    dismissAvatarSnippet({ reschedule: false });
-    return;
+  const suggestions = taskAppLaunchService.resolve(task);
+  const canDirectOpen = effectiveAssistantPreferences.value.directOpenCompatibleApp
+    && suggestions.length === 1;
+
+  if (canDirectOpen) {
+    const result = await openTaskLaunch(task, suggestions[0]?.id ?? '', {
+      showPremiumHint: false,
+      userInitiated: true,
+    });
+    if (result.completed) {
+      dismissAvatarSnippet({ reschedule: false });
+      return;
+    }
   }
 
   openReminderTask(taskId, preferredView);
@@ -1044,35 +1170,45 @@ function openReminderTask(taskId, preferredView = '') {
 }
 
 function handleReminderNotificationReceived(notification) {
+  const preferredView = notification?.extra?.preferredView ?? '';
+  const lane = notification?.extra?.lane ?? REMINDER_LANES.BASIC;
+  const reminderKind = notification?.extra?.reminderKind ?? '';
   const taskId = notification?.extra?.taskId;
+  if (!taskId && preferredView === 'dashboard' && reminderKind === 'weekly-brief') {
+    showUiFeedback('Tu lectura operativa semanal ya esta lista en el panel.', 'info');
+    return;
+  }
   if (!taskId) return;
-  showReminderBubble(taskId);
+  showReminderBubble(taskId, {
+    markSent: lane !== REMINDER_LANES.PREP,
+  });
 }
 
-function handleReminderNotificationAction(notificationAction) {
-  const taskId = notificationAction?.notification?.extra?.taskId;
-  if (!taskId) return;
-
-  const preferredView = notificationAction?.notification?.extra?.preferredView ?? '';
-  const actionId = notificationAction?.actionId;
-  if (actionId === REMINDER_ACTION_IDS.COMPLETE) {
-    completeReminderTask(taskId);
-    return;
-  }
-
-  if (actionId === REMINDER_ACTION_IDS.SNOOZE_10) {
-    snoozeReminderTask(taskId, 10);
-    return;
-  }
-
-  if (actionId === REMINDER_ACTION_IDS.MOVE_TOMORROW) {
-    moveReminderTaskToTomorrow(taskId);
-    return;
-  }
-
-  if (actionId === REMINDER_ACTION_IDS.OPEN) {
+const reminderActionRouter = new ReminderActionRouter({
+  onComplete: ({ taskId }) => completeReminderTask(taskId),
+  onSnooze: ({ taskId }) => snoozeReminderTask(taskId, 10),
+  onMoveTomorrow: ({ taskId }) => moveReminderTaskToTomorrow(taskId),
+  onOpenTask: ({ taskId, preferredView }) => {
     openReminderPrimaryAction(taskId, preferredView);
-  }
+  },
+  onOpenView: ({ preferredView, reminderKind }) => {
+    if (preferredView) {
+      emit('navigate', preferredView);
+      if (reminderKind === 'weekly-brief') {
+        showUiFeedback('Abriendo tu lectura operativa semanal.', 'info');
+      }
+    }
+  },
+});
+
+function handleReminderNotificationAction(notificationAction) {
+  reminderActionRouter.route(new ReminderActionContext({
+    actionId: notificationAction?.actionId ?? REMINDER_ACTION_IDS.OPEN,
+    taskId: notificationAction?.notification?.extra?.taskId,
+    preferredView: notificationAction?.notification?.extra?.preferredView ?? '',
+    lane: notificationAction?.notification?.extra?.lane ?? '',
+    reminderKind: notificationAction?.notification?.extra?.reminderKind ?? '',
+  }));
 }
 
 async function enableNotificationsFlow() {
@@ -1096,7 +1232,7 @@ async function enableNotificationsFlow() {
 async function disableNotificationsFlow() {
   preferences.value.notificationsEnabled = false;
   await clearAllReminderTimers();
-  await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
+  await reminderScheduleService.cancelByIds(reminderPolicyEngine.buildKnownReminderIds(tasks.value));
 }
 
 async function toggleNotificationsSetting(enabled) {
@@ -1114,31 +1250,78 @@ async function saveReminderSettings() {
   showUiFeedback('Preferencias de recordatorio guardadas localmente.', 'success');
 }
 
-function markReminderSent(id) {
-  const task = tasks.value.find(item => item.id === id);
+function markReminderSent(payload) {
+  const taskId = typeof payload === 'string'
+    ? payload
+    : (payload?.taskId || payload?.id || '');
+  const lane = typeof payload === 'object' ? payload?.lane : REMINDER_LANES.BASIC;
+  if (!taskId || lane === REMINDER_LANES.PREP || lane === REMINDER_LANES.BRIEFING) return;
+  const task = tasks.value.find(item => item.id === taskId);
   if (!task) return;
   task.applyPatch({ reminderSent: true });
 }
 
+function syncBriefHistory(report) {
+  if (!report?.weekKey) return;
+
+  const currentAssistant = new MobileAssistantPreferences(preferences.value.assistant);
+  const currentHistory = currentAssistant.briefHistory;
+  const existing = currentHistory.find(item => item.weekKey === report.weekKey);
+  const nextEntry = {
+    weekKey: report.weekKey,
+    createdAt: existing?.createdAt || report.createdAt,
+    summary: report.summary,
+    highlights: report.highlights,
+  };
+
+  const existingSignature = existing ? JSON.stringify({
+    summary: existing.summary,
+    highlights: existing.highlights,
+  }) : '';
+  const nextSignature = JSON.stringify({
+    summary: nextEntry.summary,
+    highlights: nextEntry.highlights,
+  });
+
+  if (existingSignature === nextSignature) {
+    return;
+  }
+
+  const nextHistory = currentHistory.filter(item => item.weekKey !== report.weekKey);
+  nextHistory.push(nextEntry);
+  preferences.value.assistant = currentAssistant.withBriefHistory(nextHistory);
+}
+
 async function syncReminders() {
   await clearAllReminderTimers();
-  await Promise.all(tasks.value.map(task => cancelReminder(task.id)));
+  await reminderScheduleService.cancelByIds(reminderPolicyEngine.buildKnownReminderIds(tasks.value));
+
+  const referenceDate = new Date();
+  const avatarPreferences = buildEffectiveAvatarPreferences();
+  const assistantPreferences = buildEffectiveAssistantPreferences();
+  const entitlements = preferences.value.license?.entitlements ?? {};
+  const weeklyBrief = assistantBriefService.buildWeeklyBrief(tasks.value, analytics.value, {
+    referenceDate,
+    assistantPreferences,
+    entitlements,
+  });
+  syncBriefHistory(weeklyBrief.report);
 
   if (!preferences.value.notificationsEnabled) {
     return;
   }
 
-  const effectiveAvatarPreferences = buildEffectiveAvatarPreferences();
-  for (const task of tasks.value) {
-    if (task.isCompleted()) continue;
-    const reminderAt = avatarCoach.getReminderAt(task, effectiveAvatarPreferences);
-    if (!reminderAt || task.reminderSent) continue;
+  const taskPlans = reminderPolicyEngine.buildTaskPlans(tasks.value, {
+    referenceDate,
+    avatarPreferences,
+    assistantPreferences,
+    entitlements,
+  });
+  const reminderPlans = weeklyBrief.plan
+    ? [...taskPlans, weeklyBrief.plan]
+    : taskPlans;
 
-    await scheduleReminder({
-      ...task.toJSON(),
-      reminderAt,
-    }, markReminderSent);
-  }
+  await reminderScheduleService.schedulePlans(reminderPlans, markReminderSent);
 }
 
 function setReminderTiming(value) {
@@ -1246,14 +1429,6 @@ async function importBackupFromFile(event) {
   }
 }
 
-function runProfessionalReviewAction(item) {
-  if (!item?.targetView) return;
-  emit('navigate', item.targetView);
-  if (item.targetView === 'today') {
-    activeFilterId.value = FILTER_IDS.NO_DATE;
-  }
-}
-
 function handleLaunchIntent(intent) {
   if (!intent?.nonce) return;
 
@@ -1281,6 +1456,7 @@ function handleLaunchIntent(intent) {
 
 const resolvedView = computed(() => navigationCatalog.getFallbackView(props.currentView));
 const effectiveAvatarPreferences = computed(() => buildEffectiveAvatarPreferences());
+const effectiveAssistantPreferences = computed(() => buildEffectiveAssistantPreferences());
 const showTaskWorkspace = computed(() => ['today', 'follow-up', 'calendar'].includes(resolvedView.value));
 const openTasks = computed(() => sortTasksByRelevance(tasks.value.filter(task => !task.isCompleted())));
 const focusTasks = computed(() =>
@@ -1297,8 +1473,7 @@ const completedTasks = computed(() =>
   tasks.value
     .filter(task => task.isCompleted())
     .slice()
-    .sort((left, right) => new Date(right.completedAt) - new Date(left.completedAt))
-    .slice(0, 6),
+    .sort((left, right) => new Date(right.completedAt) - new Date(left.completedAt)),
 );
 const timeFilters = computed(() => {
   const referenceDate = new Date();
@@ -1308,10 +1483,13 @@ const timeFilters = computed(() => {
       FILTER_IDS.THIS_WEEK,
       FILTER_IDS.OVERDUE,
       FILTER_IDS.NO_DATE,
+      FILTER_IDS.COMPLETED,
     ].includes(filter.id))
     .map(filter => ({
       ...filter,
-      count: filterService.apply(focusTasks.value, filter.id, { referenceDate }).length,
+      count: filter.id === FILTER_IDS.COMPLETED
+        ? completedTasks.value.length
+        : filterService.apply(focusTasks.value, filter.id, { referenceDate }).length,
     }));
 });
 const selectedTimeFilter = computed(() =>
@@ -1324,11 +1502,15 @@ const filteredTasks = computed(() => {
   });
   return sortTasksByRelevance(applySearch(filtered));
 });
+const selectedWorkspaceTasks = computed(() => {
+  if (selectedTimeFilter.value?.id === FILTER_IDS.COMPLETED) {
+    return applySearch(completedTasks.value);
+  }
+
+  return filteredTasks.value;
+});
 const calendarSourceTasks = computed(() => applySearch(tasks.value));
-const professionalReviewItems = computed(() => professionalReviewAnalyzer.analyze(openTasks.value, {
-  referenceDate: new Date(),
-}));
-const focusEmptyMessage = computed(() => {
+const workspaceEmptyMessage = computed(() => {
   if (selectedTimeFilter.value?.id === FILTER_IDS.OVERDUE) {
     return 'No hay tareas vencidas.';
   }
@@ -1341,6 +1523,10 @@ const focusEmptyMessage = computed(() => {
     return 'No hay tareas para esta semana.';
   }
 
+  if (selectedTimeFilter.value?.id === FILTER_IDS.COMPLETED) {
+    return 'Todavia no hay tareas completadas.';
+  }
+
   return 'No hay tareas dentro de esta ventana de tiempo.';
 });
 const backlogInsights = computed(() => insightAnalyzer.analyze(openTasks.value, {
@@ -1348,6 +1534,20 @@ const backlogInsights = computed(() => insightAnalyzer.analyze(openTasks.value, 
 }));
 const visibleBacklogInsights = computed(() =>
   hasFeature(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS) ? backlogInsights.value : [],
+);
+const dailyRecovery = computed(() => dailyRecoveryPlanner.build(openTasks.value, {
+  referenceDate: new Date(),
+}));
+const backlogRescue = computed(() => backlogRescuePlanner.build(openTasks.value, {
+  referenceDate: new Date(),
+}));
+const todayHealthSummary = computed(() => taskHealthAnalyzer.summarize(openTasks.value, {
+  referenceDate: new Date(),
+}));
+const showOperabilityCards = computed(() =>
+  resolvedView.value === 'today'
+  && selectedTimeFilter.value?.id !== FILTER_IDS.COMPLETED
+  && (dailyRecovery.value.shouldShow || backlogRescue.value.shouldShow),
 );
 const summary = computed(() => ({
   pending: openTasks.value.length,
@@ -1399,23 +1599,28 @@ const summaryCards = computed(() => {
 
   return [
     { id: 'pending', label: 'Abiertas', value: summary.value.pending },
-    { id: 'today', label: 'Para hoy', value: summary.value.today },
-    { id: 'overdue', label: 'Vencidas', value: summary.value.overdue },
+    { id: 'followUp', label: 'Seguimiento', value: summary.value.followUp },
+    { id: 'withoutDate', label: 'Sin fecha', value: summary.value.withoutDate },
   ];
 });
 const activePaletteId = computed(() => hasFeature(ENTITLEMENT_KEYS.PREMIUM_THEMES)
   ? (preferences.value.colorPalette ?? COLOR_PALETTES.OCEAN)
   : COLOR_PALETTES.OCEAN);
+const currentOperationalBrief = computed(() => operationalReportService.build(tasks.value, analytics.value, {
+  referenceDate: new Date(),
+  history: effectiveAssistantPreferences.value.briefHistory,
+}));
+const subscriptionPlanLabel = computed(() => `${LISTEA_PRO_MONTHLY_PLAN.label} · ${LISTEA_PRO_MONTHLY_PLAN.priceLabel}`);
 const licenseSummary = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO
-  ? 'ListEA Pro activado en este dispositivo.'
+  ? `${LISTEA_PRO_MONTHLY_PLAN.label} activo en este dispositivo.`
   : 'ListEA Free activo. Tus tareas siguen siendo privadas y locales.');
 const isProActive = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO);
 const viewQuickActions = computed(() => {
   if (resolvedView.value === 'follow-up') {
     return [
       { id: 'search', label: 'Buscar' },
-      { id: 'review', label: 'Revision' },
       { id: 'open-calendar', label: 'Calendario' },
+      { id: 'open-dashboard', label: 'Panel' },
     ];
   }
 
@@ -1464,11 +1669,6 @@ function handleQuickAction(actionId) {
 
   if (actionId === 'search') {
     focusSearchField();
-    return;
-  }
-
-  if (actionId === 'review') {
-    scrollToElement(reviewPanelRef);
     return;
   }
 
@@ -1535,6 +1735,7 @@ watch(
 
 onMounted(async () => {
   loadState();
+  preferences.value.license = await subscriptionService.sync(preferences.value.license);
   isNativeReminderPlatform.value = await isNativeReminderRuntime();
   preferences.value.reminderPermission = await getReminderPermission();
   preferences.value.exactAlarmPermission = await getExactAlarmPermission();
@@ -1700,12 +1901,12 @@ onBeforeUnmount(() => {
       <article ref="focusListPanelRef" class="panelCard focusListPanel">
         <div class="sectionHeader">
           <div>
-            <p class="eyebrow">Activa</p>
+            <p class="eyebrow">Trabajo activo</p>
             <h3>{{ selectedTimeFilter.label }}</h3>
           </div>
           <div class="headerActions">
             <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
-            <span class="laneCount">{{ formatTaskCount(filteredTasks.length) }}</span>
+            <span class="laneCount">{{ formatTaskCount(selectedWorkspaceTasks.length) }}</span>
           </div>
         </div>
 
@@ -1723,12 +1924,84 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
+        <div v-if="showOperabilityCards" class="operabilityGrid">
+          <article v-if="dailyRecovery.shouldShow" class="assistantCard">
+            <div class="assistantCardHead">
+              <div>
+                <p class="eyebrow">Modo recuperacion</p>
+                <strong>{{ dailyRecovery.headline }}</strong>
+              </div>
+              <span class="assistantStatePill" :data-tone="dailyRecovery.isRecoveryMode ? 'warn' : 'good'">
+                {{ dailyRecovery.isRecoveryMode ? 'Activo' : 'Estable' }}
+              </span>
+            </div>
+
+            <p class="panelText">{{ dailyRecovery.message }}</p>
+
+            <div v-if="dailyRecovery.priorityTasks.length" class="assistantTaskRow">
+              <button
+                v-for="item in dailyRecovery.priorityTasks"
+                :key="item.id"
+                type="button"
+                class="assistantTaskButton"
+                @click="focusTaskById(item.id, 'today', { showFeedback: false })"
+              >
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.badge }}</span>
+              </button>
+            </div>
+
+            <div class="assistantMetaRow">
+              <span class="assistantMetaChip">Riesgo: {{ todayHealthSummary['at-risk'] }}</span>
+              <span class="assistantMetaChip">Estancadas: {{ todayHealthSummary.stalled }}</span>
+              <span class="assistantMetaChip">Vencidas: {{ todayHealthSummary.overdue }}</span>
+            </div>
+
+            <div v-if="dailyRecovery.quickWins.length || dailyRecovery.cleanupMessage" class="assistantMetaRow">
+              <span
+                v-for="quickTask in dailyRecovery.quickWins"
+                :key="quickTask.id"
+                class="assistantMetaChip"
+              >
+                {{ quickTask.title }} · {{ quickTask.minutes }}m
+              </span>
+              <span v-if="dailyRecovery.cleanupMessage" class="assistantMetaChip cleanup">
+                {{ dailyRecovery.cleanupMessage }}
+              </span>
+            </div>
+          </article>
+
+          <article v-if="backlogRescue.shouldShow" class="assistantCard">
+            <div class="assistantCardHead">
+              <div>
+                <p class="eyebrow">Backlog rescue</p>
+                <strong>ListEA encontro tareas que conviene rescatar primero</strong>
+              </div>
+              <span class="assistantStatePill">Local</span>
+            </div>
+
+            <div class="rescueList">
+              <button
+                v-for="item in backlogRescue.items"
+                :key="item.id"
+                type="button"
+                class="rescueActionCard"
+                @click="focusTaskById(item.taskId, 'today', { edit: ['split', 'quick-step'].includes(item.actionId), showFeedback: false })"
+              >
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.actionLabel }}</span>
+                <small>{{ item.reason }}</small>
+              </button>
+            </div>
+          </article>
+        </div>
+
         <transition name="timeSwap" mode="out-in">
           <div :key="selectedTimeFilter.id" class="focusListWrap">
             <TodoList
-              :todos="filteredTasks"
+              :todos="selectedWorkspaceTasks"
               :editing-task-id="editingTaskId"
-              :empty-message="focusEmptyMessage"
+              :empty-message="workspaceEmptyMessage"
               @toggle="toggleTask"
               @remove="removeTask"
               @update="updateTask"
@@ -1737,30 +2010,6 @@ onBeforeUnmount(() => {
             />
           </div>
         </transition>
-      </article>
-
-      <article class="panelCard">
-        <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Completadas</p>
-            <h3>Completadas recientes</h3>
-          </div>
-          <div class="headerActions">
-            <button type="button" class="ghostButton" @click="resetTaskWorkspaceView">Reiniciar vista</button>
-            <span class="laneCount">{{ formatTaskCount(completedTasks.length) }}</span>
-          </div>
-        </div>
-
-        <TodoList
-          :todos="completedTasks"
-          :editing-task-id="editingTaskId"
-          empty-message="Todavia no hay tareas completadas."
-          @toggle="toggleTask"
-          @remove="removeTask"
-          @update="updateTask"
-          @toggle-subtask="toggleSubtask"
-          @open-external="handleTaskLaunchRequest"
-        />
       </article>
     </section>
 
@@ -1775,7 +2024,6 @@ onBeforeUnmount(() => {
             <span class="laneCount">{{ formatTaskCount(followUpTasks.length) }}</span>
           </div>
         </div>
-        <p class="panelText">Todo lo que espera respuesta o nueva fecha vive aqui.</p>
         <TodoList
           :todos="followUpTasks"
           :editing-task-id="editingTaskId"
@@ -1788,27 +2036,6 @@ onBeforeUnmount(() => {
           @task-action="handleTaskAction"
           @open-external="handleTaskLaunchRequest"
         />
-      </article>
-
-      <article ref="reviewPanelRef" class="panelCard insightsPanel">
-        <div class="sectionHeader">
-          <div>
-            <p class="eyebrow">Revision profesional</p>
-            <h3>Resumen local de 3 a 5 minutos</h3>
-          </div>
-        </div>
-        <div v-if="professionalReviewItems.length" class="reviewList">
-          <article v-for="item in professionalReviewItems" :key="item.id" class="reviewCard">
-            <div>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.message }}</p>
-            </div>
-            <button type="button" class="ghostButton" @click="runProfessionalReviewAction(item)">
-              {{ item.actionLabel }}
-            </button>
-          </article>
-        </div>
-        <p v-else class="emptyText">Tu seguimiento se ve bajo control.</p>
       </article>
     </section>
 
@@ -1828,7 +2055,6 @@ onBeforeUnmount(() => {
 
         <article
           v-if="visibleBacklogInsights.length"
-          ref="reviewPanelRef"
           class="panelCard insightsPanel"
         >
           <div class="sectionHeader">
@@ -1906,8 +2132,11 @@ onBeforeUnmount(() => {
         :analytics="analytics"
         :entitlements="preferences.license.entitlements"
         :license-tier="preferences.license.licenseTier"
+        :operational-brief="currentOperationalBrief"
+        :brief-history="effectiveAssistantPreferences.briefHistory"
         :tasks="tasks"
         @clear-analytics="clearAnalytics"
+        @navigate="emit('navigate', $event)"
         @upgrade="requestUpgrade"
       />
     </section>
@@ -1929,16 +2158,16 @@ onBeforeUnmount(() => {
               {{ isProActive ? 'ListEA Pro' : 'ListEA Free' }}
             </span>
             <span class="panelText">
-              {{ isProActive ? 'Pago unico local preparado para este dispositivo.' : 'Tus tareas siguen completas y privadas en el plan Free.' }}
+              {{ isProActive ? `${subscriptionPlanLabel}. Tus datos siguen viviendo aqui.` : 'Tus tareas siguen completas y privadas en el plan Free.' }}
             </span>
           </div>
-          <p class="panelText">Pro suma calendario premium, revision avanzada, avisos, apertura inteligente, voz a tarea, paletas y respaldo cifrado.</p>
+          <p class="panelText">Pro suma asistente movil, briefings semanales, centro de control premium, calendario, apertura inteligente, voz a tarea y respaldo cifrado.</p>
           <div class="buttonRow">
-            <button v-if="!isProActive" type="button" class="primaryButton" @click="activateProLocally">
-              Activar ListEA Pro local
+            <button v-if="!isProActive" type="button" class="primaryButton" @click="subscribeToPro">
+              Suscribirme a Pro
             </button>
-            <button type="button" class="ghostButton" @click="restoreLocalPro">
-              Restaurar Pro local
+            <button type="button" class="ghostButton" @click="restoreSubscription">
+              Restaurar Pro
             </button>
             <button v-if="isProActive" type="button" class="ghostButton" @click="revertToFreePlan">
               Volver a Free
@@ -1953,7 +2182,7 @@ onBeforeUnmount(() => {
         <p class="panelText">Estado actual: {{ preferences.reminderPermission }}</p>
         <p class="panelText">Recordatorios: {{ preferences.notificationsEnabled ? 'activados' : 'desactivados' }}</p>
         <p class="panelText">Alarma exacta: {{ preferences.exactAlarmPermission }}</p>
-        <p class="panelText">Los recordatorios normales siguen funcionando aunque Android no conceda alarma exacta.</p>
+        <p class="panelText">Free cubre el aviso basico. Pro suma preparacion previa, riesgo y lectura semanal fuera de la app.</p>
         <div class="settingsStack">
           <label class="checkboxRow">
             <input
@@ -1987,6 +2216,117 @@ onBeforeUnmount(() => {
               Guardar preferencias
             </button>
           </div>
+        </div>
+      </article>
+
+      <article class="panelCard">
+        <p class="eyebrow">Asistente movil</p>
+        <h3>Tu telefono te ayuda a actuar, no solo a recordar</h3>
+        <p class="panelText">
+          Prepara tareas antes de la hora, empuja compromisos en riesgo y deja lista la lectura operativa semanal.
+        </p>
+        <div class="settingsStack">
+          <label class="checkboxRow">
+            <input
+              :checked="effectiveAssistantPreferences.assistantEnabled"
+              type="checkbox"
+              @change="setAssistantEnabled($event.target.checked)"
+            />
+            <span>Activar asistente movil</span>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Pre-recordatorio</span>
+            <select
+              class="detailField"
+              :value="effectiveAssistantPreferences.preReminderOffset"
+              @change="setPreReminderOffset($event.target.value)"
+            >
+              <option
+                v-for="option in PRE_REMINDER_OPTIONS"
+                :key="option.value"
+                :value="option.value"
+                :disabled="option.value > 0 && !preferences.license.entitlements.advancedReminders"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="fieldGroup">
+            <span>Tono del asistente</span>
+            <select
+              class="detailField"
+              :value="effectiveAssistantPreferences.reminderPersonality"
+              @change="setReminderPersonality($event.target.value)"
+            >
+              <option
+                v-for="option in REMINDER_PERSONALITY_OPTIONS"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+
+          <div class="fieldGroup">
+            <span>Horas silenciosas</span>
+            <div class="inlineFieldRow">
+              <input
+                class="detailField"
+                type="time"
+                :value="effectiveAssistantPreferences.quietHoursStart"
+                @change="setAssistantPreferences({ quietHoursStart: $event.target.value })"
+              />
+              <input
+                class="detailField"
+                type="time"
+                :value="effectiveAssistantPreferences.quietHoursEnd"
+                @change="setAssistantPreferences({ quietHoursEnd: $event.target.value })"
+              />
+            </div>
+          </div>
+
+          <label class="fieldGroup">
+            <span>Resumen semanal</span>
+            <div class="inlineFieldRow">
+              <select
+                class="detailField"
+                :value="effectiveAssistantPreferences.weeklyBriefDay"
+                @change="setWeeklyBriefDay($event.target.value)"
+              >
+                <option v-for="day in WEEKDAY_OPTIONS" :key="day.value" :value="day.value">
+                  {{ day.label }}
+                </option>
+              </select>
+              <input
+                class="detailField"
+                type="time"
+                :value="effectiveAssistantPreferences.weeklyBriefTime"
+                @change="setWeeklyBriefTime($event.target.value)"
+              />
+            </div>
+          </label>
+
+          <label class="checkboxRow">
+            <input
+              :checked="effectiveAssistantPreferences.directOpenCompatibleApp"
+              type="checkbox"
+              @change="setDirectOpenCompatibleApp($event.target.checked)"
+            />
+            <span>Abrir directo la app compatible desde el recordatorio</span>
+          </label>
+
+          <div class="briefPreviewCard">
+            <strong>Lectura semanal actual</strong>
+            <p>{{ currentOperationalBrief.highlights[0] || 'ListEA preparara aqui tu lectura operativa.' }}</p>
+            <small>{{ currentOperationalBrief.highlights[1] || 'Se construye solo con datos locales del dispositivo.' }}</small>
+          </div>
+
+          <p v-if="!preferences.license.entitlements.mobileAssistant" class="panelText">
+            ListEA Free recuerda. Pro se comporta como asistente movil local-first.
+          </p>
         </div>
       </article>
 
@@ -2248,10 +2588,15 @@ onBeforeUnmount(() => {
 .quickActionButton {
   min-height: 40px;
   padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
   background: color-mix(in srgb, var(--surface) 58%, transparent);
   color: var(--text-main);
+  line-height: 1.15;
+  text-align: center;
 }
 
 .feedbackBanner {
@@ -2491,7 +2836,7 @@ onBeforeUnmount(() => {
 }
 
 .timeFilterGrid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .timeFilterTile {
@@ -2507,6 +2852,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--surface) 64%, transparent);
   color: var(--text-main);
   text-align: left;
+  line-height: 1.15;
 }
 
 .timeFilterLabel {
@@ -2534,8 +2880,15 @@ onBeforeUnmount(() => {
 .filterChip,
 .ghostButton,
 .primaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--line);
+  line-height: 1.15;
+  text-align: center;
 }
 
 .filterChip,
@@ -2575,7 +2928,7 @@ onBeforeUnmount(() => {
 }
 
 .workflowGrid {
-  grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+  grid-template-columns: 1fr;
 }
 
 .calendarGridView {
@@ -2739,9 +3092,112 @@ onBeforeUnmount(() => {
   min-height: 120px;
 }
 
+.operabilityGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.assistantCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+  background: color-mix(in srgb, white 92%, var(--surface));
+  box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
+}
+
+.assistantCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assistantCardHead strong,
+.assistantTaskButton strong,
+.rescueActionCard strong,
+.rescueActionCard small {
+  display: block;
+  text-align: left;
+}
+
+.assistantStatePill,
+.assistantMetaChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface) 82%, white);
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.assistantStatePill[data-tone='warn'] {
+  color: #a14e1f;
+}
+
+.assistantStatePill[data-tone='good'] {
+  color: #336346;
+}
+
+.assistantTaskRow,
+.assistantMetaRow,
+.rescueList {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.assistantTaskButton,
+.rescueActionCard {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  color: var(--text-main);
+}
+
+.assistantTaskButton {
+  flex: 1 1 180px;
+  min-height: 72px;
+  padding: 12px 14px;
+}
+
+.assistantTaskButton span,
+.rescueActionCard span {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.assistantMetaChip.cleanup {
+  white-space: normal;
+  align-items: flex-start;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-radius: 18px;
+}
+
+.rescueActionCard {
+  flex: 1 1 220px;
+  padding: 12px 14px;
+}
+
+.rescueActionCard small {
+  color: var(--text-muted);
+}
+
 .focusFilterBar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -2771,44 +3227,19 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-.reviewList {
-  display: grid;
-  gap: 12px;
-}
-
 .insightCard {
   padding: 14px 0 0;
   border-radius: 0;
   border-top: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   background: transparent;
 }
-
-.reviewCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 0 0;
-  border-radius: 0;
-  border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
-  background: transparent;
-}
-
-.reviewCard button {
-  align-self: center;
-}
-
 .insightCard strong,
-.insightCard p,
-.reviewCard strong,
-.reviewCard p {
+.insightCard p {
   display: block;
   text-align: left;
 }
 
-.insightCard p,
-.reviewCard p {
+.insightCard p {
   margin: 6px 0 0;
 }
 
@@ -2937,6 +3368,32 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
+.inlineFieldRow {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.briefPreviewCard {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface) 64%, transparent);
+  text-align: left;
+}
+
+.briefPreviewCard p,
+.briefPreviewCard small {
+  margin: 0;
+}
+
+.briefPreviewCard small {
+  color: var(--text-muted);
+}
+
 .srOnly {
   position: absolute;
   width: 1px;
@@ -2978,7 +3435,9 @@ onBeforeUnmount(() => {
   .focusBoardGrid,
   .calendarGridView,
   .settingsGrid,
-  .timeFilterGrid {
+  .timeFilterGrid,
+  .inlineFieldRow,
+  .operabilityGrid {
     grid-template-columns: 1fr;
   }
 
@@ -2992,9 +3451,6 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
   }
 
-  .reviewCard {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {
@@ -3106,6 +3562,12 @@ onBeforeUnmount(() => {
     gap: 8px;
     padding-bottom: 2px;
     scrollbar-width: none;
+  }
+
+  .assistantTaskRow,
+  .assistantMetaRow,
+  .rescueList {
+    flex-direction: column;
   }
 
   .focusFilterBar::-webkit-scrollbar {

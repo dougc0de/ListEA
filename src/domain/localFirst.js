@@ -1,4 +1,5 @@
 import { TaskActivityLedger } from './activity';
+import { MobileAssistantPreferences } from './mobileAssistant';
 import { AvatarPreferences, AVATAR_SNIPPET_DURATIONS, AVATAR_TIMINGS } from './avatar';
 import { buildLicenseState, serializeLicenseState } from './license';
 import { TaskFactory } from './tasks';
@@ -18,6 +19,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
     snippetTiming: AVATAR_TIMINGS.ON_TIME,
     snippetDuration: AVATAR_SNIPPET_DURATIONS.MEDIUM,
   }),
+  assistant: new MobileAssistantPreferences(),
 });
 
 export class LocalTaskRepository {
@@ -84,6 +86,7 @@ export class LocalTaskRepository {
 
   normalizePreferences(rawPreferences = {}) {
     const avatar = new AvatarPreferences(rawPreferences.avatar);
+    const assistant = new MobileAssistantPreferences(rawPreferences.assistant);
     const license = buildLicenseState(rawPreferences.license, {
       migratedPremiumEnabled: rawPreferences.premiumEnabled,
     });
@@ -96,6 +99,7 @@ export class LocalTaskRepository {
       colorPalette: rawPreferences.colorPalette ?? DEFAULT_PREFERENCES.colorPalette,
       license,
       avatar,
+      assistant,
     };
   }
 
@@ -108,6 +112,7 @@ export class LocalTaskRepository {
       colorPalette: preferences.colorPalette ?? DEFAULT_PREFERENCES.colorPalette,
       license: serializeLicenseState(preferences.license),
       avatar: new AvatarPreferences(preferences.avatar),
+      assistant: new MobileAssistantPreferences(preferences.assistant),
     };
   }
 

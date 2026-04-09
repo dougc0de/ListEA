@@ -132,4 +132,27 @@ describe('LocalTaskRepository', () => {
     expect(state.preferences.license.entitlements.premiumThemes).toBe(true);
     expect(state.preferences.license.entitlements.pdfExport).toBe(true);
   });
+
+  it('rehydrates assistant personality preferences from local storage', () => {
+    const storage = {
+      getItem() {
+        return JSON.stringify({
+          tasks: [],
+          analytics: [],
+          preferences: {
+            assistant: {
+              assistantEnabled: true,
+              reminderPersonality: 'warm',
+            },
+          },
+        });
+      },
+      setItem() {},
+    };
+
+    const state = new LocalTaskRepository({ storage }).load();
+
+    expect(state.preferences.assistant.assistantEnabled).toBe(true);
+    expect(state.preferences.assistant.reminderPersonality).toBe('warm');
+  });
 });
