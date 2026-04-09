@@ -501,34 +501,41 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
   const width = pageWidth - (PAGE_MARGIN * 2);
   const x = PAGE_MARGIN;
   const y = cursor.y;
-  drawPanel(doc, x, y, width, 94, { radius: 22 });
+  const headerHeight = 108;
+  const logoSize = 62;
+  const logoX = x + 18;
+  const logoY = y + 22;
+  const leftTextX = logoX + logoSize + 18;
+  const metaWidth = 220;
+  const metaX = x + width - metaWidth - 18;
+  const leftTextWidth = Math.max(140, metaX - leftTextX - 18);
+
+  drawPanel(doc, x, y, width, headerHeight, { radius: 22 });
 
   if (logoDataUrl) {
     try {
-      doc.addImage(logoDataUrl, 'PNG', x + 18, y + 18, 56, 56);
+      doc.addImage(logoDataUrl, 'PNG', logoX, logoY, logoSize, logoSize);
     } catch {}
   }
 
-  drawTextBlock(doc, data.appName, x + 92, y + 22, {
-    width: width - 250,
+  drawTextBlock(doc, data.appName, leftTextX, y + 24, {
+    width: leftTextWidth,
     size: 20,
     color: COLORS.brand,
     fontStyle: 'bold',
   });
-  drawTextBlock(doc, 'Reporte Premium de actividad', x + 92, y + 44, {
-    width: width - 250,
+  drawTextBlock(doc, 'Reporte Premium de actividad', leftTextX, y + 46, {
+    width: leftTextWidth,
     size: 17,
     color: COLORS.title,
     fontStyle: 'bold',
   });
-  drawTextBlock(doc, 'Tus estadisticas privadas, generadas localmente.', x + 92, y + 66, {
-    width: width - 260,
+  drawTextBlock(doc, 'Tus estadisticas privadas, generadas localmente.', leftTextX, y + 72, {
+    width: leftTextWidth,
     size: 10,
     color: COLORS.muted,
   });
 
-  const metaWidth = 188;
-  const metaX = x + width - metaWidth - 18;
   drawPanel(doc, metaX, y + 18, metaWidth, 34, {
     fill: COLORS.soft,
     stroke: COLORS.soft,
@@ -546,14 +553,14 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
     fontStyle: 'bold',
     align: 'center',
   });
-  drawTextBlock(doc, `Generado: ${data.generatedAtLabel}`, metaX, y + 60, {
-    width: metaWidth,
+  drawTextBlock(doc, `Generado: ${data.generatedAtLabel}`, metaX + 8, y + 60, {
+    width: metaWidth - 16,
     size: 8,
     color: COLORS.muted,
-    align: 'right',
+    align: 'center',
   });
 
-  cursor.y += 94 + SECTION_GAP;
+  cursor.y += headerHeight + SECTION_GAP;
 }
 
 function drawHeroSection(doc, cursor, data) {
@@ -969,6 +976,7 @@ function drawFooters(doc, data) {
 
 let pdfLibraryPromise;
 let logoDataPromise;
+let roundedLogoDataPromise;
 
 function loadPdfLibrary() {
   if (!pdfLibraryPromise) {
@@ -988,6 +996,56 @@ function blobToDataUrl(blob) {
   });
 }
 
+function buildRoundedRectPath(context, x, y, width, height, radius) {
+  const nextRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + nextRadius, y);
+  context.lineTo(x + width - nextRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + nextRadius);
+  context.lineTo(x + width, y + height - nextRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - nextRadius, y + height);
+  context.lineTo(x + nextRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - nextRadius);
+  context.lineTo(x, y + nextRadius);
+  context.quadraticCurveTo(x, y, x + nextRadius, y);
+  context.closePath();
+}
+
+function createRoundedImageDataUrl(sourceDataUrl, { size = 62, radius = 30 } = {}) {
+  return new Promise(resolve => {
+    if (typeof document === 'undefined') {
+      resolve(sourceDataUrl);
+      return;
+    }
+
+    const image = new Image();
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          resolve(sourceDataUrl);
+          return;
+        }
+
+        context.clearRect(0, 0, size, size);
+        buildRoundedRectPath(context, 0, 0, size, size, radius);
+        context.clip();
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(image, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(sourceDataUrl);
+      }
+    };
+    image.onerror = () => resolve(sourceDataUrl);
+    image.src = sourceDataUrl;
+  });
+}
+
 function loadLogoDataUrl() {
   if (!logoDataPromise) {
     logoDataPromise = (async () => {
@@ -1004,6 +1062,20 @@ function loadLogoDataUrl() {
   return logoDataPromise;
 }
 
+function loadRoundedLogoDataUrl() {
+  if (!roundedLogoDataPromise) {
+    roundedLogoDataPromise = (async () => {
+      const sourceDataUrl = await loadLogoDataUrl();
+      if (!sourceDataUrl) return null;
+      return createRoundedImageDataUrl(sourceDataUrl, {
+        size: 62,
+        radius: 30,
+      });
+    })();
+  }
+  return roundedLogoDataPromise;
+}
+
 async function renderReportToPdf(data, fileName) {
   const { jsPDF } = await loadPdfLibrary();
   const doc = new jsPDF({
@@ -1016,7 +1088,7 @@ async function renderReportToPdf(data, fileName) {
   doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
 
   const cursor = { y: PAGE_MARGIN };
-  const logoDataUrl = await loadLogoDataUrl();
+  const logoDataUrl = await loadRoundedLogoDataUrl();
 
   drawHeaderSection(doc, cursor, data, logoDataUrl);
   drawHeroSection(doc, cursor, data);
@@ -1047,4 +1119,284 @@ export async function downloadDashboardPdfReport({
   });
   const safeDate = new Date().toISOString().slice(0, 10);
   await renderReportToPdf(data, `${fileNamePrefix}-${safeDate}.pdf`);
+}
+
+function normalizePeriodicListItems(items = [], fallbackDetail = '') {
+  if (items.length) {
+    return items.map(item => ({
+      id: item.id,
+      title: item.title || 'Tarea sin titulo',
+      tag: item.tag || 'General',
+      whenLabel: item.meta || 'Sin fecha',
+      detail: item.detail || fallbackDetail || 'Sin contexto adicional.',
+    }));
+  }
+
+  return [{
+    id: 'empty',
+    title: 'Sin datos suficientes',
+    tag: 'Sin actividad',
+    whenLabel: '-',
+    detail: fallbackDetail || 'Este bloque no registro movimiento suficiente dentro del periodo.',
+  }];
+}
+
+export function buildPeriodicPdfReportData({
+  appName = 'ListEA',
+  reportSnapshot,
+} = {}) {
+  if (!reportSnapshot) {
+    throw new Error('reportSnapshot is required');
+  }
+
+  const title = reportSnapshot.title || 'Reporte cerrado';
+  const rangeLabel = reportSnapshot.range?.label || 'Sin rango';
+  const summary = reportSnapshot.summary || {};
+  const signals = reportSnapshot.signals || {};
+  const patterns = reportSnapshot.patterns || {};
+  const lists = reportSnapshot.lists || {};
+
+  return {
+    appName,
+    generatedAtLabel: formatDateTime(new Date()),
+    reportTitle: title,
+    periodLabel: rangeLabel,
+    mainInsight: patterns.mainInsight || 'Sin insight principal todavia.',
+    summaryCards: [
+      { label: 'Creadas', value: summary.created ?? 0, accent: COLORS.title },
+      { label: 'Completadas', value: summary.completed ?? 0, accent: COLORS.completed },
+      { label: 'Pendientes al cierre', value: summary.openAtClose ?? 0, accent: COLORS.incomplete },
+      { label: 'Vencidas', value: summary.overdue ?? 0, accent: COLORS.overdue },
+      { label: 'Sin fecha', value: summary.noDate ?? 0, accent: COLORS.deleted },
+      { label: 'Cumplimiento', value: `${summary.completionRate ?? 0}%`, accent: COLORS.brand },
+    ],
+    patternCards: [
+      { label: 'Mejor franja', value: patterns.bestHourRange || 'Sin datos', accent: COLORS.completed },
+      { label: 'Hora mas vulnerable', value: patterns.missedHourRange || 'Sin datos', accent: COLORS.overdue },
+      { label: 'Contexto mas reprogramado', value: patterns.mostPostponedContext || 'Sin contexto', accent: COLORS.deleted },
+    ],
+    signalCards: [
+      { label: 'En riesgo', value: signals.atRisk ?? 0, accent: COLORS.overdue },
+      { label: 'Estancadas', value: signals.stalled ?? 0, accent: COLORS.deleted },
+      { label: 'Respuestas', value: signals.responses ?? 0, accent: COLORS.title },
+      { label: 'Apps abiertas', value: signals.launches ?? 0, accent: COLORS.completed },
+    ],
+    insights: Array.isArray(patterns.insights) ? patterns.insights.slice(0, 5) : [],
+    sections: [
+      {
+        id: 'completed',
+        title: 'Completadas clave',
+        color: COLORS.completed,
+        items: normalizePeriodicListItems(
+          lists.completed || [],
+          'No hubo cierres dentro del periodo seleccionado.',
+        ),
+      },
+      {
+        id: 'pending',
+        title: 'Pendientes al cierre',
+        color: COLORS.incomplete,
+        items: normalizePeriodicListItems(
+          lists.pending || [],
+          'No quedaron tareas abiertas al final del periodo.',
+        ),
+      },
+      {
+        id: 'overdue',
+        title: 'Vencidas al cierre',
+        color: COLORS.overdue,
+        items: normalizePeriodicListItems(
+          lists.overdue || [],
+          'No hubo tareas vencidas al momento del cierre.',
+        ),
+      },
+      {
+        id: 'no-date',
+        title: 'Tareas sin fecha',
+        color: COLORS.deleted,
+        items: normalizePeriodicListItems(
+          lists.noDate || [],
+          'No quedaron tareas activas sin fecha.',
+        ),
+      },
+    ],
+  };
+}
+
+function drawPeriodicExecutiveSection(doc, cursor, data) {
+  const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
+  const x = PAGE_MARGIN;
+  const y = cursor.y;
+  const metricWidth = (width - 44 - 20) / 3;
+  const metricHeight = 54;
+  const insightLines = getTextLines(doc, data.mainInsight, width - 44, {
+    size: 11,
+  });
+  const insightHeight = getTextHeight(insightLines, 11, 1.2);
+  const summaryGridTop = y + 84 + insightHeight;
+  const summaryGridHeight = (metricHeight * 2) + 14;
+  const height = (summaryGridTop - y) + summaryGridHeight + 20;
+  ensurePageSpace(doc, cursor, height);
+
+  drawPanel(doc, x, y, width, height, { fill: COLORS.panelAlt, radius: 22 });
+  drawTextBlock(doc, data.reportTitle, x + 22, y + 22, {
+    width: width - 44,
+    size: 20,
+    color: COLORS.title,
+    fontStyle: 'bold',
+  });
+  drawTextBlock(doc, data.mainInsight, x + 22, y + 50, {
+    width: width - 44,
+    size: 11,
+    color: COLORS.muted,
+  });
+
+  data.summaryCards.forEach((metric, index) => {
+    const row = Math.floor(index / 3);
+    const column = index % 3;
+    const cardX = x + 22 + (column * (metricWidth + 10));
+    const cardY = summaryGridTop + (row * (metricHeight + 14));
+    drawMetricCard(doc, cardX, cardY, metricWidth, metricHeight, metric);
+  });
+
+  cursor.y += height + SECTION_GAP;
+}
+
+function drawPeriodicPatternSection(doc, cursor, data) {
+  const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
+  const x = PAGE_MARGIN;
+  const cardWidth = (width - 44 - 20) / 3;
+  const insightText = data.insights.length
+    ? data.insights.map(item => `- ${item}`).join('\n')
+    : '- Todavia no hay suficiente movimiento para detectar patrones fuertes.';
+  const insightLines = getTextLines(doc, insightText, width - 44, {
+    size: 9,
+  });
+  const height = 154 + getTextHeight(insightLines, 9, 1.16);
+  ensurePageSpace(doc, cursor, height);
+  const y = cursor.y;
+
+  drawPanel(doc, x, y, width, height, { radius: 22 });
+  drawTextBlock(doc, 'Patrones y lectura operativa', x + 22, y + 22, {
+    width: width - 44,
+    size: 17,
+    color: COLORS.text,
+    fontStyle: 'bold',
+  });
+  drawTextBlock(doc, 'ListEA resume lo que este cierre deja ver sin sacar datos del dispositivo.', x + 22, y + 46, {
+    width: width - 44,
+    size: 10,
+    color: COLORS.muted,
+  });
+
+  data.patternCards.forEach((card, index) => {
+    drawMetricCard(doc, x + 22 + (index * (cardWidth + 10)), y + 78, cardWidth, 56, {
+      ...card,
+      kind: 'descriptor',
+      size: 11,
+    });
+  });
+
+  drawTextBlock(doc, insightText, x + 22, y + 146, {
+    width: width - 44,
+    size: 9,
+    color: COLORS.text,
+    lineHeight: 1.16,
+  });
+
+  cursor.y += height + SECTION_GAP;
+}
+
+function drawPeriodicSignalsSection(doc, cursor, data) {
+  const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
+  const x = PAGE_MARGIN;
+  const y = cursor.y;
+  const cardWidth = (width - 44 - 30) / 4;
+  const height = 132;
+  ensurePageSpace(doc, cursor, height);
+
+  drawPanel(doc, x, y, width, height, {
+    fill: mixHex(COLORS.completed, COLORS.white, 0.94),
+    radius: 22,
+  });
+  drawTextBlock(doc, 'Riesgos y seguimiento', x + 22, y + 22, {
+    width: width - 44,
+    size: 17,
+    color: COLORS.title,
+    fontStyle: 'bold',
+  });
+
+  data.signalCards.forEach((card, index) => {
+    drawMetricCard(doc, x + 22 + (index * (cardWidth + 10)), y + 54, cardWidth, 56, card);
+  });
+
+  cursor.y += height + SECTION_GAP;
+}
+
+function drawPeriodicSectionGroup(doc, cursor, section) {
+  const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
+  const x = PAGE_MARGIN;
+  const items = Array.isArray(section.items) ? section.items : [];
+  const estimatedHeight = 62 + items.reduce((sum, item) => sum + measureTaskRowHeight(doc, item, width) + 10, 0);
+  ensurePageSpace(doc, cursor, estimatedHeight);
+
+  drawTextBlock(doc, section.title, x, cursor.y, {
+    width,
+    size: 17,
+    color: section.color,
+    fontStyle: 'bold',
+  });
+  cursor.y += 28;
+
+  items.forEach(item => {
+    cursor.y += drawTaskRow(doc, x, cursor.y, width, item, section.color) + 10;
+  });
+
+  cursor.y += 8;
+}
+
+async function renderPeriodicReportToPdf(data, fileName) {
+  const { jsPDF } = await loadPdfLibrary();
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'a4',
+    compress: true,
+  });
+  fillColor(doc, COLORS.page);
+  doc.rect(0, 0, doc.internal.pageSize.getWidth(), doc.internal.pageSize.getHeight(), 'F');
+
+  const cursor = { y: PAGE_MARGIN };
+  const logoDataUrl = await loadRoundedLogoDataUrl();
+
+  drawHeaderSection(doc, cursor, {
+    appName: data.appName,
+    periodLabel: `${data.reportTitle} · ${data.periodLabel}`,
+    generatedAtLabel: data.generatedAtLabel,
+  }, logoDataUrl);
+  drawPeriodicExecutiveSection(doc, cursor, data);
+  drawPeriodicPatternSection(doc, cursor, data);
+  drawPeriodicSignalsSection(doc, cursor, data);
+  data.sections.forEach(section => {
+    drawPeriodicSectionGroup(doc, cursor, section);
+  });
+  drawFooters(doc, {
+    appName: data.appName,
+  });
+
+  doc.save(fileName);
+}
+
+export async function downloadPeriodicPdfReport({
+  appName = 'ListEA',
+  reportSnapshot,
+  fileNamePrefix = 'reporte-listEA',
+} = {}) {
+  const data = buildPeriodicPdfReportData({
+    appName,
+    reportSnapshot,
+  });
+  const safeDate = reportSnapshot?.range?.fileLabel || new Date().toISOString().slice(0, 10);
+  const safePeriod = reportSnapshot?.period || 'periodo';
+  await renderPeriodicReportToPdf(data, `${fileNamePrefix}-${safePeriod}-${safeDate}.pdf`);
 }

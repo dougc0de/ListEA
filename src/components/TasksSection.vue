@@ -50,8 +50,10 @@ import {
 } from '../domain/license';
 import { LocalTaskRepository } from '../domain/localFirst';
 import { NavigationCatalog } from '../domain/navigation';
+import { PeriodicReportService, REPORT_PERIODS } from '../domain/periodicReports';
 import { QuickCaptureInterpreter } from '../domain/quickCapture';
 import { RecurrenceEngine } from '../domain/recurrence';
+import { downloadPeriodicPdfReport } from '../services/dashboardReportPdf';
 import { downloadBackupFile, parseBackupDocument, readBackupFile } from '../services/localBackup';
 import { LAUNCH_INTENT_TYPES } from '../services/launchIntents';
 import { ReminderActionContext, ReminderActionRouter } from '../services/reminderActionRouter';
@@ -88,6 +90,7 @@ const filterService = new TaskFilterService();
 const visibilityPlanner = new TaskVisibilityPlanner(filterService);
 const insightAnalyzer = new BacklogInsightAnalyzer();
 const taskHealthAnalyzer = new TaskHealthAnalyzer();
+const periodicReportService = new PeriodicReportService();
 const dailyRecoveryPlanner = new DailyRecoveryPlanner({
   filterService,
   healthAnalyzer: taskHealthAnalyzer,
@@ -123,6 +126,7 @@ const backupPassphrase = ref('');
 const importPassphrase = ref('');
 const isExportingBackup = ref(false);
 const isImportingBackup = ref(false);
+const exportingPeriodicReportId = ref('');
 const isNativeReminderPlatform = ref(false);
 const THEME_MODES = Object.freeze({
   LIGHT: 'light',
@@ -466,6 +470,33 @@ function resetTaskWorkspaceView() {
 function clearAnalytics() {
   analytics.value = repository.normalizeAnalytics();
   showUiFeedback('Estadisticas reiniciadas.', 'success');
+}
+
+async function exportPeriodicReport(reportId) {
+  const reportSnapshot = periodicReports.value.find(report => report.id === reportId);
+  if (!reportSnapshot) {
+    showUiFeedback('No se pudo preparar el reporte seleccionado.', 'error');
+    return;
+  }
+
+  if (!hasFeature(ENTITLEMENT_KEYS.PDF_EXPORT)) {
+    requestUpgrade(ENTITLEMENT_KEYS.PDF_EXPORT);
+    return;
+  }
+
+  exportingPeriodicReportId.value = reportId;
+  try {
+    await downloadPeriodicPdfReport({
+      appName: 'ListEA',
+      reportSnapshot,
+      fileNamePrefix: 'reporte-listEA',
+    });
+    showUiFeedback(`PDF "${reportSnapshot.title}" generado localmente.`, 'success');
+  } catch {
+    showUiFeedback('No fue posible generar el PDF local.', 'error');
+  } finally {
+    exportingPeriodicReportId.value = '';
+  }
 }
 
 function setAvatarPreferences(patch) {
@@ -1631,6 +1662,14 @@ const currentOperationalBrief = computed(() => operationalReportService.build(ta
   referenceDate: new Date(),
   history: effectiveAssistantPreferences.value.briefHistory,
 }));
+const periodicReports = computed(() => ([
+  REPORT_PERIODS.WEEK,
+  REPORT_PERIODS.BIWEEKLY,
+  REPORT_PERIODS.MONTH,
+].map(period => periodicReportService.build(tasks.value, analytics.value, {
+  period,
+  referenceDate: new Date(),
+}))));
 const subscriptionPlanLabel = computed(() => `${LISTEA_PRO_MONTHLY_PLAN.label} · ${LISTEA_PRO_MONTHLY_PLAN.priceLabel}`);
 const licenseSummary = computed(() => preferences.value.license?.licenseTier === LICENSE_TIERS.PRO
   ? `${LISTEA_PRO_MONTHLY_PLAN.label} activo en este dispositivo.`
@@ -2165,9 +2204,12 @@ onBeforeUnmount(() => {
         :entitlements="preferences.license.entitlements"
         :license-tier="preferences.license.licenseTier"
         :operational-brief="currentOperationalBrief"
+        :periodic-reports="periodicReports"
         :brief-history="effectiveAssistantPreferences.briefHistory"
         :tasks="tasks"
+        :exporting-report-id="exportingPeriodicReportId"
         @clear-analytics="clearAnalytics"
+        @export-pdf="exportPeriodicReport"
         @navigate="emit('navigate', $event)"
         @upgrade="requestUpgrade"
       />

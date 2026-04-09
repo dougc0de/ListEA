@@ -15,9 +15,11 @@ const props = defineProps({
   entitlements: { type: Object, default: () => ({}) },
   licenseTier: { type: String, default: 'free' },
   operationalBrief: { type: Object, default: null },
+  periodicReports: { type: Array, default: () => [] },
   tasks: { type: Array, default: () => [] },
+  exportingReportId: { type: String, default: '' },
 });
-const emit = defineEmits(['clear-analytics', 'upgrade', 'navigate']);
+const emit = defineEmits(['clear-analytics', 'upgrade', 'navigate', 'export-pdf']);
 
 const dashboardService = new TaskActivityDashboard();
 const controlCenterService = new ProfessionalControlCenter();
@@ -51,9 +53,11 @@ let trendChart;
 let mixChart;
 const canUseAdvancedDashboard = computed(() => Boolean(props.entitlements?.advancedDashboard));
 const canUseControlCenter = computed(() => Boolean(props.entitlements?.premiumInsights));
+const canUsePdfExport = computed(() => Boolean(props.entitlements?.pdfExport));
 const weeklyBrief = computed(() => (props.operationalBrief && typeof props.operationalBrief === 'object')
   ? props.operationalBrief
   : null);
+const openPeriodicReportId = ref('');
 const briefDeltaItems = computed(() => {
   if (!weeklyBrief.value?.comparison) {
     return [];
@@ -372,6 +376,14 @@ const currentActivityGroup = computed(() =>
   ?? null,
 );
 
+function togglePeriodicReport(reportId) {
+  openPeriodicReportId.value = openPeriodicReportId.value === reportId ? '' : reportId;
+}
+
+function isPeriodicReportOpen(reportId) {
+  return openPeriodicReportId.value === reportId;
+}
+
 function destroyCharts() {
   trendChart?.destroy();
   mixChart?.destroy();
@@ -467,6 +479,16 @@ watch(canUseAdvancedDashboard, enabled => {
     viewMode.value = 'day';
   }
 });
+watch(() => props.periodicReports, reports => {
+  if (!Array.isArray(reports) || !reports.length) {
+    openPeriodicReportId.value = '';
+    return;
+  }
+
+  if (!reports.some(report => report.id === openPeriodicReportId.value)) {
+    openPeriodicReportId.value = reports[0].id;
+  }
+}, { deep: true, immediate: true });
 
 onMounted(renderCharts);
 onBeforeUnmount(destroyCharts);
@@ -548,6 +570,100 @@ onBeforeUnmount(destroyCharts);
                 {{ item.value > 0 ? '+' : '' }}{{ item.value }}
               </strong>
             </article>
+          </div>
+        </article>
+
+        <article class="decisionCard weeklyBriefCard">
+          <div class="decisionHead">
+            <div>
+              <strong>Reportes PDF de cierre</strong>
+              <span>Semana, quincena y mes cerrados, generados localmente</span>
+            </div>
+            <button
+              v-if="!canUsePdfExport"
+              type="button"
+              class="ghostButton"
+              @click="emit('upgrade', 'pdfExport')"
+            >
+              Desbloquear PDF
+            </button>
+          </div>
+
+          <div v-if="canUsePdfExport" class="reportCardGrid">
+            <article
+              v-for="report in periodicReports"
+              :key="report.id"
+              class="reportPreviewCard"
+            >
+              <div class="reportPreviewHead">
+                <div>
+                  <strong>{{ report.title }}</strong>
+                  <span>{{ report.range?.label }}</span>
+                </div>
+                <span class="decisionBadge">{{ report.summary?.completionRate ?? 0 }}%</span>
+              </div>
+
+              <div class="reportMetricGrid">
+                <article class="reportMetric">
+                  <span>Cumplimiento</span>
+                  <strong>{{ report.summary?.completionRate ?? 0 }}%</strong>
+                </article>
+                <article class="reportMetric">
+                  <span>Al cierre</span>
+                  <strong>{{ report.summary?.openAtClose ?? 0 }}</strong>
+                </article>
+                <article class="reportMetric">
+                  <span>Vencidas</span>
+                  <strong>{{ report.summary?.overdue ?? 0 }}</strong>
+                </article>
+              </div>
+
+              <p v-if="report.isEmpty" class="emptyText">
+                Todavia no hay suficiente actividad en este cierre para exportar una lectura con peso.
+              </p>
+              <p v-else class="reportInsight">{{ report.patterns?.mainInsight }}</p>
+
+              <div v-if="isPeriodicReportOpen(report.id)" class="reportSummary">
+                <article class="reportSummaryItem">
+                  <span>Mejor hora</span>
+                  <strong>{{ report.patterns?.bestHourRange }}</strong>
+                </article>
+                <article class="reportSummaryItem">
+                  <span>Hora vulnerable</span>
+                  <strong>{{ report.patterns?.missedHourRange }}</strong>
+                </article>
+                <article class="reportSummaryItem">
+                  <span>Contexto mas reprogramado</span>
+                  <strong>{{ report.patterns?.mostPostponedContext }}</strong>
+                </article>
+              </div>
+
+              <div class="reportActions">
+                <button type="button" class="ghostButton" @click="togglePeriodicReport(report.id)">
+                  {{ isPeriodicReportOpen(report.id) ? 'Ocultar resumen' : 'Ver resumen' }}
+                </button>
+                <button
+                  type="button"
+                  class="primaryButton"
+                  :disabled="exportingReportId === report.id"
+                  @click="emit('export-pdf', report.id)"
+                >
+                  {{ exportingReportId === report.id ? 'Exportando...' : 'Exportar PDF' }}
+                </button>
+              </div>
+            </article>
+          </div>
+
+          <div v-else class="upgradeCard inlineUpgradeCard">
+            <div>
+              <strong>ListEA Pro exporta cierres en PDF sin sacar datos del telefono.</strong>
+              <p>
+                Semana cerrada, quincena cerrada y mes cerrado quedan listos para leer y compartir localmente.
+              </p>
+            </div>
+            <button type="button" class="primaryButton" @click="emit('upgrade', 'pdfExport')">
+              Ver ListEA Pro
+            </button>
           </div>
         </article>
 
@@ -714,7 +830,7 @@ onBeforeUnmount(destroyCharts);
         <div>
           <strong>ListEA Pro convierte el panel en tu centro de control.</strong>
           <p>
-            Compromisos en riesgo, respuestas por enviar, bloqueos viejos, lectura operativa semanal y uso por canal viven solo en tu dispositivo.
+            Compromisos en riesgo, respuestas por enviar, bloqueos viejos, lectura operativa semanal, uso por canal y reportes PDF viven solo en tu dispositivo.
           </p>
         </div>
         <button type="button" class="primaryButton" @click="emit('upgrade', 'premiumInsights')">
@@ -1056,6 +1172,90 @@ onBeforeUnmount(destroyCharts);
   padding: 16px;
   display: grid;
   gap: 12px;
+}
+
+.inlineUpgradeCard {
+  margin-top: 0;
+}
+
+.reportCardGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reportPreviewCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.reportPreviewHead,
+.reportActions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reportPreviewHead strong,
+.reportPreviewHead span,
+.reportInsight,
+.reportSummaryItem strong,
+.reportSummaryItem span {
+  display: block;
+  text-align: left;
+}
+
+.reportPreviewHead > div {
+  min-width: 0;
+}
+
+.reportPreviewHead > div span {
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.reportMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.reportMetric,
+.reportSummaryItem {
+  min-height: 74px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+  background: color-mix(in srgb, white 78%, var(--surface));
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.reportMetric strong,
+.reportSummaryItem strong {
+  font-size: 1.08rem;
+}
+
+.reportInsight {
+  margin: 0;
+  padding-left: 12px;
+  border-left: 3px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  color: var(--text-muted);
+}
+
+.reportSummary {
+  display: grid;
+  gap: 8px;
+}
+
+.reportActions {
+  align-items: center;
 }
 
 .decisionHead {
@@ -1507,7 +1707,10 @@ onBeforeUnmount(destroyCharts);
   .customControls,
   .weeklyBriefSummary,
   .weeklyBriefDeltaRow,
-  .heroStats {
+  .heroStats,
+  .reportCardGrid,
+  .reportMetricGrid,
+  .reportSummary {
     grid-template-columns: 1fr;
   }
 
@@ -1561,7 +1764,9 @@ onBeforeUnmount(destroyCharts);
   .decisionItem,
   .upgradeCard,
   .eventItem,
-  .activityHead {
+  .activityHead,
+  .reportPreviewHead,
+  .reportActions {
     flex-direction: column;
     align-items: flex-start;
   }

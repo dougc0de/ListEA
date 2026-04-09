@@ -625,7 +625,9 @@ defineExpose({
   display: grid;
   gap: 10px;
   width: var(--calendar-side-body-width);
-  margin-inline: auto;
+  margin-inline: 0;
+  justify-self: start;
+  align-items: flex-start;
 }
 
 .upcomingRow {
@@ -666,7 +668,8 @@ defineExpose({
   display: grid;
   gap: 10px;
   width: var(--calendar-side-body-width);
-  margin-inline: auto;
+  margin-inline: 0;
+  justify-self: start;
 }
 
 .rhythmCard span {
@@ -680,7 +683,9 @@ defineExpose({
 
 .calendarSideSection > .emptyText {
   width: var(--calendar-side-body-width);
-  margin-inline: auto;
+  margin-inline: 0;
+  justify-self: start;
+  text-align: left;
 }
 
 .calendarDetailCard > :not(.calendarDetailHeader) {
