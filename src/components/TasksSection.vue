@@ -2558,8 +2558,11 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
   gap: 14px;
-  padding: 8px 0 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  padding: 22px;
+  border-radius: 30px;
+  border: 1px solid var(--hero-surface-border);
+  background: var(--hero-surface);
+  box-shadow: var(--hero-surface-shadow);
 }
 
 .topCopy {
@@ -2570,6 +2573,24 @@ onBeforeUnmount(() => {
 
 .topHint {
   max-width: 52ch;
+}
+
+.topBar .eyebrow,
+.topBar .topCopy h1,
+.topBar .panelText,
+.topBar .statCard,
+.topBar .statCard span,
+.topBar .statCard strong {
+  color: var(--hero-on);
+}
+
+.topBar .eyebrow {
+  color: color-mix(in srgb, var(--hero-on) 88%, var(--accent-contrast));
+  opacity: 0.88;
+}
+
+.topBar .panelText {
+  color: var(--hero-on-muted);
 }
 
 .topCopy h1,
@@ -2631,6 +2652,18 @@ onBeforeUnmount(() => {
   color: var(--text-main);
   line-height: 1.15;
   text-align: center;
+}
+
+.topBar .quickActionButton {
+  border-color: var(--hero-chip-line);
+  background: var(--hero-chip-surface);
+  color: var(--hero-on);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.topBar .quickActionButton:hover {
+  border-color: color-mix(in srgb, var(--hero-on) 34%, transparent);
+  background: color-mix(in srgb, white 16%, transparent);
 }
 
 .feedbackBanner {
@@ -2733,10 +2766,24 @@ onBeforeUnmount(() => {
   min-height: 88px;
   padding: 16px 18px;
   border-radius: 24px;
-  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
-  background: color-mix(in srgb, white 94%, var(--surface));
-  box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
+  border: 1px solid color-mix(in srgb, white 18%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, white 12%, var(--accent)) 0%,
+    color-mix(in srgb, white 8%, var(--accent)) 100%
+  );
+  box-shadow: 0 12px 24px rgba(6, 17, 26, 0.14);
   text-align: left;
+}
+
+.topBar .statCard {
+  border-color: var(--hero-card-line);
+  background: var(--hero-card-surface);
+  box-shadow: none;
+}
+
+.topBar .statCard span {
+  color: color-mix(in srgb, var(--hero-on) 84%, transparent);
 }
 
 .statCard strong {
@@ -3565,8 +3612,11 @@ onBeforeUnmount(() => {
 
   .topBar,
   .panelCard {
-    padding: 0;
-    border-radius: 0;
+    border-radius: 26px;
+  }
+
+  .topBar {
+    padding: 18px 16px;
   }
 
   .calendarPreviewWeekdays,
@@ -3750,6 +3800,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 420px) {
+  .topBar {
+    padding: 16px 14px;
+    border-radius: 22px;
+  }
+
   .topStats,
   .focusFilterBar,
   .assistantSummaryRow {

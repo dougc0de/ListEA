@@ -4,7 +4,7 @@ A partir de ahora trabajar así:
 -Debe ser 100% responsive en todo tipo de pantalla, esta app es especialmente movil first
 -no rehacer layouts completos si no me lo pides
 -tocar solo la parte puntual que estemos corrigiendo
--preservar el responsive que ya funcione
+-preservar el responsive que ya funcione a menos que expresamente se pida un cambio especifico
 -validar antes de mover estructura base
 -si una mejora implica riesgo de romper vistas, te lo diré antes
 

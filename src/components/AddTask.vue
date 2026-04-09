@@ -983,9 +983,9 @@ onBeforeUnmount(() => {
   gap: 14px;
   padding: clamp(18px, 4vw, 34px);
   border-radius: 30px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: var(--card-shadow);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--section-tint-soft) 72%, white), color-mix(in srgb, var(--surface) 92%, white));
+  border: 1px solid var(--section-line-strong);
+  box-shadow: var(--section-shadow-soft);
 }
 
 .launcherPrimaryButton,
@@ -1005,12 +1005,13 @@ onBeforeUnmount(() => {
 }
 
 .launcherPrimaryButton {
-  background: var(--accent);
+  background: color-mix(in srgb, var(--accent) 78%, #10232f);
   color: var(--accent-contrast);
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
 }
 
 .launcherSecondaryButton {
-  background: var(--surface-soft);
+  background: color-mix(in srgb, var(--surface) 88%, var(--section-tint-soft));
   color: var(--text-main);
 }
 
@@ -1019,6 +1020,11 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid var(--hero-surface-border);
+  background: var(--hero-surface);
+  box-shadow: var(--hero-surface-shadow);
 }
 
 .composerHeadingActions {
@@ -1037,6 +1043,21 @@ onBeforeUnmount(() => {
 .composerHeading h2 {
   font-size: clamp(1rem, 3vw, 1.2rem);
   line-height: 1.1;
+}
+
+.composerHeading .eyebrow,
+.composerHeading h2 {
+  color: var(--hero-on);
+}
+
+.composerHeading .eyebrow {
+  opacity: 0.88;
+}
+
+.composerHeading .ghostButton {
+  border-color: var(--hero-chip-line);
+  background: var(--hero-chip-surface);
+  color: var(--hero-on);
 }
 
 .eyebrow {

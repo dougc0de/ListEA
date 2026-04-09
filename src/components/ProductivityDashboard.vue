@@ -882,11 +882,14 @@ onBeforeUnmount(destroyCharts);
 }
 
 .heroCard {
-  padding: 0 0 14px;
+  padding: 22px;
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) auto;
   gap: 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 30px;
+  border: 1px solid var(--hero-surface-border);
+  background: var(--hero-surface);
+  box-shadow: var(--hero-surface-shadow);
 }
 
 .heroCopy h2,
@@ -909,6 +912,19 @@ onBeforeUnmount(destroyCharts);
   max-width: 22ch;
   font-size: clamp(1.4rem, 4vw, 2rem);
   line-height: 1.05;
+}
+
+.heroCard .eyebrow,
+.heroCard .heroCopy h2,
+.heroCard .heroText,
+.heroCard .heroStat span,
+.heroCard .heroStat strong {
+  color: var(--hero-on);
+}
+
+.heroCard .heroText,
+.heroCard .heroStat span {
+  color: var(--hero-on-muted);
 }
 
 .heroText,
@@ -951,6 +967,12 @@ onBeforeUnmount(destroyCharts);
   box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
 }
 
+.heroCard .heroStat {
+  border-color: var(--hero-card-line);
+  background: var(--hero-card-surface);
+  box-shadow: none;
+}
+
 .heroStat {
   min-height: 92px;
   padding: 16px 18px;
@@ -969,6 +991,14 @@ onBeforeUnmount(destroyCharts);
   padding: 6px 0 0;
   display: grid;
   gap: 16px;
+}
+
+.controlCenterCard {
+  padding: 18px;
+  border-radius: 30px;
+  border: 1px solid var(--section-line-strong);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--section-tint) 78%, white), color-mix(in srgb, var(--section-tint-soft) 66%, white));
+  box-shadow: var(--section-shadow-soft);
 }
 
 .controlHeader,
@@ -991,6 +1021,16 @@ onBeforeUnmount(destroyCharts);
   display: grid;
   gap: 6px;
   align-content: center;
+}
+
+.controlCenterCard .pulseCard {
+  background: color-mix(in srgb, white 90%, var(--section-tint));
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--line));
+}
+
+.controlCenterCard .decisionCard {
+  background: color-mix(in srgb, white 94%, var(--section-tint-soft));
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--line));
 }
 
 .controlGrid {
@@ -1478,10 +1518,14 @@ onBeforeUnmount(destroyCharts);
 }
 
 @media (max-width: 640px) {
-  .heroCard,
   .dashboardCard {
     padding: 0;
     border-radius: 0;
+  }
+
+  .heroCard {
+    padding: 18px 16px;
+    border-radius: 26px;
   }
 
   .heroStats {

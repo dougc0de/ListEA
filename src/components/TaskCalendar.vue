@@ -320,8 +320,11 @@ defineExpose({
 .calendarHeader {
   display: grid;
   gap: 16px;
-  padding: 0 0 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  padding: 22px;
+  border-radius: 30px;
+  border: 1px solid var(--hero-surface-border);
+  background: var(--hero-surface);
+  box-shadow: var(--hero-surface-shadow);
 }
 
 .calendarMonthRow,
@@ -341,6 +344,19 @@ defineExpose({
 .calendarMicrocopy {
   margin: 6px 0 0;
   color: var(--text-muted);
+}
+
+.calendarHeader .eyebrow,
+.calendarHeader .calendarMonthBlock h3,
+.calendarHeader .calendarMicrocopy,
+.calendarHeader .calendarStatCard strong,
+.calendarHeader .calendarStatCard span {
+  color: var(--hero-on);
+}
+
+.calendarHeader .calendarMicrocopy,
+.calendarHeader .calendarStatCard span {
+  color: var(--hero-on-muted);
 }
 
 .calendarMonthActions,
@@ -374,6 +390,19 @@ defineExpose({
   border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
 }
 
+.calendarHeader .ghostButton,
+.calendarHeader .calendarModeButton {
+  border-color: var(--hero-chip-line);
+  background: var(--hero-chip-surface);
+  color: var(--hero-on);
+}
+
+.calendarHeader .calendarModeButton.active {
+  background: color-mix(in srgb, white 88%, transparent);
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--hero-on) 34%, transparent);
+}
+
 .calendarStats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -387,6 +416,11 @@ defineExpose({
   border-radius: 18px;
   background: color-mix(in srgb, var(--surface) 68%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
+}
+
+.calendarHeader .calendarStatCard {
+  background: var(--hero-card-surface);
+  border-color: var(--hero-card-line);
 }
 
 .calendarStatCard strong,
@@ -594,12 +628,16 @@ defineExpose({
 }
 
 @media (max-width: 720px) {
-  .calendarHeader,
   .calendarMonthCard,
   .calendarDetailCard,
   .calendarSideCard {
     border-radius: 0;
     padding: 0;
+  }
+
+  .calendarHeader {
+    padding: 18px 16px;
+    border-radius: 26px;
   }
 
   .calendarMonthRow,

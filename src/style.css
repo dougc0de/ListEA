@@ -27,6 +27,22 @@
   --section-tint-contrast: #f7fbff;
   --section-line-strong: color-mix(in srgb, var(--accent) 26%, var(--line));
   --section-shadow-soft: 0 12px 26px rgba(15, 70, 98, 0.08);
+  --hero-surface:
+    radial-gradient(circle at top right, color-mix(in srgb, white 14%, transparent), transparent 28%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 74%, #12202c) 0%,
+      color-mix(in srgb, var(--accent) 62%, #172734) 58%,
+      color-mix(in srgb, var(--accent) 56%, #0d1821) 100%
+    );
+  --hero-surface-border: color-mix(in srgb, var(--accent) 26%, var(--line));
+  --hero-surface-shadow: 0 18px 38px rgba(12, 28, 40, 0.16);
+  --hero-card-surface: color-mix(in srgb, var(--section-tint-deep) 76%, rgba(255, 255, 255, 0.12));
+  --hero-card-line: color-mix(in srgb, white 18%, transparent);
+  --hero-chip-surface: color-mix(in srgb, white 10%, transparent);
+  --hero-chip-line: color-mix(in srgb, white 24%, transparent);
+  --hero-on: var(--section-tint-contrast);
+  --hero-on-muted: color-mix(in srgb, var(--hero-on) 80%, transparent);
   --card-shadow: 0 18px 46px rgba(15, 70, 98, 0.12);
   --secButton: rgba(147, 194, 219, 0.9);
   --shell-pad-inline: clamp(14px, 3vw, 32px);
@@ -197,6 +213,22 @@
   --section-tint: color-mix(in srgb, var(--accent) 14%, #16212d);
   --section-line-strong: color-mix(in srgb, var(--accent) 30%, var(--line));
   --section-shadow-soft: 0 12px 26px rgba(0, 0, 0, 0.22);
+  --hero-surface:
+    radial-gradient(circle at top right, color-mix(in srgb, white 8%, transparent), transparent 28%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent) 42%, #101722) 0%,
+      color-mix(in srgb, var(--accent) 36%, #0b1119) 58%,
+      color-mix(in srgb, var(--accent) 32%, #070b12) 100%
+    );
+  --hero-surface-border: color-mix(in srgb, var(--accent) 30%, var(--line));
+  --hero-surface-shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
+  --hero-card-surface: color-mix(in srgb, var(--accent) 18%, #172230);
+  --hero-card-line: color-mix(in srgb, white 12%, transparent);
+  --hero-chip-surface: color-mix(in srgb, white 8%, transparent);
+  --hero-chip-line: color-mix(in srgb, white 16%, transparent);
+  --hero-on: #f5f8fc;
+  --hero-on-muted: color-mix(in srgb, var(--hero-on) 78%, transparent);
   --card-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
 }
 
