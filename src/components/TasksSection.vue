@@ -1549,6 +1549,27 @@ const showOperabilityCards = computed(() =>
   && selectedTimeFilter.value?.id !== FILTER_IDS.COMPLETED
   && (dailyRecovery.value.shouldShow || backlogRescue.value.shouldShow),
 );
+const operabilityPanel = computed(() => {
+  const recovery = dailyRecovery.value;
+  const rescue = backlogRescue.value;
+  const rescueItems = rescue.items ?? [];
+
+  return {
+    tone: recovery.isRecoveryMode ? 'warn' : 'steady',
+    title: recovery.shouldShow ? recovery.headline : 'Enfoque del dia',
+    message: recovery.shouldShow
+      ? recovery.message
+      : 'ListEA encontro tareas que conviene ajustar antes de que sigan enfriandose.',
+    stateLabel: recovery.isRecoveryMode ? 'Activo' : 'En foco',
+    priorityTasks: recovery.priorityTasks ?? [],
+    quickWins: recovery.quickWins ?? [],
+    cleanupMessage: recovery.cleanupMessage ?? '',
+    rescueItems,
+    rescueLabel: rescueItems.length
+      ? `${rescueItems.length} ajuste${rescueItems.length === 1 ? '' : 's'} sugerido${rescueItems.length === 1 ? '' : 's'}`
+      : 'Sin rescates',
+  };
+});
 const summary = computed(() => ({
   pending: openTasks.value.length,
   overdue: openTasks.value.filter(task => task.dueAt && new Date(task.dueAt) < new Date()).length,
@@ -1925,74 +1946,89 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-if="showOperabilityCards" class="operabilityGrid">
-          <article v-if="dailyRecovery.shouldShow" class="assistantCard">
-            <div class="assistantCardHead">
+          <article class="assistantBoard" :data-tone="operabilityPanel.tone">
+            <div class="assistantBoardHead">
               <div>
-                <p class="eyebrow">Modo recuperacion</p>
-                <strong>{{ dailyRecovery.headline }}</strong>
+                <p class="eyebrow">Asistente del dia</p>
+                <strong>{{ operabilityPanel.title }}</strong>
               </div>
-              <span class="assistantStatePill" :data-tone="dailyRecovery.isRecoveryMode ? 'warn' : 'good'">
-                {{ dailyRecovery.isRecoveryMode ? 'Activo' : 'Estable' }}
+              <span class="assistantStatePill" :data-tone="operabilityPanel.tone === 'warn' ? 'warn' : 'good'">
+                {{ operabilityPanel.stateLabel }}
               </span>
             </div>
 
-            <p class="panelText">{{ dailyRecovery.message }}</p>
+            <p class="panelText">{{ operabilityPanel.message }}</p>
 
-            <div v-if="dailyRecovery.priorityTasks.length" class="assistantTaskRow">
-              <button
-                v-for="item in dailyRecovery.priorityTasks"
-                :key="item.id"
-                type="button"
-                class="assistantTaskButton"
-                @click="focusTaskById(item.id, 'today', { showFeedback: false })"
-              >
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.badge }}</span>
-              </button>
-            </div>
-
-            <div class="assistantMetaRow">
+            <div class="assistantSummaryRow">
               <span class="assistantMetaChip">Riesgo: {{ todayHealthSummary['at-risk'] }}</span>
               <span class="assistantMetaChip">Estancadas: {{ todayHealthSummary.stalled }}</span>
               <span class="assistantMetaChip">Vencidas: {{ todayHealthSummary.overdue }}</span>
+              <span v-if="operabilityPanel.rescueItems.length" class="assistantMetaChip">{{ operabilityPanel.rescueLabel }}</span>
             </div>
 
-            <div v-if="dailyRecovery.quickWins.length || dailyRecovery.cleanupMessage" class="assistantMetaRow">
-              <span
-                v-for="quickTask in dailyRecovery.quickWins"
-                :key="quickTask.id"
-                class="assistantMetaChip"
-              >
-                {{ quickTask.title }} · {{ quickTask.minutes }}m
-              </span>
-              <span v-if="dailyRecovery.cleanupMessage" class="assistantMetaChip cleanup">
-                {{ dailyRecovery.cleanupMessage }}
-              </span>
-            </div>
-          </article>
-
-          <article v-if="backlogRescue.shouldShow" class="assistantCard">
-            <div class="assistantCardHead">
+            <section v-if="operabilityPanel.priorityTasks.length" class="assistantSection">
               <div>
-                <p class="eyebrow">Backlog rescue</p>
-                <strong>ListEA encontro tareas que conviene rescatar primero</strong>
+                <p class="assistantSectionEyebrow">Prioridades</p>
+                <strong class="assistantSectionTitle">Lo primero que conviene mover</strong>
               </div>
-              <span class="assistantStatePill">Local</span>
-            </div>
 
-            <div class="rescueList">
-              <button
-                v-for="item in backlogRescue.items"
-                :key="item.id"
-                type="button"
-                class="rescueActionCard"
-                @click="focusTaskById(item.taskId, 'today', { edit: ['split', 'quick-step'].includes(item.actionId), showFeedback: false })"
-              >
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.actionLabel }}</span>
-                <small>{{ item.reason }}</small>
-              </button>
-            </div>
+              <div class="assistantTaskRow">
+                <button
+                  v-for="item in operabilityPanel.priorityTasks"
+                  :key="item.id"
+                  type="button"
+                  class="assistantTaskButton"
+                  @click="focusTaskById(item.id, 'today', { showFeedback: false })"
+                >
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.badge }}</span>
+                </button>
+              </div>
+            </section>
+
+            <section v-if="operabilityPanel.rescueItems.length" class="assistantSection">
+              <div>
+                <p class="assistantSectionEyebrow">Ajustes sugeridos</p>
+                <strong class="assistantSectionTitle">Backlog rescue dentro del mismo flujo</strong>
+              </div>
+
+              <div class="rescueList">
+                <button
+                  v-for="item in operabilityPanel.rescueItems"
+                  :key="item.id"
+                  type="button"
+                  class="rescueActionCard"
+                  @click="focusTaskById(item.taskId, 'today', { edit: ['split', 'quick-step'].includes(item.actionId), showFeedback: false })"
+                >
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.actionLabel }}</span>
+                  <small>{{ item.reason }}</small>
+                </button>
+              </div>
+            </section>
+
+            <section
+              v-if="operabilityPanel.quickWins.length || operabilityPanel.cleanupMessage"
+              class="assistantSection assistantSectionSoft"
+            >
+              <div>
+                <p class="assistantSectionEyebrow">Limpieza rapida</p>
+                <strong class="assistantSectionTitle">Pequenas decisiones que despejan el dia</strong>
+              </div>
+
+              <div class="assistantMetaRow">
+                <span
+                  v-for="quickTask in operabilityPanel.quickWins"
+                  :key="quickTask.id"
+                  class="assistantMetaChip"
+                >
+                  {{ quickTask.title }} · {{ quickTask.minutes }}m
+                </span>
+                <span v-if="operabilityPanel.cleanupMessage" class="assistantMetaChip cleanup">
+                  {{ operabilityPanel.cleanupMessage }}
+                </span>
+              </div>
+            </section>
           </article>
         </div>
 
@@ -3120,6 +3156,62 @@ onBeforeUnmount(() => {
   grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.assistantBoard {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px solid var(--section-line-strong);
+  background:
+    linear-gradient(180deg, var(--section-tint) 0%, var(--section-tint-soft) 100%);
+  box-shadow: var(--section-shadow-soft);
+}
+
+.assistantBoard[data-tone='warn'] {
+  border-color: color-mix(in srgb, #c77c43 38%, var(--section-line-strong));
+}
+
+.assistantBoardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assistantSummaryRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.assistantSection {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--section-line-strong) 72%, transparent);
+}
+
+.assistantSectionSoft {
+  padding: 14px;
+  border-top: 0;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--section-tint-soft) 72%, white);
+}
+
+.assistantSectionEyebrow {
+  margin: 0 0 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.assistantSectionTitle {
+  display: block;
+  text-align: left;
 }
 
 .assistantCard {
