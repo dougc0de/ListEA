@@ -239,10 +239,15 @@
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   min-height: 100vh;
   background: var(--app-bg);
@@ -291,6 +296,17 @@ img,
 svg,
 canvas,
 video {
+  max-width: 100%;
+}
+
+main,
+header,
+nav,
+section,
+article,
+aside,
+footer {
+  min-width: 0;
   max-width: 100%;
 }
 

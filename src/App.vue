@@ -53,8 +53,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .appShell {
   width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: clamp(10px, 1.4vw, 18px) 0 max(18px, env(safe-area-inset-bottom));
+  overflow-x: clip;
 }
 </style>

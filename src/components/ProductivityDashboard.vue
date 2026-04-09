@@ -871,6 +871,8 @@ onBeforeUnmount(destroyCharts);
 .dashboardPage {
   display: grid;
   gap: var(--section-gap);
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .heroCard,
@@ -1332,7 +1334,7 @@ onBeforeUnmount(destroyCharts);
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 130px;
+  min-width: 0;
   border-left: 3px solid color-mix(in srgb, var(--accent) 18%, var(--line));
 }
 
@@ -1492,7 +1494,6 @@ onBeforeUnmount(destroyCharts);
 
 @media (max-width: 860px) {
   .heroCard,
-  .summaryRow,
   .pulseRow,
   .controlGrid,
   .chartGrid,
@@ -1517,6 +1518,18 @@ onBeforeUnmount(destroyCharts);
   }
 }
 
+@media (min-width: 641px) and (max-width: 1024px) {
+  .heroStats,
+  .pulseRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summaryRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .dashboardCard {
     padding: 0;
@@ -1529,6 +1542,11 @@ onBeforeUnmount(destroyCharts);
   }
 
   .heroStats {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryRow {
+    display: grid;
     grid-template-columns: 1fr;
   }
 

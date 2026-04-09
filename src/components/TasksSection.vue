@@ -3604,10 +3604,22 @@ onBeforeUnmount(() => {
 
 }
 
+@media (min-width: 641px) and (max-width: 960px) {
+  .topStats,
+  .assistantSummaryRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focusFilterBar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .tasksShell {
     gap: 12px;
     padding-inline: 12px;
+    overflow-x: clip;
   }
 
   .topBar,
@@ -3641,7 +3653,7 @@ onBeforeUnmount(() => {
 
   .topStats {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
     overflow: visible;
   }
@@ -3701,7 +3713,7 @@ onBeforeUnmount(() => {
 
   .focusFilterBar {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 8px;
     overflow: visible;
   }
@@ -3729,7 +3741,7 @@ onBeforeUnmount(() => {
 
   .assistantSummaryRow {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .assistantMetaChip,
@@ -3803,12 +3815,6 @@ onBeforeUnmount(() => {
   .topBar {
     padding: 16px 14px;
     border-radius: 22px;
-  }
-
-  .topStats,
-  .focusFilterBar,
-  .assistantSummaryRow {
-    grid-template-columns: 1fr;
   }
 
   .assistantBoard {

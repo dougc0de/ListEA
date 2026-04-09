@@ -305,6 +305,8 @@ defineExpose({
 .calendarShell {
   display: grid;
   gap: var(--section-gap);
+  min-width: 0;
+  overflow-x: clip;
 }
 
 .calendarHeader,
@@ -680,6 +682,18 @@ defineExpose({
   .calendarStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .calendarMonthActions,
+  .calendarModeRow {
+    overflow-x: visible;
+    flex-wrap: wrap;
+  }
+
+  .calendarStats {
+    grid-template-columns: 1fr;
   }
 }
 </style>
