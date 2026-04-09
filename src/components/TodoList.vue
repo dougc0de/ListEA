@@ -6,9 +6,10 @@ const props = defineProps({
   emptyMessage: { type: String, default: 'No hay tareas.' },
   taskActions: { type: Array, default: () => [] },
   editingTaskId: { type: String, default: '' },
+  showFollowUpHints: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action', 'open-external']);
+const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-action', 'open-external', 'request-upgrade']);
 </script>
 
 <template>
@@ -23,8 +24,10 @@ const emit = defineEmits(['toggle', 'remove', 'update', 'toggle-subtask', 'task-
       :todo="todo"
       :task-actions="props.taskActions"
       :force-edit="props.editingTaskId === todo.id"
+      :show-follow-up-hints="props.showFollowUpHints"
       @toggle="emit('toggle', $event)"
       @remove="emit('remove', $event)"
+      @request-upgrade="emit('request-upgrade')"
       @update="emit('update', $event)"
       @toggle-subtask="emit('toggle-subtask', $event)"
       @task-action="emit('task-action', $event)"

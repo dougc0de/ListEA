@@ -17,6 +17,9 @@ import {
 } from '../domain/tasks';
 
 const props = defineProps({
+  screenshotCaptureEnabled: { type: Boolean, default: false },
+  smartAppLaunchEnabled: { type: Boolean, default: false },
+  mobileAssistantEnabled: { type: Boolean, default: false },
   voiceCaptureEnabled: { type: Boolean, default: false },
 });
 
@@ -88,7 +91,9 @@ const showScreenshotFeedback = computed(() => (
 ));
 const screenshotProgressWidth = computed(() => `${Math.max(4, Math.round(screenshotProgress.value * 100))}%`);
 const screenshotButtonLabel = computed(() => (
-  screenshotBusy.value ? 'Leyendo screenshot...' : 'Convertir screenshot en tarea'
+  !props.screenshotCaptureEnabled
+    ? 'Screenshot Pro'
+    : (screenshotBusy.value ? 'Leyendo screenshot...' : 'Convertir screenshot en tarea')
 ));
 const voiceCaptureActive = computed(() => [
   VOICE_CAPTURE_STATES.STARTING,
@@ -110,6 +115,26 @@ const voiceButtonLabel = computed(() => {
 });
 const voiceStatusTone = computed(() => (voiceError.value ? 'error' : 'info'));
 const voiceCanOpenDraft = computed(() => Boolean(voiceTranscript.value.trim()) && Boolean(voiceError.value));
+const captureProHints = computed(() => ([
+  {
+    id: 'basic-reminder',
+    label: 'Recordatorio basico',
+    description: 'Gratis',
+    locked: false,
+  },
+  {
+    id: ENTITLEMENT_KEYS.MOBILE_ASSISTANT,
+    label: 'Seguimiento automatico',
+    description: props.mobileAssistantEnabled ? 'Activo' : 'Pro',
+    locked: !props.mobileAssistantEnabled,
+  },
+  {
+    id: ENTITLEMENT_KEYS.SMART_APP_LAUNCH,
+    label: 'Abrir app compatible',
+    description: props.smartAppLaunchEnabled ? 'Activo' : 'Pro',
+    locked: !props.smartAppLaunchEnabled,
+  },
+]).filter(item => item.locked || item.id === 'basic-reminder'));
 const composerHelperText = computed(() => (
   captureSource.value === CAPTURE_SOURCES.SCREENSHOT
     ? 'Ajusta lo detectado y guarda.'
@@ -427,6 +452,10 @@ function applyScreenshotCapture(result) {
 
 function openScreenshotPicker() {
   if (voiceCaptureActive.value) return;
+  if (!props.screenshotCaptureEnabled) {
+    emit('request-upgrade', ENTITLEMENT_KEYS.SCREENSHOT_CAPTURE);
+    return;
+  }
   screenshotError.value = '';
   screenshotStatus.value = '';
   screenshotProgress.value = 0;
@@ -576,6 +605,11 @@ async function handleVoiceCaptureButton() {
   await startVoiceCapture();
 }
 
+function requestCaptureUpgrade(entitlementKey) {
+  if (!entitlementKey || entitlementKey === 'basic-reminder') return;
+  emit('request-upgrade', entitlementKey);
+}
+
 function openVoiceDraftFallback() {
   const interpreted = interpreter.interpret(voiceTranscript.value);
   openComposerWithDraft({
@@ -705,6 +739,20 @@ onBeforeUnmount(() => {
           <span class="screenshotProgressFill" :style="{ width: screenshotProgressWidth }" />
         </div>
       </div>
+
+      <div v-if="captureProHints.length" class="captureHintStrip" aria-label="Ayudas de captura">
+        <button
+          v-for="item in captureProHints"
+          :key="item.id"
+          type="button"
+          class="captureHintChip"
+          :class="{ locked: item.locked, available: !item.locked }"
+          @click="requestCaptureUpgrade(item.id)"
+        >
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.description }}</span>
+        </button>
+      </div>
     </section>
 
     <section v-else key="composer" class="composerCard">
@@ -774,6 +822,20 @@ onBeforeUnmount(() => {
 
         <div v-if="previewItems.length" class="previewBox">
           <span v-for="item in previewItems" :key="item" class="previewChip">{{ item }}</span>
+        </div>
+
+        <div v-if="captureProHints.length" class="captureHintStrip inline">
+          <button
+            v-for="item in captureProHints"
+            :key="`composer-${item.id}`"
+            type="button"
+            class="captureHintChip"
+            :class="{ locked: item.locked, available: !item.locked }"
+            @click="requestCaptureUpgrade(item.id)"
+          >
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.description }}</span>
+          </button>
         </div>
 
         <div v-if="advancedOpen" class="advancedPanel">
@@ -1142,6 +1204,49 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
 }
 
+.captureHintStrip {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.captureHintStrip.inline {
+  margin-top: -2px;
+}
+
+.captureHintChip {
+  min-height: 62px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  color: var(--text-main);
+}
+
+.captureHintChip strong,
+.captureHintChip span {
+  display: block;
+}
+
+.captureHintChip span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.captureHintChip.locked {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.captureHintChip.available {
+  border-color: color-mix(in srgb, #5f8d64 24%, var(--line));
+}
+
 .screenshotFeedback {
   display: grid;
   gap: 8px;
@@ -1396,6 +1501,10 @@ onBeforeUnmount(() => {
   .templateChip,
   .previewChip {
     flex: 0 0 auto;
+  }
+
+  .captureHintStrip {
+    grid-template-columns: 1fr;
   }
 
   .voiceFeedbackActions {

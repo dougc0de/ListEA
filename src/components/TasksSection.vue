@@ -203,6 +203,10 @@ const UPGRADE_COPY = Object.freeze({
     title: 'ListEA Pro desbloquea apertura inteligente de apps',
     message: 'ListEA Pro detecta apps compatibles instaladas y las abre directamente desde tus tareas y recordatorios.',
   },
+  [ENTITLEMENT_KEYS.SCREENSHOT_CAPTURE]: {
+    title: 'ListEA Pro desbloquea screenshot a tarea',
+    message: 'Convierte capturas en tareas accionables para que nada importante se quede perdido en tu galeria.',
+  },
   [ENTITLEMENT_KEYS.VOICE_CAPTURE]: {
     title: 'ListEA Pro desbloquea voz a tarea',
     message: 'Hablas, ListEA estructura la tarea localmente y la deja lista para editar o ejecutar desde tu telefono.',
@@ -1541,6 +1545,22 @@ const selectedWorkspaceTasks = computed(() => {
   return filteredTasks.value;
 });
 const calendarSourceTasks = computed(() => applySearch(tasks.value));
+const agedTasksWithoutFollowUp = computed(() => {
+  const now = new Date();
+  return sortTasksByRelevance(openTasks.value.filter(task => {
+    if (task.status !== TASK_STATUS.ACTIVE) return false;
+    if (task.followUpAt) return false;
+    const createdAt = parseDate(task.createdAt);
+    if (!createdAt) return false;
+    const ageInDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    return ageInDays >= 2;
+  }));
+});
+const showFollowUpUpgradeBanner = computed(() => (
+  resolvedView.value === 'today'
+  && !hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)
+  && agedTasksWithoutFollowUp.value.length > 0
+));
 const workspaceEmptyMessage = computed(() => {
   if (selectedTimeFilter.value?.id === FILTER_IDS.OVERDUE) {
     return 'No hay tareas vencidas.';
@@ -1850,6 +1870,9 @@ onBeforeUnmount(() => {
     <AddTask
       v-if="showTaskWorkspace"
       ref="addTaskRef"
+      :mobile-assistant-enabled="hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)"
+      :screenshot-capture-enabled="hasFeature(ENTITLEMENT_KEYS.SCREENSHOT_CAPTURE)"
+      :smart-app-launch-enabled="hasFeature(ENTITLEMENT_KEYS.SMART_APP_LAUNCH)"
       :voice-capture-enabled="hasFeature(ENTITLEMENT_KEYS.VOICE_CAPTURE)"
       @add="addTask"
       @voice-add="handleVoiceCaptured"
@@ -1955,6 +1978,27 @@ onBeforeUnmount(() => {
           placeholder="Buscar tarea, proyecto o tag"
         />
       </label>
+    </section>
+
+    <section v-if="showFollowUpUpgradeBanner" class="focusBoardGrid">
+      <article class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Seguimiento Pro</p>
+            <h3>Tienes {{ formatTaskCount(agedTasksWithoutFollowUp.length) }} sin seguimiento</h3>
+          </div>
+        </div>
+        <p class="panelText">
+          Activa seguimiento automatico para que estas tareas no se enfrien ni se te vayan del radar.
+        </p>
+        <div class="upgradePanel compactUpgrade">
+          <strong>ListEA Pro detecta esperas y te vuelve a empujar en el momento correcto.</strong>
+          <p class="panelText">No es solo recordar la hora. Es no dejar caer compromisos.</p>
+          <button type="button" class="primaryButton" @click="requestUpgrade(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)">
+            Activar seguimiento Pro
+          </button>
+        </div>
+      </article>
     </section>
 
     <section v-if="resolvedView === 'today'" class="focusBoardGrid">
@@ -2073,8 +2117,10 @@ onBeforeUnmount(() => {
               :todos="selectedWorkspaceTasks"
               :editing-task-id="editingTaskId"
               :empty-message="workspaceEmptyMessage"
+              :show-follow-up-hints="!hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)"
               @toggle="toggleTask"
               @remove="removeTask"
+              @request-upgrade="requestUpgrade(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)"
               @update="updateTask"
               @toggle-subtask="toggleSubtask"
               @open-external="handleTaskLaunchRequest"
@@ -2085,7 +2131,7 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else-if="resolvedView === 'follow-up'" class="workflowGrid">
-      <article class="panelCard">
+      <article v-if="hasFeature(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)" class="panelCard">
         <div class="sectionHeader">
           <div>
             <p class="eyebrow">Seguimiento</p>
@@ -2107,6 +2153,33 @@ onBeforeUnmount(() => {
           @task-action="handleTaskAction"
           @open-external="handleTaskLaunchRequest"
         />
+      </article>
+
+      <article v-else class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Seguimiento Pro</p>
+            <h3>No dejes promesas sin siguiente paso</h3>
+          </div>
+          <div class="headerActions">
+            <span class="laneCount">{{ formatTaskCount(agedTasksWithoutFollowUp.length) }}</span>
+          </div>
+        </div>
+        <p class="panelText">
+          ListEA Pro agrupa esperas, bloqueos y tareas que ya merecen seguimiento para que no se enfrien.
+        </p>
+        <div class="calendarBenefitList">
+          <span class="previewChip">Tareas olvidadas detectadas</span>
+          <span class="previewChip">Recordatorios con contexto</span>
+          <span class="previewChip">Siguiente paso visible</span>
+        </div>
+        <div class="upgradePanel compactUpgrade">
+          <strong>Esto es lo que evita que se te vayan clientes, respuestas y compromisos.</strong>
+          <p class="panelText">Activa el sistema de seguimiento inteligente dentro de ListEA Pro.</p>
+          <button type="button" class="primaryButton" @click="requestUpgrade(ENTITLEMENT_KEYS.MOBILE_ASSISTANT)">
+            Ver seguimiento Pro
+          </button>
+        </div>
       </article>
     </section>
 
@@ -2200,6 +2273,7 @@ onBeforeUnmount(() => {
 
     <section v-else-if="resolvedView === 'dashboard'" class="dashboardGrid">
       <ProductivityDashboard
+        v-if="hasFeature(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS)"
         :analytics="analytics"
         :entitlements="preferences.license.entitlements"
         :license-tier="preferences.license.licenseTier"
@@ -2213,6 +2287,30 @@ onBeforeUnmount(() => {
         @navigate="emit('navigate', $event)"
         @upgrade="requestUpgrade"
       />
+
+      <article v-else class="panelCard">
+        <div class="sectionHeader">
+          <div>
+            <p class="eyebrow">Centro de seguimiento</p>
+            <h3>Ve lo que se te esta escapando antes de que pese</h3>
+          </div>
+        </div>
+        <p class="panelText">
+          ListEA Pro convierte este espacio en tu centro de seguimiento: riesgos, respuestas por enviar, lectura semanal y cierres en PDF.
+        </p>
+        <div class="calendarBenefitList">
+          <span class="previewChip">Compromisos en riesgo</span>
+          <span class="previewChip">Lectura operativa semanal</span>
+          <span class="previewChip">Reportes PDF locales</span>
+        </div>
+        <div class="upgradePanel compactUpgrade">
+          <strong>Lo importante no es ver mas datos. Es ver antes lo que no puedes dejar caer.</strong>
+          <p class="panelText">Activa el centro de seguimiento premium dentro de ListEA Pro.</p>
+          <button type="button" class="primaryButton" @click="requestUpgrade(ENTITLEMENT_KEYS.PREMIUM_INSIGHTS)">
+            Ver Centro Pro
+          </button>
+        </div>
+      </article>
     </section>
 
     <section v-else class="settingsGrid">

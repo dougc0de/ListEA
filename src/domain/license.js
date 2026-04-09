@@ -38,6 +38,7 @@ export const ENTITLEMENT_KEYS = Object.freeze({
   PREMIUM_THEMES: 'premiumThemes',
   LOCAL_ENCRYPTED_BACKUP: 'localEncryptedBackup',
   SMART_APP_LAUNCH: 'smartAppLaunch',
+  SCREENSHOT_CAPTURE: 'screenshotCapture',
   VOICE_CAPTURE: 'voiceCapture',
 });
 
@@ -53,6 +54,7 @@ export const FREE_ENTITLEMENTS = Object.freeze({
   [ENTITLEMENT_KEYS.PREMIUM_THEMES]: false,
   [ENTITLEMENT_KEYS.LOCAL_ENCRYPTED_BACKUP]: false,
   [ENTITLEMENT_KEYS.SMART_APP_LAUNCH]: false,
+  [ENTITLEMENT_KEYS.SCREENSHOT_CAPTURE]: false,
   [ENTITLEMENT_KEYS.VOICE_CAPTURE]: false,
 });
 
