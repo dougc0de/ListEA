@@ -2551,6 +2551,7 @@ onBeforeUnmount(() => {
   background: transparent;
   box-shadow: none;
   overflow: visible;
+  min-width: 0;
 }
 
 .topBar {
@@ -2608,6 +2609,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   align-self: stretch;
   grid-auto-rows: 1fr;
+  min-width: 0;
 }
 
 .quickActionRow {
@@ -3140,6 +3142,7 @@ onBeforeUnmount(() => {
   background:
     linear-gradient(180deg, var(--section-tint) 0%, var(--section-tint-soft) 100%);
   box-shadow: var(--section-shadow-soft);
+  min-width: 0;
 }
 
 .assistantBoard[data-tone='warn'] {
@@ -3151,12 +3154,22 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--section-tint-deep), color-mix(in srgb, var(--section-tint-deep) 76%, black));
+  color: var(--section-tint-contrast);
+}
+
+.assistantBoardHead .eyebrow,
+.assistantBoardHead strong {
+  color: inherit;
 }
 
 .assistantSummaryRow {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .assistantSection {
@@ -3223,6 +3236,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--surface) 82%, white);
   color: var(--text-main);
   font-weight: 700;
+  min-width: 0;
 }
 
 .assistantStatePill[data-tone='warn'] {
@@ -3251,6 +3265,7 @@ onBeforeUnmount(() => {
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
   background: color-mix(in srgb, var(--surface) 78%, transparent);
   color: var(--text-main);
+  min-width: 0;
 }
 
 .assistantTaskButton {
@@ -3288,6 +3303,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+  min-width: 0;
 }
 
 .focusFilterTile {
@@ -3574,38 +3590,27 @@ onBeforeUnmount(() => {
   }
 
   .topStats {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .topStats::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
   }
 
   .statCard {
-    min-width: 140px;
+    min-width: 0;
     min-height: 78px;
     padding: 14px 16px;
     border-radius: 20px;
   }
 
   .quickActionRow {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .quickActionRow::-webkit-scrollbar {
-    display: none;
+    overflow: visible;
+    flex-wrap: wrap;
   }
 
   .quickActionButton {
-    flex: 0 0 auto;
-    white-space: nowrap;
+    flex: 0 1 auto;
+    white-space: normal;
   }
 
   .sectionHeader {
@@ -3645,11 +3650,10 @@ onBeforeUnmount(() => {
   }
 
   .focusFilterBar {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    padding-bottom: 2px;
-    scrollbar-width: none;
+    overflow: visible;
   }
 
   .assistantTaskRow,
@@ -3690,10 +3694,6 @@ onBeforeUnmount(() => {
     white-space: normal;
   }
 
-  .focusFilterBar::-webkit-scrollbar {
-    display: none;
-  }
-
   .paletteGrid {
     grid-template-columns: 1fr;
   }
@@ -3708,7 +3708,8 @@ onBeforeUnmount(() => {
     min-height: 52px;
     padding: 9px 12px;
     border-radius: 16px;
-    flex: 0 0 150px;
+    min-width: 0;
+    flex: initial;
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
@@ -3749,6 +3750,8 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 420px) {
+  .topStats,
+  .focusFilterBar,
   .assistantSummaryRow {
     grid-template-columns: 1fr;
   }
