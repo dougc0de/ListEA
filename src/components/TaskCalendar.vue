@@ -580,7 +580,7 @@ defineExpose({
 }
 
 .calendarSideSection {
-  --calendar-side-body-width: min(calc(100% - clamp(42px, 12vw, 82px)), 25rem);
+  --calendar-side-body-width: 100%;
   display: grid;
   gap: 12px;
 }

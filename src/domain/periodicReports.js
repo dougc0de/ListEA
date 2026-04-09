@@ -252,7 +252,7 @@ function collectCompletionRecords(tasks = [], analytics = [], range) {
     .sort((left, right) => new Date(right.happenedAt) - new Date(left.happenedAt));
 }
 
-function buildHourRangeFromRecords(records = []) {
+function buildHourMap(records = []) {
   const hourMap = new Map();
   records.forEach(record => {
     const date = parseDate(record.happenedAt);
@@ -261,15 +261,43 @@ function buildHourRangeFromRecords(records = []) {
     hourMap.set(hour, (hourMap.get(hour) ?? 0) + 1);
   });
 
-  const bestHour = Array.from(hourMap.entries()).sort((left, right) => right[1] - left[1])[0]?.[0];
-  if (!Number.isFinite(bestHour)) {
+  return hourMap;
+}
+
+function formatHourRange(hour) {
+  if (!Number.isFinite(hour)) {
     return 'Sin datos suficientes';
   }
 
-  return `${`${bestHour}`.padStart(2, '0')}:00 - ${`${(bestHour + 1) % 24}`.padStart(2, '0')}:00`;
+  return `${`${hour}`.padStart(2, '0')}:00 - ${`${(hour + 1) % 24}`.padStart(2, '0')}:00`;
 }
 
-function buildMissedHourRange(tasks = [], endDate) {
+function pickDominantHour(hourMap = new Map(), { excludeHours = [] } = {}) {
+  const excluded = new Set(excludeHours.filter(Number.isFinite));
+  const entries = Array.from(hourMap.entries())
+    .filter(([hour, count]) => Number.isFinite(hour) && count > 0 && !excluded.has(hour))
+    .sort((left, right) => {
+      if (right[1] !== left[1]) {
+        return right[1] - left[1];
+      }
+
+      return left[0] - right[0];
+    });
+
+  return entries[0]?.[0] ?? null;
+}
+
+function buildHourRangeFromRecords(records = [], options = {}) {
+  const hourMap = buildHourMap(records);
+  const dominantHour = pickDominantHour(hourMap, options);
+  if (!Number.isFinite(dominantHour)) {
+    return options.emptyLabel ?? 'Sin datos suficientes';
+  }
+
+  return formatHourRange(dominantHour);
+}
+
+function collectMissedHourRecords(tasks = [], endDate) {
   const records = [];
 
   tasks.forEach(task => {
@@ -287,7 +315,7 @@ function buildMissedHourRange(tasks = [], endDate) {
     records.push({ happenedAt: anchorDate.toISOString() });
   });
 
-  return buildHourRangeFromRecords(records);
+  return records;
 }
 
 function buildMostPostponedContext(tasks = []) {
@@ -468,6 +496,13 @@ export class PeriodicReportService {
     const healthSummary = this.healthAnalyzer.summarize(openAtCloseTasks, {
       referenceDate: range.endDate,
     });
+    const missedHourRecords = collectMissedHourRecords(scopedTasks, range.endDate);
+    const bestHourRange = buildHourRangeFromRecords(completionRecords);
+    const bestHour = pickDominantHour(buildHourMap(completionRecords));
+    const missedHourRange = buildHourRangeFromRecords(missedHourRecords, {
+      excludeHours: Number.isFinite(bestHour) ? [bestHour] : [],
+      emptyLabel: missedHourRecords.length ? 'Sin contraste suficiente' : 'Sin datos suficientes',
+    });
 
     const completedCount = completionRecords.length;
     const openAtCloseCount = openAtCloseTasks.length;
@@ -512,8 +547,8 @@ export class PeriodicReportService {
         launches: controlCenter.summary.launches,
       },
       patterns: {
-        bestHourRange: buildHourRangeFromRecords(completionRecords),
-        missedHourRange: buildMissedHourRange(scopedTasks, range.endDate),
+        bestHourRange,
+        missedHourRange,
         mostPostponedContext: buildMostPostponedContext(scopedTasks),
         insights,
         mainInsight,

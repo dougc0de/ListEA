@@ -449,6 +449,18 @@ function getTextHeight(lines, size, lineHeight = 1.2) {
   return lines.length * size * lineHeight;
 }
 
+function clampLines(lines = [], maxLines = 2) {
+  if (!Array.isArray(lines) || lines.length <= maxLines) {
+    return lines;
+  }
+
+  const nextLines = lines.slice(0, maxLines);
+  const lastIndex = nextLines.length - 1;
+  const trimmedLastLine = `${nextLines[lastIndex] ?? ''}`.replace(/[.,;:!?-–—\s]+$/u, '');
+  nextLines[lastIndex] = `${trimmedLastLine}…`;
+  return nextLines;
+}
+
 function drawTag(doc, text, x, y, color) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
@@ -472,27 +484,39 @@ function drawMetricCard(doc, x, y, width, height, metric) {
     fill: mixHex(metric.accent, COLORS.white, 0.82),
     stroke: mixHex(metric.accent, COLORS.stroke, 0.44),
   });
+  const innerX = x + 14;
+  const innerWidth = width - 28;
+  const labelLines = clampLines(getTextLines(doc, metric.label, innerWidth, {
+    size: metric.labelSize ?? 9,
+    fontStyle: 'bold',
+  }), 2);
+  const labelHeight = getTextHeight(labelLines, metric.labelSize ?? 9, 1.15);
   const valueText = `${metric.value ?? ''}`;
   const isDescriptor = metric.kind === 'descriptor';
   const valueSize = metric.size
     ?? (isDescriptor ? (valueText.length > 18 ? 10 : 11) : (valueText.length > 8 ? 18 : 23));
-  const valueLines = getTextLines(doc, valueText, width - 28, {
+  const valueLines = clampLines(getTextLines(doc, valueText, innerWidth, {
     size: valueSize,
     fontStyle: 'bold',
-  }).slice(0, isDescriptor ? 3 : 2);
+  }), isDescriptor ? 3 : 2);
   const valueHeight = getTextHeight(valueLines, valueSize, isDescriptor ? 1.15 : 1.05);
+  const labelY = y + 12;
+  const minimumValueY = labelY + labelHeight + 10;
+  const valueY = Math.max(minimumValueY, y + height - 12 - valueHeight);
 
-  drawTextBlock(doc, valueLines, x + 14, y + 12, {
-    width: width - 28,
+  drawTextBlock(doc, labelLines, innerX, labelY, {
+    width: innerWidth,
+    size: metric.labelSize ?? 9,
+    color: COLORS.text,
+    fontStyle: 'bold',
+    lineHeight: 1.15,
+  });
+  drawTextBlock(doc, valueLines, innerX, valueY, {
+    width: innerWidth,
     size: valueSize,
     color: COLORS.title,
     fontStyle: 'bold',
     lineHeight: isDescriptor ? 1.15 : 1.05,
-  });
-  drawTextBlock(doc, metric.label, x + 14, y + 18 + valueHeight, {
-    width: width - 28,
-    size: 10,
-    color: COLORS.text,
   });
 }
 
@@ -501,7 +525,6 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
   const width = pageWidth - (PAGE_MARGIN * 2);
   const x = PAGE_MARGIN;
   const y = cursor.y;
-  const headerHeight = 108;
   const logoSize = 62;
   const logoX = x + 18;
   const logoY = y + 22;
@@ -509,6 +532,23 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
   const metaWidth = 220;
   const metaX = x + width - metaWidth - 18;
   const leftTextWidth = Math.max(140, metaX - leftTextX - 18);
+  const titleLines = clampLines(getTextLines(doc, 'Reporte Premium de actividad', leftTextWidth, {
+    size: 17,
+    fontStyle: 'bold',
+  }), 2);
+  const subtitleLines = clampLines(getTextLines(doc, 'Tus estadisticas privadas, generadas localmente.', leftTextWidth, {
+    size: 10,
+  }), 2);
+  const periodLines = clampLines(getTextLines(doc, `Periodo: ${data.periodLabel}`, metaWidth - 24, {
+    size: 8,
+    fontStyle: 'bold',
+  }), 2);
+  const appNameHeight = getTextHeight([data.appName], 20, 1.2);
+  const titleHeight = getTextHeight(titleLines, 17, 1.2);
+  const subtitleHeight = getTextHeight(subtitleLines, 10, 1.2);
+  const leftBlockHeight = appNameHeight + 8 + titleHeight + 8 + subtitleHeight;
+  const metaBlockHeight = 34 + 10 + getTextHeight([`Generado: ${data.generatedAtLabel}`], 8, 1.2);
+  const headerHeight = Math.max(108, 28 + Math.max(logoSize, leftBlockHeight, metaBlockHeight) + 18);
 
   drawPanel(doc, x, y, width, headerHeight, { radius: 22 });
 
@@ -524,13 +564,13 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
     color: COLORS.brand,
     fontStyle: 'bold',
   });
-  drawTextBlock(doc, 'Reporte Premium de actividad', leftTextX, y + 46, {
+  drawTextBlock(doc, titleLines, leftTextX, y + 24 + appNameHeight + 8, {
     width: leftTextWidth,
     size: 17,
     color: COLORS.title,
     fontStyle: 'bold',
   });
-  drawTextBlock(doc, 'Tus estadisticas privadas, generadas localmente.', leftTextX, y + 72, {
+  drawTextBlock(doc, subtitleLines, leftTextX, y + 24 + appNameHeight + 8 + titleHeight + 8, {
     width: leftTextWidth,
     size: 10,
     color: COLORS.muted,
@@ -542,10 +582,6 @@ function drawHeaderSection(doc, cursor, data, logoDataUrl) {
     lineWidth: 0,
     radius: 14,
   });
-  const periodLines = getTextLines(doc, `Periodo: ${data.periodLabel}`, metaWidth - 24, {
-    size: 8,
-    fontStyle: 'bold',
-  }).slice(0, 2);
   drawTextBlock(doc, periodLines, metaX + 12, y + 23, {
     width: metaWidth - 24,
     size: 8,
@@ -791,6 +827,7 @@ function drawInsightsSection(doc, cursor, data) {
 
 function buildTaskRowLayout(doc, item, width) {
   const contentWidth = width - 24;
+  const titleWidth = width - 130;
   const titleLines = getTextLines(doc, item.title, contentWidth, {
     size: 10,
     fontStyle: 'bold',
@@ -800,12 +837,17 @@ function buildTaskRowLayout(doc, item, width) {
   });
   const titleHeight = getTextHeight(titleLines, 10, 1.1);
   const detailHeight = getTextHeight(detailLines, 9, 1.18);
-  const detailY = 38 + titleHeight + 4;
-  const rowHeight = Math.max(64, detailY + detailHeight + 12);
+  const headerY = 12;
+  const titleY = 34;
+  const detailY = titleY + titleHeight + 8;
+  const rowHeight = Math.max(72, detailY + detailHeight + 14);
 
   return {
+    titleWidth,
     titleLines,
     detailLines,
+    headerY,
+    titleY,
     detailY,
     rowHeight,
   };
@@ -819,15 +861,15 @@ function drawTaskRow(doc, x, y, width, item, color) {
   const layout = buildTaskRowLayout(doc, item, width);
   const rowHeight = layout.rowHeight;
   drawPanel(doc, x, y, width, rowHeight, { radius: 14 });
-  drawTag(doc, item.tag, x + 12, y + 10, color);
-  drawTextBlock(doc, item.whenLabel, x + width - 108, y + 12, {
+  drawTag(doc, item.tag, x + 12, y + layout.headerY, color);
+  drawTextBlock(doc, item.whenLabel, x + width - 108, y + layout.headerY + 2, {
     width: 96,
     size: 8,
     color: COLORS.muted,
     align: 'right',
   });
-  drawTextBlock(doc, layout.titleLines, x + 12, y + 34, {
-    width: width - 130,
+  drawTextBlock(doc, layout.titleLines, x + 12, y + layout.titleY, {
+    width: layout.titleWidth,
     size: 10,
     color: COLORS.text,
     fontStyle: 'bold',
@@ -1228,12 +1270,12 @@ function drawPeriodicExecutiveSection(doc, cursor, data) {
   const x = PAGE_MARGIN;
   const y = cursor.y;
   const metricWidth = (width - 44 - 20) / 3;
-  const metricHeight = 54;
+  const metricHeight = 68;
   const insightLines = getTextLines(doc, data.mainInsight, width - 44, {
     size: 11,
   });
   const insightHeight = getTextHeight(insightLines, 11, 1.2);
-  const summaryGridTop = y + 84 + insightHeight;
+  const summaryGridTop = y + 92 + insightHeight;
   const summaryGridHeight = (metricHeight * 2) + 14;
   const height = (summaryGridTop - y) + summaryGridHeight + 20;
   ensurePageSpace(doc, cursor, height);
@@ -1266,13 +1308,14 @@ function drawPeriodicPatternSection(doc, cursor, data) {
   const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
   const x = PAGE_MARGIN;
   const cardWidth = (width - 44 - 20) / 3;
+  const metricHeight = 76;
   const insightText = data.insights.length
     ? data.insights.map(item => `- ${item}`).join('\n')
     : '- Todavia no hay suficiente movimiento para detectar patrones fuertes.';
   const insightLines = getTextLines(doc, insightText, width - 44, {
     size: 9,
   });
-  const height = 154 + getTextHeight(insightLines, 9, 1.16);
+  const height = 170 + getTextHeight(insightLines, 9, 1.16);
   ensurePageSpace(doc, cursor, height);
   const y = cursor.y;
 
@@ -1290,14 +1333,14 @@ function drawPeriodicPatternSection(doc, cursor, data) {
   });
 
   data.patternCards.forEach((card, index) => {
-    drawMetricCard(doc, x + 22 + (index * (cardWidth + 10)), y + 78, cardWidth, 56, {
+    drawMetricCard(doc, x + 22 + (index * (cardWidth + 10)), y + 78, cardWidth, metricHeight, {
       ...card,
       kind: 'descriptor',
       size: 11,
     });
   });
 
-  drawTextBlock(doc, insightText, x + 22, y + 146, {
+  drawTextBlock(doc, insightText, x + 22, y + 78 + metricHeight + 14, {
     width: width - 44,
     size: 9,
     color: COLORS.text,
@@ -1312,7 +1355,8 @@ function drawPeriodicSignalsSection(doc, cursor, data) {
   const x = PAGE_MARGIN;
   const y = cursor.y;
   const cardWidth = (width - 44 - 30) / 4;
-  const height = 132;
+  const cardHeight = 64;
+  const height = 142;
   ensurePageSpace(doc, cursor, height);
 
   drawPanel(doc, x, y, width, height, {
@@ -1327,7 +1371,7 @@ function drawPeriodicSignalsSection(doc, cursor, data) {
   });
 
   data.signalCards.forEach((card, index) => {
-    drawMetricCard(doc, x + 22 + (index * (cardWidth + 10)), y + 54, cardWidth, 56, card);
+    drawMetricCard(doc, x + 22 + (index * (cardWidth + 10)), y + 56, cardWidth, cardHeight, card);
   });
 
   cursor.y += height + SECTION_GAP;
@@ -1337,16 +1381,22 @@ function drawPeriodicSectionGroup(doc, cursor, section) {
   const width = doc.internal.pageSize.getWidth() - (PAGE_MARGIN * 2);
   const x = PAGE_MARGIN;
   const items = Array.isArray(section.items) ? section.items : [];
+  const sectionLabelWidth = Math.min(280, width);
   const estimatedHeight = 62 + items.reduce((sum, item) => sum + measureTaskRowHeight(doc, item, width) + 10, 0);
   ensurePageSpace(doc, cursor, estimatedHeight);
 
-  drawTextBlock(doc, section.title, x, cursor.y, {
-    width,
-    size: 17,
+  drawPanel(doc, x, cursor.y, sectionLabelWidth, 38, {
+    fill: mixHex(section.color, COLORS.white, 0.92),
+    stroke: mixHex(section.color, COLORS.stroke, 0.44),
+    radius: 16,
+  });
+  drawTextBlock(doc, section.title, x + 16, cursor.y + 11, {
+    width: sectionLabelWidth - 32,
+    size: 13,
     color: section.color,
     fontStyle: 'bold',
   });
-  cursor.y += 28;
+  cursor.y += 50;
 
   items.forEach(item => {
     cursor.y += drawTaskRow(doc, x, cursor.y, width, item, section.color) + 10;

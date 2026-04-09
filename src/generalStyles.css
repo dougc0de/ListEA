@@ -1,0 +1,57 @@
+:root {
+  /* Layout baseline: phone first. Future views should return to these tokens. */
+  --layout-shell-max: 100%;
+  --shell-pad-inline: 12px;
+  --section-gap: 14px;
+  --section-body-max: 100%;
+  --section-body-compact-max: 100%;
+  --section-body-inset: 0px;
+}
+
+@media (min-width: 641px) {
+  :root {
+    --shell-pad-inline: 18px;
+    --section-gap: 18px;
+    --section-body-max: 100%;
+    --section-body-compact-max: 100%;
+    --section-body-inset: 0px;
+  }
+}
+
+@media (min-width: 961px) {
+  :root {
+    --shell-pad-inline: clamp(18px, 3vw, 32px);
+    --section-gap: clamp(18px, 2.8vw, 30px);
+    --section-body-max: 100%;
+    --section-body-compact-max: 100%;
+    --section-body-inset: 0px;
+  }
+}
+
+:where(.appShell, .tasksShell, .calendarShell, .dashboardPage) {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+  min-width: 0;
+}
+
+.viewport-shell {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+  min-width: 0;
+}
+
+.content-body {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+  min-width: 0;
+}
+
+.content-body-compact {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+  min-width: 0;
+}

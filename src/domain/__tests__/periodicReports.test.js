@@ -118,4 +118,37 @@ describe('PeriodicReportService', () => {
     expect(report.summary.completed).toBe(0);
     expect(report.patterns.mainInsight).toContain('Todavia');
   });
+
+  it('avoids presenting the same hour as both strongest and most vulnerable when there is no contrast', () => {
+    const factory = new TaskFactory();
+    const tasks = [
+      factory.create({
+        id: 'task-a',
+        title: 'Llamar a cliente',
+        createdAt: '2026-03-31T08:00:00.000Z',
+        dueAt: '2026-04-01T09:00:00.000Z',
+        dueAtPrecision: 'datetime',
+        status: TASK_STATUS.COMPLETED,
+        completedAt: '2026-04-01T09:10:00.000Z',
+      }),
+      factory.create({
+        id: 'task-b',
+        title: 'Seguimiento de propuesta',
+        createdAt: '2026-04-01T08:00:00.000Z',
+        followUpAt: '2026-04-03T09:00:00.000Z',
+        followUpAtPrecision: 'datetime',
+        status: TASK_STATUS.WAITING,
+      }),
+    ];
+    const analytics = new TaskActivityLedger();
+    analytics.recordCompleted(tasks[0], '2026-04-01T09:10:00.000Z');
+
+    const report = new PeriodicReportService().build(tasks, analytics, {
+      period: REPORT_PERIODS.WEEK,
+      referenceDate: new Date('2026-04-09T12:00:00.000Z'),
+    });
+
+    expect(report.patterns.bestHourRange).toBe(toHourRange('2026-04-01T09:10:00.000Z'));
+    expect(report.patterns.missedHourRange).toBe('Sin contraste suficiente');
+  });
 });
