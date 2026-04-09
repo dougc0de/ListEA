@@ -1,30 +1,44 @@
 <script setup>
+import { ref } from 'vue';
 import FooterPage from './components/FooterPage.vue';
 import TasksSection from './components/TasksSection.vue';
 import WebMenu from './components/WebMenu.vue';
 import WelcomeComponent from './components/WelcomeComponent.vue';
 
+const currentView = ref('home');
+const currentPlanId = ref('free');
 
+function changeView(nextView) {
+  currentView.value = nextView;
+}
+
+function syncPlan(planId) {
+  currentPlanId.value = planId;
+}
 </script>
 
 <template>
-  <WebMenu />
-  <WelcomeComponent />
-  <TasksSection />
+  <WebMenu
+    :current-view="currentView"
+    :current-plan-id="currentPlanId"
+    @navigate="changeView"
+  />
+  <main class="appShell">
+    <WelcomeComponent @navigate="changeView" />
+    <TasksSection
+      :current-view="currentView"
+      @navigate="changeView"
+      @plan-change="syncPlan"
+    />
+  </main>
   <FooterPage />
 </template>
 
 <style scoped>
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #42b883aa);
+.appShell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
 }
 </style>

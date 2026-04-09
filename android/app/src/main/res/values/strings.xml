@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ListEA</string>
+    <string name="title_activity_main">ListEA</string>
+    <string name="package_name">com.daenterprise.listea</string>
+    <string name="custom_url_scheme">com.daenterprise.listea</string>
+</resources>
