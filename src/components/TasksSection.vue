@@ -2559,9 +2559,9 @@ onBeforeUnmount(() => {
 
 .topBar {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  padding: 4px 0 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.92fr);
+  gap: 14px;
+  padding: 8px 0 14px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
 }
 
@@ -2569,11 +2569,10 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 6px;
   align-content: start;
-  min-width: 0;
 }
 
 .topHint {
-  max-width: none;
+  max-width: 52ch;
 }
 
 .topCopy h1,
@@ -2585,8 +2584,8 @@ onBeforeUnmount(() => {
 .topCopy h1 {
   margin-top: 0.35rem;
   margin-bottom: 0.5rem;
-  max-width: none;
-  font-size: clamp(1.08rem, 5vw, 1.48rem);
+  max-width: 18ch;
+  font-size: clamp(1.25rem, 4vw, 1.78rem);
   line-height: 1.05;
 }
 
@@ -2604,40 +2603,25 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
   line-height: 1.45;
   text-wrap: pretty;
-  max-width: none;
-  font-size: 0.92rem;
+  max-width: 72ch;
 }
 
 .topStats {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
   align-self: stretch;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.topStats::-webkit-scrollbar {
-  display: none;
+  grid-auto-rows: 1fr;
 }
 
 .quickActionRow {
   display: flex;
   gap: 8px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   margin-top: 4px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.quickActionRow::-webkit-scrollbar {
-  display: none;
 }
 
 .quickActionButton {
-  flex: 0 0 auto;
   min-height: 40px;
   padding: 0 14px;
   display: inline-flex;
@@ -2649,7 +2633,6 @@ onBeforeUnmount(() => {
   color: var(--text-main);
   line-height: 1.15;
   text-align: center;
-  white-space: nowrap;
 }
 
 .feedbackBanner {
@@ -2749,15 +2732,13 @@ onBeforeUnmount(() => {
   justify-content: center;
   align-items: flex-start;
   gap: 4px;
-  min-width: min(46vw, 168px);
-  min-height: 78px;
-  padding: 14px 16px;
-  border-radius: 20px;
+  min-height: 88px;
+  padding: 16px 18px;
+  border-radius: 24px;
   border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
   background: color-mix(in srgb, white 94%, var(--surface));
   box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
   text-align: left;
-  min-width: 0;
 }
 
 .statCard strong {
@@ -2995,7 +2976,7 @@ onBeforeUnmount(() => {
 }
 
 .settingsGrid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .panelCard {
@@ -3076,7 +3057,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  flex-direction: column;
   margin-bottom: 14px;
 }
 
@@ -3086,8 +3066,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  width: 100%;
-  justify-content: space-between;
 }
 
 .sectionToggle {
@@ -3144,7 +3122,6 @@ onBeforeUnmount(() => {
 .focusListPanel,
 .widePanel {
   grid-column: 1 / -1;
-  min-width: 0;
 }
 
 .focusListWrap {
@@ -3153,7 +3130,7 @@ onBeforeUnmount(() => {
 
 .operabilityGrid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -3266,7 +3243,6 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  flex-direction: column;
 }
 
 .assistantTaskButton,
@@ -3312,21 +3288,13 @@ onBeforeUnmount(() => {
 }
 
 .focusFilterBar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.focusFilterBar::-webkit-scrollbar {
-  display: none;
 }
 
 .focusFilterTile {
-  flex: 0 0 min(48vw, 170px);
   min-height: 62px;
   gap: 6px;
   padding: 10px 12px;
@@ -3387,7 +3355,7 @@ onBeforeUnmount(() => {
 .paletteGrid {
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -3495,7 +3463,7 @@ onBeforeUnmount(() => {
 .inlineFieldRow {
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -3575,61 +3543,6 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
   }
 
-}
-
-@media (max-width: 1080px) {
-  .topBar {
-    grid-template-columns: 1fr;
-  }
-
-  .topStats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .focusFilterBar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .settingsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .settingsGrid > .panelCard:first-child,
-  .settingsGrid > .panelCard:nth-child(2) {
-    grid-column: auto;
-  }
-}
-
-@media (max-width: 820px) {
-  .topCopy h1 {
-    max-width: none;
-  }
-
-  .quickActionRow {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .quickActionRow::-webkit-scrollbar {
-    display: none;
-  }
-
-  .quickActionButton {
-    flex: 0 0 auto;
-    white-space: nowrap;
-  }
-
-  .headerActions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .laneCount {
-    min-width: 0;
-    padding-inline: 12px;
-  }
 }
 
 @media (max-width: 640px) {
@@ -3753,10 +3666,6 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .focusFilterTile {
-    flex: 0 0 min(48vw, 180px);
-  }
-
   .paletteGrid {
     grid-template-columns: 1fr;
   }
@@ -3808,102 +3717,6 @@ onBeforeUnmount(() => {
   .topCopy h1 {
     max-width: none;
     font-size: clamp(1.08rem, 5vw, 1.38rem);
-  }
-}
-
-@media (min-width: 641px) {
-  .panelText,
-  .emptyText {
-    font-size: 0.96rem;
-  }
-
-  .topStats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    overflow: visible;
-    padding-bottom: 0;
-    scrollbar-width: auto;
-  }
-
-  .statCard {
-    min-width: 0;
-  }
-
-  .quickActionRow {
-    flex-wrap: wrap;
-    overflow: visible;
-    padding-bottom: 0;
-    scrollbar-width: auto;
-  }
-
-  .focusFilterBar {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
-    padding-bottom: 0;
-    scrollbar-width: auto;
-  }
-
-  .focusFilterTile {
-    min-height: 60px;
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  .snippetActions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 861px) {
-  .sectionHeader {
-    flex-direction: row;
-  }
-
-  .headerActions,
-  .headerToggleWrap {
-    width: auto;
-    justify-content: flex-start;
-  }
-
-  .operabilityGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .assistantTaskRow,
-  .assistantMetaRow,
-  .rescueList {
-    flex-direction: row;
-  }
-}
-
-@media (min-width: 961px) {
-  .topBar {
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 0.95fr);
-    gap: 14px;
-    padding: 8px 0 14px;
-  }
-
-  .topCopy h1 {
-    max-width: 18ch;
-    font-size: clamp(1.25rem, 4vw, 1.78rem);
-  }
-
-  .topHint {
-    max-width: 52ch;
-  }
-
-  .topStats {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .focusFilterBar {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-
-  .settingsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

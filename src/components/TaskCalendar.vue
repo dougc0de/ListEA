@@ -315,13 +315,12 @@ defineExpose({
   border: 0;
   background: transparent;
   box-shadow: none;
-  min-width: 0;
 }
 
 .calendarHeader {
   display: grid;
-  gap: 12px;
-  padding: 0 0 12px;
+  gap: 16px;
+  padding: 0 0 14px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
 }
 
@@ -331,13 +330,12 @@ defineExpose({
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  flex-direction: column;
 }
 
 .calendarMonthBlock h3,
 .calendarDetailTitle {
   margin: 0;
-  font-size: clamp(1.04rem, 4.5vw, 1.32rem);
+  font-size: clamp(1.12rem, 2.8vw, 1.5rem);
 }
 
 .calendarMicrocopy {
@@ -352,19 +350,6 @@ defineExpose({
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.calendarMonthActions,
-.calendarModeRow {
-  overflow-x: auto;
-  flex-wrap: nowrap;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.calendarMonthActions::-webkit-scrollbar,
-.calendarModeRow::-webkit-scrollbar {
-  display: none;
 }
 
 .smallButton {
@@ -391,8 +376,7 @@ defineExpose({
 
 .calendarStats {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .calendarStatCard,
@@ -413,8 +397,7 @@ defineExpose({
 .calendarLayout {
   display: grid;
   gap: 16px;
-  grid-template-columns: 1fr;
-  min-width: 0;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
 }
 
 .calendarMonthCard,
@@ -426,15 +409,14 @@ defineExpose({
 .calendarMonthCard {
   display: grid;
   gap: 12px;
-  min-width: 0;
 }
 
 .calendarWeekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: 8px;
   color: var(--text-muted);
-  font-size: 0.64rem;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -443,14 +425,13 @@ defineExpose({
 .calendarGrid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
-  min-width: 0;
+  gap: 8px;
 }
 
 .calendarDay {
-  min-height: 68px;
-  padding: 6px;
-  border-radius: 14px;
+  min-height: 106px;
+  padding: 10px;
+  border-radius: 20px;
   border: 1px solid color-mix(in srgb, var(--accent) 8%, var(--line));
   background: color-mix(in srgb, var(--surface) 82%, white);
   display: grid;
@@ -529,7 +510,10 @@ defineExpose({
   font-size: 0.84rem;
   line-height: 1.25;
   color: var(--text-main);
-  display: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .calendarDetailCard,
@@ -560,8 +544,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: flex-start;
-  flex-direction: column;
+  align-items: center;
   padding: 12px 14px;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
@@ -576,7 +559,7 @@ defineExpose({
 .upcomingMeta {
   display: grid;
   gap: 2px;
-  justify-items: start;
+  justify-items: end;
 }
 
 .upcomingMeta small {
@@ -607,31 +590,6 @@ defineExpose({
 
   .calendarStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 860px) {
-  .calendarHeader {
-    gap: 12px;
-  }
-
-  .calendarMonthActions,
-  .calendarModeRow {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .calendarMonthActions::-webkit-scrollbar,
-  .calendarModeRow::-webkit-scrollbar {
-    display: none;
-  }
-
-  .calendarMonthActions button,
-  .calendarModeButton {
-    flex: 0 0 auto;
-    white-space: nowrap;
   }
 }
 
@@ -684,103 +642,6 @@ defineExpose({
   .calendarStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  .calendarWeekdays {
-    gap: 4px;
-    font-size: 0.64rem;
-  }
-
-  .calendarGrid {
-    gap: 4px;
-  }
-
-  .calendarDay {
-    min-height: 68px;
-    padding: 6px;
-    border-radius: 14px;
-  }
-
-  .calendarDayCount {
-    min-width: 24px;
-    min-height: 24px;
-    padding-inline: 6px;
-    font-size: 0.74rem;
-  }
-
-  .calendarStatCard,
-  .rhythmCard {
-    padding: 12px;
-    border-radius: 16px;
-  }
-}
-
-@media (min-width: 721px) {
-  .calendarMonthBlock h3,
-  .calendarDetailTitle {
-    font-size: clamp(1.12rem, 2.8vw, 1.5rem);
-  }
-
-  .calendarStats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .calendarWeekdays {
-    gap: 8px;
-    font-size: 0.76rem;
-  }
-
-  .calendarGrid {
-    gap: 8px;
-  }
-
-  .calendarDay {
-    min-height: 88px;
-    padding: 8px;
-    border-radius: 18px;
-  }
-
-  .calendarDayPreview {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .upcomingRow {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .upcomingMeta {
-    justify-items: end;
-  }
-}
-
-@media (min-width: 1041px) {
-  .calendarLayout {
-    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  }
-
-  .calendarMonthRow,
-  .calendarDetailHeader {
-    flex-direction: row;
-  }
-
-  .calendarMonthActions,
-  .calendarModeRow {
-    overflow: visible;
-    flex-wrap: wrap;
-    padding-bottom: 0;
-    scrollbar-width: auto;
-  }
-
-  .calendarDay {
-    min-height: 106px;
-    padding: 10px;
-    border-radius: 20px;
   }
 }
 </style>

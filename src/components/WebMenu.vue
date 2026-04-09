@@ -214,7 +214,7 @@ watch(
 .menuBar {
   width: 100%;
   margin: 0;
-  min-height: 56px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -226,7 +226,6 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -239,9 +238,9 @@ watch(
 }
 
 .brandLogo {
-  width: 74px;
-  height: 30px;
-  border-radius: 14px;
+  width: 94px;
+  height: 38px;
+  border-radius: 16px;
   object-fit: contain;
   object-position: center;
   display: block;
@@ -252,31 +251,21 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-width: 0;
 }
 
 .brandCopy strong {
-  font-size: 0.92rem;
+  font-size: 0.98rem;
   line-height: 1;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .brandCopy span {
   color: var(--text-muted);
   font-size: 0.78rem;
-  max-width: min(38vw, 260px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: none;
 }
 
 .menuTrigger {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
@@ -328,7 +317,7 @@ watch(
   z-index: 31;
   overflow-y: auto;
   opacity: 0;
-  border-radius: 0 0 24px 24px;
+  border-radius: 0 0 32px 32px;
   border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
   border-top: 0;
 }
@@ -447,69 +436,6 @@ watch(
   z-index: 28;
 }
 
-@media (min-width: 641px) {
-  .menuBar {
-    min-height: 60px;
-  }
-
-  .brandLogo {
-    width: 88px;
-    height: 36px;
-    border-radius: 16px;
-  }
-
-  .brandCopy strong {
-    font-size: 0.98rem;
-  }
-
-  .brandCopy span {
-    display: block;
-    max-width: min(34vw, 180px);
-  }
-
-  .menuTrigger {
-    width: 44px;
-    height: 44px;
-    border-radius: 16px;
-  }
-}
-
-@media (min-width: 901px) {
-  .menuBar {
-    min-height: 64px;
-  }
-
-  .brandLogo {
-    width: 94px;
-    height: 38px;
-  }
-
-  .brandCopy span {
-    max-width: min(38vw, 260px);
-  }
-
-  .drawer {
-    border-radius: 0 0 32px 32px;
-  }
-}
-
-@media (max-width: 900px) {
-  .menuBar {
-    min-height: 60px;
-    gap: 8px;
-  }
-
-  .brandLogo {
-    width: 84px;
-    height: 34px;
-    border-radius: 14px;
-  }
-
-  .brandCopy span {
-    max-width: min(34vw, 180px);
-  }
-}
-
 @media (max-width: 640px) {
   .menuBar {
     min-height: 56px;
@@ -537,27 +463,6 @@ watch(
   .drawerItem,
   .drawerDisclosure {
     min-height: 46px;
-  }
-}
-
-@media (max-width: 420px) {
-  .brandButton {
-    gap: 10px;
-  }
-
-  .brandLogo {
-    width: 74px;
-    height: 30px;
-  }
-
-  .brandCopy strong {
-    font-size: 0.9rem;
-  }
-
-  .menuTrigger {
-    width: 42px;
-    height: 42px;
-    border-radius: 14px;
   }
 }
 </style>

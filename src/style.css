@@ -204,7 +204,6 @@
 
 html {
   scroll-behavior: smooth;
-  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -223,7 +222,6 @@ input,
 textarea,
 select {
   font: inherit;
-  min-width: 0;
 }
 
 button {
@@ -253,43 +251,9 @@ a {
   text-decoration: none;
 }
 
-img,
-svg,
-canvas,
-video {
-  max-width: 100%;
-}
-
-#app,
-#app > * {
-  min-width: 0;
-}
-
 #app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   width: 100%;
-}
-
-@media (max-width: 900px) {
-  :root {
-    --shell-pad-inline: clamp(12px, 3vw, 20px);
-    --section-gap: 14px;
-  }
-
-  body {
-    font-size: 15px;
-  }
-}
-
-@media (max-width: 560px) {
-  :root {
-    --shell-pad-inline: 12px;
-    --section-gap: 12px;
-  }
-
-  body {
-    font-size: 14px;
-  }
 }

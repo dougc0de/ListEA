@@ -55,20 +55,6 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  padding:
-    clamp(8px, 1.4vw, 18px)
-    0
-    max(18px, env(safe-area-inset-bottom));
-}
-
-.appShell > * {
-  min-width: 0;
-}
-
-@media (max-width: 720px) {
-  .appShell {
-    padding-top: 8px;
-  }
+  padding: clamp(10px, 1.4vw, 18px) 0 max(18px, env(safe-area-inset-bottom));
 }
 </style>

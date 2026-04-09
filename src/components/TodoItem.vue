@@ -885,37 +885,4 @@ function openExternalAction(action) {
     width: 100%;
   }
 }
-
-@media (max-width: 960px) {
-  .detailsPanel {
-    grid-template-columns: 1fr;
-  }
-
-  .titleRow {
-    align-items: flex-start;
-  }
-}
-
-@media (max-width: 480px) {
-  .taskCard {
-    padding: 12px;
-    border-radius: 16px;
-  }
-
-  .titleRow h3 {
-    font-size: 1rem;
-  }
-
-  .statusBadge,
-  .contextChip,
-  .healthBadge,
-  .tagChip {
-    min-height: 30px;
-    font-size: 0.76rem;
-  }
-
-  .overflowActionGrid {
-    grid-template-columns: 1fr;
-  }
-}
 </style>

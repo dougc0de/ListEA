@@ -7,8 +7,8 @@ A partir de ahora trabajar así:
 -si una mejora implica riesgo de romper vistas, te lo diré antes
 
 Para esta app, lo correcto ahora es trabajar con criterio de:
-ajuste local
-sin refactor visual amplio
-sin cambiar jerarquías que ya funcionan
-solo corrección puntual sobre el componente afectado
+-ajuste local
+-sin refactor visual amplio
+-sin cambiar jerarquías que ya funcionan
+-solo corrección puntual sobre el componente afectado
 

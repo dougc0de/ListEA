@@ -1322,11 +1322,7 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .launcherPrimaryButton,
   .launcherSecondaryButton {
-    width: min(100%, 420px);
-  }
-
-  .advancedPanel {
-    grid-template-columns: 1fr;
+    width: min(100%, 360px);
   }
 }
 
@@ -1391,30 +1387,6 @@ onBeforeUnmount(() => {
 
   .advancedPanel {
     display: grid;
-  }
-}
-
-@media (max-width: 480px) {
-  .launcherCard,
-  .composerCard {
-    padding: 14px 12px;
-    border-radius: 20px;
-  }
-
-  .launcherPrimaryButton,
-  .launcherSecondaryButton {
-    min-height: 50px;
-  }
-
-  .primaryField,
-  .detailField {
-    border-radius: 16px;
-    padding: 12px 14px;
-  }
-
-  .voiceWaveform {
-    gap: 4px;
-    min-height: 46px;
   }
 }
 </style>
