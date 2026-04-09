@@ -1966,33 +1966,16 @@ onBeforeUnmount(() => {
               <span v-if="operabilityPanel.rescueItems.length" class="assistantMetaChip">{{ operabilityPanel.rescueLabel }}</span>
             </div>
 
-            <section v-if="operabilityPanel.priorityTasks.length" class="assistantSection">
+            <section
+              v-if="operabilityPanel.rescueItems.length || operabilityPanel.priorityTasks.length"
+              class="assistantSection"
+            >
               <div>
                 <p class="assistantSectionEyebrow">Prioridades</p>
-                <strong class="assistantSectionTitle">Lo primero que conviene mover</strong>
+                <strong class="assistantSectionTitle">Lo primero que conviene mover sin duplicar vista</strong>
               </div>
 
-              <div class="assistantTaskRow">
-                <button
-                  v-for="item in operabilityPanel.priorityTasks"
-                  :key="item.id"
-                  type="button"
-                  class="assistantTaskButton"
-                  @click="focusTaskById(item.id, 'today', { showFeedback: false })"
-                >
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.badge }}</span>
-                </button>
-              </div>
-            </section>
-
-            <section v-if="operabilityPanel.rescueItems.length" class="assistantSection">
-              <div>
-                <p class="assistantSectionEyebrow">Ajustes sugeridos</p>
-                <strong class="assistantSectionTitle">Backlog rescue dentro del mismo flujo</strong>
-              </div>
-
-              <div class="rescueList">
+              <div v-if="operabilityPanel.rescueItems.length" class="rescueList">
                 <button
                   v-for="item in operabilityPanel.rescueItems"
                   :key="item.id"
@@ -2003,6 +1986,19 @@ onBeforeUnmount(() => {
                   <strong>{{ item.title }}</strong>
                   <span>{{ item.actionLabel }}</span>
                   <small>{{ item.reason }}</small>
+                </button>
+              </div>
+
+              <div v-else class="assistantTaskRow">
+                <button
+                  v-for="item in operabilityPanel.priorityTasks"
+                  :key="item.id"
+                  type="button"
+                  class="assistantTaskButton"
+                  @click="focusTaskById(item.id, 'today', { showFeedback: false })"
+                >
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.badge }}</span>
                 </button>
               </div>
             </section>
@@ -3662,6 +3658,38 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 
+  .assistantBoard {
+    padding: 14px;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .assistantBoardHead {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .assistantStatePill {
+    align-self: flex-start;
+  }
+
+  .assistantSummaryRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .assistantMetaChip,
+  .assistantTaskButton,
+  .rescueActionCard {
+    min-width: 0;
+  }
+
+  .assistantMetaChip {
+    width: 100%;
+    justify-content: flex-start;
+    white-space: normal;
+  }
+
   .focusFilterBar::-webkit-scrollbar {
     display: none;
   }
@@ -3717,6 +3745,21 @@ onBeforeUnmount(() => {
   .topCopy h1 {
     max-width: none;
     font-size: clamp(1.08rem, 5vw, 1.38rem);
+  }
+}
+
+@media (max-width: 420px) {
+  .assistantSummaryRow {
+    grid-template-columns: 1fr;
+  }
+
+  .assistantBoard {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .assistantSectionSoft {
+    padding: 12px;
   }
 }
 </style>
