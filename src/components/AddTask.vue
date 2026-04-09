@@ -998,7 +998,7 @@ onBeforeUnmount(() => {
   min-height: 54px;
   padding: 0 18px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 4px solid var(--line);
   cursor: pointer;
   font-weight: 700;
   font-size: 1rem;
@@ -1089,6 +1089,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  width: min(calc(100% - var(--section-body-inset)), var(--section-body-max));
+  margin-inline: auto;
 }
 
 .primaryField,
@@ -1190,6 +1192,8 @@ onBeforeUnmount(() => {
   border-top: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
   background: transparent;
   box-shadow: none;
+  width: min(calc(100% - var(--section-body-inset)), var(--section-body-max));
+  margin-inline: auto;
 }
 
 .voiceFeedback.error {

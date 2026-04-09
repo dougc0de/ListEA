@@ -110,10 +110,6 @@ watch(
     <div class="menuBar">
       <button type="button" class="brandButton" @click="navigateTo('today')">
         <img src="../assets/logo.png" alt="Logo de ListEA" class="brandLogo" />
-        <div class="brandCopy">
-          <strong>ListEA</strong>
-          <span>Hoy, seguimiento y calendario</span>
-        </div>
       </button>
 
       <button

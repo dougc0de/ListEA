@@ -110,6 +110,27 @@ function formatUpcomingDate(value) {
   }).format(value);
 }
 
+function formatTaskCountLabel(value = 0) {
+  return `${value} tarea${value === 1 ? '' : 's'}`;
+}
+
+function formatUpcomingHeadline(day) {
+  return `${formatUpcomingDate(day.date)} -> ${formatTaskCountLabel(day.count)}`;
+}
+
+function formatBusiestDaySummary() {
+  if (!board.value.monthStats.busiestDay) {
+    return 'No hubo picos visibles este mes.';
+  }
+
+  const busiestDay = board.value.monthStats.busiestDay;
+  return `${busiestDay.label} -> ${formatTaskCountLabel(busiestDay.count)}`;
+}
+
+function formatWithoutDateSummary() {
+  return `${board.value.monthStats.withoutDate} tarea${board.value.monthStats.withoutDate === 1 ? '' : 's'} sin fecha`;
+}
+
 function formatLoadMinutes(value) {
   if (!value) return 'Ligero';
   if (value < 45) return `${value}m`;
@@ -230,13 +251,6 @@ defineExpose({
             </button>
           </div>
 
-          <div class="calendarDetailMetrics">
-            <span class="metricPill">Carga {{ formatLoadMinutes(board.selectedDay.loadMinutes) }}</span>
-            <span v-if="board.selectedDay.counts.due" class="metricPill due">Fechas {{ board.selectedDay.counts.due }}</span>
-            <span v-if="board.selectedDay.counts.followUp" class="metricPill followUp">Seguimiento {{ board.selectedDay.counts.followUp }}</span>
-            <span v-if="board.selectedDay.counts.completed" class="metricPill completed">Cierres {{ board.selectedDay.counts.completed }}</span>
-          </div>
-
           <TodoList
             :todos="board.selectedDay.tasks"
             :editing-task-id="props.editingTaskId"
@@ -251,10 +265,11 @@ defineExpose({
 
         <aside class="calendarSideCard">
           <div class="calendarSideSection">
-            <div class="sectionHeader compact">
+            <div class="sectionHeader compact calendarSideHeader">
               <div>
-                <p class="eyebrow">Cerca de hoy</p>
-                <h3>Proximas cargas</h3>
+                <p class="calendarSideKicker">Cerca de hoy</p>
+                <h3 class="calendarSideTitle">Proximas cargas</h3>
+                <p class="calendarSectionNote">Fechas cercanas donde ya hay movimiento visible.</p>
               </div>
             </div>
 
@@ -266,10 +281,9 @@ defineExpose({
                 class="upcomingRow"
                 @click="selectDay(day)"
               >
-                <span class="upcomingDate">{{ formatUpcomingDate(day.date) }}</span>
-                <span class="upcomingMeta">
-                  <strong>{{ day.count }}</strong>
-                  <small>{{ day.title }}</small>
+                <span class="upcomingPrimary">
+                  <strong class="upcomingLine">{{ formatUpcomingHeadline(day) }}</strong>
+                  <small class="upcomingHint">{{ day.title || 'Hay carga visible ese dia.' }}</small>
                 </span>
               </button>
             </div>
@@ -277,21 +291,21 @@ defineExpose({
           </div>
 
           <div class="calendarSideSection">
-            <div class="sectionHeader compact">
+            <div class="sectionHeader compact calendarSideHeader">
               <div>
-                <p class="eyebrow">Ritmo</p>
-                <h3>Lectura del mes</h3>
+                <h3 class="calendarSideTitle">Lectura del mes</h3>
+                <p class="calendarSectionNote">Resumen local de lo que este mes te esta diciendo.</p>
               </div>
             </div>
 
             <div class="rhythmList">
               <div class="rhythmCard">
-                <span>Pico</span>
-                <strong>{{ board.monthStats.busiestDay ? `${board.monthStats.busiestDay.label} · ${board.monthStats.busiestDay.count}` : 'Sin saturacion' }}</strong>
+                <span>Fecha con mas carga</span>
+                <strong>{{ formatBusiestDaySummary() }}</strong>
               </div>
               <div class="rhythmCard">
-                <span>Sin fecha</span>
-                <strong>{{ board.monthStats.withoutDate }}</strong>
+                <span>Tareas sin fecha</span>
+                <strong>{{ formatWithoutDateSummary() }}</strong>
               </div>
             </div>
           </div>
@@ -566,21 +580,58 @@ defineExpose({
 }
 
 .calendarSideSection {
+  --calendar-side-body-width: min(calc(100% - clamp(42px, 12vw, 82px)), 25rem);
   display: grid;
   gap: 12px;
+}
+
+.calendarSideSection + .calendarSideSection {
+  margin-top: 10px;
+}
+
+.calendarSideHeader {
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--section-tint-soft) 74%, white), color-mix(in srgb, var(--surface) 96%, white));
+}
+
+.calendarSideKicker,
+.calendarSectionNote {
+  margin: 0;
+  text-align: left;
+}
+
+.calendarSideKicker {
+  margin-bottom: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.calendarSideTitle {
+  margin: 0;
+}
+
+.calendarSectionNote {
+  margin-top: 6px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .upcomingList {
   display: grid;
   gap: 10px;
+  width: var(--calendar-side-body-width);
+  margin-inline: auto;
 }
 
 .upcomingRow {
   width: 100%;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 12px;
-  align-items: center;
   padding: 12px 14px;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
@@ -588,23 +639,53 @@ defineExpose({
   text-align: left;
 }
 
-.upcomingDate {
-  font-weight: 700;
-}
-
-.upcomingMeta {
+.upcomingPrimary {
   display: grid;
-  gap: 2px;
-  justify-items: end;
+  gap: 4px;
+  min-width: 0;
 }
 
-.upcomingMeta small {
+.upcomingLine {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.3;
+  color: var(--text-main);
+}
+
+.upcomingHint {
+  display: block;
   color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.empty {
+  text-align: center;
 }
 
 .rhythmList {
   display: grid;
   gap: 10px;
+  width: var(--calendar-side-body-width);
+  margin-inline: auto;
+}
+
+.rhythmCard span {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.rhythmCard strong {
+  line-height: 1.35;
+}
+
+.calendarSideSection > .emptyText {
+  width: var(--calendar-side-body-width);
+  margin-inline: auto;
+}
+
+.calendarDetailCard > :not(.calendarDetailHeader) {
+  width: min(calc(100% - var(--section-body-inset)), var(--section-body-max));
+  margin-inline: auto;
 }
 
 .calendarSwap-enter-active,

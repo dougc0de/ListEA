@@ -3028,6 +3028,12 @@ onBeforeUnmount(() => {
   padding: 4px 0 0;
 }
 
+.panelCard > :not(.sectionHeader) {
+  width: min(calc(100% - var(--section-body-inset)), var(--section-body-max));
+  margin-inline: auto;
+  min-width: 0;
+}
+
 .calendarUpgradeCard {
   display: grid;
   gap: 16px;
@@ -3222,6 +3228,7 @@ onBeforeUnmount(() => {
 .assistantSection {
   display: grid;
   gap: 12px;
+  margin-top: 1rem;
   padding-top: 14px;
   border-top: 1px solid color-mix(in srgb, var(--section-line-strong) 72%, transparent);
 }
@@ -3725,6 +3732,7 @@ onBeforeUnmount(() => {
   }
 
   .assistantBoard {
+    margin-top: 1.5rem;
     padding: 14px;
     border-radius: 20px;
     overflow: hidden;

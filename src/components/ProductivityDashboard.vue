@@ -902,6 +902,7 @@ onBeforeUnmount(destroyCharts);
 }
 
 .eyebrow {
+  margin-top: 2rem;
   margin-bottom: 6px;
   font-size: 0.78rem;
   letter-spacing: 0.1em;
@@ -995,6 +996,11 @@ onBeforeUnmount(destroyCharts);
   gap: 16px;
 }
 
+.dashboardCard > :not(.controlHeader) {
+  width: min(calc(100% - var(--section-body-inset)), var(--section-body-max));
+  margin-inline: auto;
+}
+
 .controlCenterCard {
   padding: 18px;
   border-radius: 30px;
@@ -1046,6 +1052,7 @@ onBeforeUnmount(destroyCharts);
 }
 
 .decisionCard {
+  margin-top: 1rem;
   padding: 16px;
   display: grid;
   gap: 12px;

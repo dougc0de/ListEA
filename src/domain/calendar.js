@@ -350,8 +350,13 @@ export class TaskCalendarBoardService {
 
   buildUpcomingDays(days = [], referenceDate = new Date(), mode = CALENDAR_VIEW_MODES.ALL) {
     const referenceKey = toDateKey(referenceDate);
+    const lastUpcomingKey = toDateKey(addDays(referenceDate, 7));
     return days
-      .filter(day => day.dateKey >= referenceKey && day.visibleCount > 0)
+      .filter(day =>
+        day.dateKey >= referenceKey
+        && day.dateKey <= lastUpcomingKey
+        && day.visibleCount > 0,
+      )
       .slice(0, 5)
       .map(day => ({
         date: day.date,
