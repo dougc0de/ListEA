@@ -884,8 +884,8 @@ onBeforeUnmount(destroyCharts);
 .heroCard {
   padding: 0 0 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) auto;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   min-width: 0;
 }
@@ -907,8 +907,8 @@ onBeforeUnmount(destroyCharts);
 }
 
 .heroCopy h2 {
-  max-width: 22ch;
-  font-size: clamp(1.4rem, 4vw, 2rem);
+  max-width: none;
+  font-size: clamp(1.18rem, 5vw, 1.7rem);
   line-height: 1.05;
 }
 
@@ -939,8 +939,8 @@ onBeforeUnmount(destroyCharts);
 
 .heroStats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   min-width: 0;
 }
 
@@ -954,8 +954,8 @@ onBeforeUnmount(destroyCharts);
 }
 
 .heroStat {
-  min-height: 92px;
-  padding: 16px 18px;
+  min-height: 82px;
+  padding: 14px 16px;
   display: grid;
   align-content: center;
   gap: 6px;
@@ -987,14 +987,14 @@ onBeforeUnmount(destroyCharts);
 .summaryRow,
 .customControls {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   gap: 12px;
 }
 
 .pulseRow {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .pulseCard {
@@ -1007,7 +1007,7 @@ onBeforeUnmount(destroyCharts);
 
 .controlGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
   min-width: 0;
 }
@@ -1027,6 +1027,7 @@ onBeforeUnmount(destroyCharts);
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-direction: column;
 }
 
 .decisionHead strong,
@@ -1042,7 +1043,7 @@ onBeforeUnmount(destroyCharts);
 
 .decisionItem {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   padding: 12px 14px;
@@ -1063,12 +1064,12 @@ onBeforeUnmount(destroyCharts);
 .weeklyBriefSummary,
 .weeklyBriefDeltaRow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
 .weeklyBriefDeltaRow {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .weeklyBriefStat,
@@ -1114,9 +1115,10 @@ onBeforeUnmount(destroyCharts);
 
 .upgradeCard {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+  flex-direction: column;
   padding: 16px 18px;
   border-radius: 22px;
   border: 1px dashed color-mix(in srgb, var(--accent) 34%, var(--line));
@@ -1137,24 +1139,24 @@ onBeforeUnmount(destroyCharts);
 .chartGrid {
   display: grid;
   gap: 12px;
+  grid-template-columns: 1fr;
 }
 
 .controlHeader {
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.7fr);
-  align-items: end;
+  align-items: flex-start;
 }
 
 .controlActions {
   display: grid;
   gap: 10px;
-  justify-items: end;
+  justify-items: start;
 }
 
 .actionButtons {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .controlHeader h3 {
@@ -1164,8 +1166,15 @@ onBeforeUnmount(destroyCharts);
 .modeRow {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.modeRow::-webkit-scrollbar {
+  display: none;
 }
 
 .rangePill,
@@ -1181,6 +1190,11 @@ onBeforeUnmount(destroyCharts);
   padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--line);
+}
+
+.modeChip {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .rangePill,
@@ -1221,7 +1235,7 @@ onBeforeUnmount(destroyCharts);
 }
 
 .customControls {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .fieldGroup {
@@ -1279,7 +1293,7 @@ onBeforeUnmount(destroyCharts);
 }
 
 .summaryRow {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   flex-wrap: wrap;
 }
 
@@ -1301,21 +1315,17 @@ onBeforeUnmount(destroyCharts);
 }
 
 .summaryCard {
-  padding: 8px 0 8px 14px;
+  min-width: 0;
+  padding: 8px 0 8px 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 130px;
   border-left: 3px solid color-mix(in srgb, var(--accent) 18%, var(--line));
 }
 
 .summaryCard strong {
   font-size: clamp(1.4rem, 4vw, 1.9rem);
   text-align: left;
-}
-
-.chartGrid {
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
 }
 
 .chartCard,
@@ -1333,9 +1343,10 @@ onBeforeUnmount(destroyCharts);
 
 .chartHead,
 .activityHead {
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 12px;
+  flex-direction: column;
 }
 
 .chartHead {
@@ -1398,9 +1409,16 @@ onBeforeUnmount(destroyCharts);
 
 .activitySegments {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.activitySegments::-webkit-scrollbar {
+  display: none;
 }
 
 .activitySegment {
@@ -1414,6 +1432,8 @@ onBeforeUnmount(destroyCharts);
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 86%, white);
   color: var(--text-main);
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .activitySegment strong {
@@ -1426,7 +1446,7 @@ onBeforeUnmount(destroyCharts);
 }
 
 .eventItem {
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 12px 14px;
   border-radius: 18px;
@@ -1568,6 +1588,105 @@ onBeforeUnmount(destroyCharts);
 
   .chartFrame.donut {
     min-height: 220px;
+  }
+}
+
+@media (min-width: 721px) {
+  .summaryRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customControls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activitySegments {
+    flex-wrap: wrap;
+    overflow: visible;
+    padding-bottom: 0;
+    scrollbar-width: auto;
+  }
+}
+
+@media (min-width: 961px) {
+  .heroCard {
+    grid-template-columns: minmax(0, 1.25fr) auto;
+    gap: 16px;
+  }
+
+  .heroCopy h2 {
+    max-width: 22ch;
+    font-size: clamp(1.4rem, 4vw, 2rem);
+  }
+
+  .heroStats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .heroStat {
+    min-height: 92px;
+    padding: 16px 18px;
+  }
+
+  .pulseRow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .controlGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controlHeader,
+  .summaryRow,
+  .customControls {
+    flex-direction: row;
+  }
+
+  .controlActions {
+    justify-items: end;
+  }
+
+  .actionButtons {
+    justify-content: flex-end;
+  }
+
+  .decisionHead,
+  .decisionItem,
+  .upgradeCard,
+  .eventItem,
+  .activityHead {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .chartHead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .weeklyBriefSummary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .weeklyBriefDeltaRow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .summaryRow {
+    display: flex;
+  }
+
+  .chartGrid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
+  }
+
+  .customControls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 </style>

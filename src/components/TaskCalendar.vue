@@ -320,8 +320,8 @@ defineExpose({
 
 .calendarHeader {
   display: grid;
-  gap: 16px;
-  padding: 0 0 14px;
+  gap: 12px;
+  padding: 0 0 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
 }
 
@@ -331,12 +331,13 @@ defineExpose({
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
+  flex-direction: column;
 }
 
 .calendarMonthBlock h3,
 .calendarDetailTitle {
   margin: 0;
-  font-size: clamp(1.12rem, 2.8vw, 1.5rem);
+  font-size: clamp(1.04rem, 4.5vw, 1.32rem);
 }
 
 .calendarMicrocopy {
@@ -351,6 +352,19 @@ defineExpose({
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.calendarMonthActions,
+.calendarModeRow {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.calendarMonthActions::-webkit-scrollbar,
+.calendarModeRow::-webkit-scrollbar {
+  display: none;
 }
 
 .smallButton {
@@ -377,7 +391,7 @@ defineExpose({
 
 .calendarStats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-width: 0;
 }
 
@@ -399,7 +413,7 @@ defineExpose({
 .calendarLayout {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   min-width: 0;
 }
 
@@ -418,9 +432,9 @@ defineExpose({
 .calendarWeekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: 4px;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: 0.64rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -429,14 +443,14 @@ defineExpose({
 .calendarGrid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 }
 
 .calendarDay {
-  min-height: 106px;
-  padding: 10px;
-  border-radius: 20px;
+  min-height: 68px;
+  padding: 6px;
+  border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--accent) 8%, var(--line));
   background: color-mix(in srgb, var(--surface) 82%, white);
   display: grid;
@@ -515,10 +529,7 @@ defineExpose({
   font-size: 0.84rem;
   line-height: 1.25;
   color: var(--text-main);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: none;
 }
 
 .calendarDetailCard,
@@ -549,7 +560,8 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
   padding: 12px 14px;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 10%, var(--line));
@@ -564,7 +576,7 @@ defineExpose({
 .upcomingMeta {
   display: grid;
   gap: 2px;
-  justify-items: end;
+  justify-items: start;
 }
 
 .upcomingMeta small {
@@ -702,6 +714,73 @@ defineExpose({
   .rhythmCard {
     padding: 12px;
     border-radius: 16px;
+  }
+}
+
+@media (min-width: 721px) {
+  .calendarMonthBlock h3,
+  .calendarDetailTitle {
+    font-size: clamp(1.12rem, 2.8vw, 1.5rem);
+  }
+
+  .calendarStats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .calendarWeekdays {
+    gap: 8px;
+    font-size: 0.76rem;
+  }
+
+  .calendarGrid {
+    gap: 8px;
+  }
+
+  .calendarDay {
+    min-height: 88px;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .calendarDayPreview {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .upcomingRow {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .upcomingMeta {
+    justify-items: end;
+  }
+}
+
+@media (min-width: 1041px) {
+  .calendarLayout {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  }
+
+  .calendarMonthRow,
+  .calendarDetailHeader {
+    flex-direction: row;
+  }
+
+  .calendarMonthActions,
+  .calendarModeRow {
+    overflow: visible;
+    flex-wrap: wrap;
+    padding-bottom: 0;
+    scrollbar-width: auto;
+  }
+
+  .calendarDay {
+    min-height: 106px;
+    padding: 10px;
+    border-radius: 20px;
   }
 }
 </style>

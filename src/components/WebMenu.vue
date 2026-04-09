@@ -214,7 +214,7 @@ watch(
 .menuBar {
   width: 100%;
   margin: 0;
-  min-height: 64px;
+  min-height: 56px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -239,9 +239,9 @@ watch(
 }
 
 .brandLogo {
-  width: 94px;
-  height: 38px;
-  border-radius: 16px;
+  width: 74px;
+  height: 30px;
+  border-radius: 14px;
   object-fit: contain;
   object-position: center;
   display: block;
@@ -256,7 +256,7 @@ watch(
 }
 
 .brandCopy strong {
-  font-size: 0.98rem;
+  font-size: 0.92rem;
   line-height: 1;
   max-width: 100%;
   overflow: hidden;
@@ -271,11 +271,12 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: none;
 }
 
 .menuTrigger {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
@@ -327,7 +328,7 @@ watch(
   z-index: 31;
   overflow-y: auto;
   opacity: 0;
-  border-radius: 0 0 32px 32px;
+  border-radius: 0 0 24px 24px;
   border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
   border-top: 0;
 }
@@ -444,6 +445,52 @@ watch(
   width: 24px;
   height: 100vh;
   z-index: 28;
+}
+
+@media (min-width: 641px) {
+  .menuBar {
+    min-height: 60px;
+  }
+
+  .brandLogo {
+    width: 88px;
+    height: 36px;
+    border-radius: 16px;
+  }
+
+  .brandCopy strong {
+    font-size: 0.98rem;
+  }
+
+  .brandCopy span {
+    display: block;
+    max-width: min(34vw, 180px);
+  }
+
+  .menuTrigger {
+    width: 44px;
+    height: 44px;
+    border-radius: 16px;
+  }
+}
+
+@media (min-width: 901px) {
+  .menuBar {
+    min-height: 64px;
+  }
+
+  .brandLogo {
+    width: 94px;
+    height: 38px;
+  }
+
+  .brandCopy span {
+    max-width: min(38vw, 260px);
+  }
+
+  .drawer {
+    border-radius: 0 0 32px 32px;
+  }
 }
 
 @media (max-width: 900px) {
