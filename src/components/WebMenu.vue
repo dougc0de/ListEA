@@ -226,6 +226,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -251,16 +252,25 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .brandCopy strong {
   font-size: 0.98rem;
   line-height: 1;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brandCopy span {
   color: var(--text-muted);
   font-size: 0.78rem;
+  max-width: min(38vw, 260px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menuTrigger {
@@ -436,6 +446,23 @@ watch(
   z-index: 28;
 }
 
+@media (max-width: 900px) {
+  .menuBar {
+    min-height: 60px;
+    gap: 8px;
+  }
+
+  .brandLogo {
+    width: 84px;
+    height: 34px;
+    border-radius: 14px;
+  }
+
+  .brandCopy span {
+    max-width: min(34vw, 180px);
+  }
+}
+
 @media (max-width: 640px) {
   .menuBar {
     min-height: 56px;
@@ -463,6 +490,27 @@ watch(
   .drawerItem,
   .drawerDisclosure {
     min-height: 46px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brandButton {
+    gap: 10px;
+  }
+
+  .brandLogo {
+    width: 74px;
+    height: 30px;
+  }
+
+  .brandCopy strong {
+    font-size: 0.9rem;
+  }
+
+  .menuTrigger {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
   }
 }
 </style>

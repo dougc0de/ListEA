@@ -315,6 +315,7 @@ defineExpose({
   border: 0;
   background: transparent;
   box-shadow: none;
+  min-width: 0;
 }
 
 .calendarHeader {
@@ -377,6 +378,7 @@ defineExpose({
 .calendarStats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-width: 0;
 }
 
 .calendarStatCard,
@@ -398,6 +400,7 @@ defineExpose({
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  min-width: 0;
 }
 
 .calendarMonthCard,
@@ -409,6 +412,7 @@ defineExpose({
 .calendarMonthCard {
   display: grid;
   gap: 12px;
+  min-width: 0;
 }
 
 .calendarWeekdays {
@@ -426,6 +430,7 @@ defineExpose({
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 
 .calendarDay {
@@ -593,6 +598,31 @@ defineExpose({
   }
 }
 
+@media (max-width: 860px) {
+  .calendarHeader {
+    gap: 12px;
+  }
+
+  .calendarMonthActions,
+  .calendarModeRow {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .calendarMonthActions::-webkit-scrollbar,
+  .calendarModeRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .calendarMonthActions button,
+  .calendarModeButton {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 720px) {
   .calendarHeader,
   .calendarMonthCard,
@@ -642,6 +672,36 @@ defineExpose({
   .calendarStats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .calendarWeekdays {
+    gap: 4px;
+    font-size: 0.64rem;
+  }
+
+  .calendarGrid {
+    gap: 4px;
+  }
+
+  .calendarDay {
+    min-height: 68px;
+    padding: 6px;
+    border-radius: 14px;
+  }
+
+  .calendarDayCount {
+    min-width: 24px;
+    min-height: 24px;
+    padding-inline: 6px;
+    font-size: 0.74rem;
+  }
+
+  .calendarStatCard,
+  .rhythmCard {
+    padding: 12px;
+    border-radius: 16px;
   }
 }
 </style>

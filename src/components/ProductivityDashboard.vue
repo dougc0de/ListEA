@@ -887,6 +887,7 @@ onBeforeUnmount(destroyCharts);
   grid-template-columns: minmax(0, 1.25fr) auto;
   gap: 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  min-width: 0;
 }
 
 .heroCopy h2,
@@ -940,6 +941,7 @@ onBeforeUnmount(destroyCharts);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+  min-width: 0;
 }
 
 .heroStat,
@@ -957,6 +959,16 @@ onBeforeUnmount(destroyCharts);
   display: grid;
   align-content: center;
   gap: 6px;
+}
+
+.heroStat,
+.pulseCard,
+.decisionCard,
+.decisionItem,
+.summaryCard,
+.chartCard,
+.activityCard {
+  min-width: 0;
 }
 
 .heroStat strong,
@@ -997,6 +1009,7 @@ onBeforeUnmount(destroyCharts);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .weeklyBriefCard {
@@ -1477,6 +1490,40 @@ onBeforeUnmount(destroyCharts);
   }
 }
 
+@media (max-width: 1100px) {
+  .heroCard {
+    grid-template-columns: 1fr;
+  }
+
+  .heroStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .controlGrid,
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .weeklyBriefSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .weeklyBriefDeltaRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summaryRow {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summaryCard {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 640px) {
   .heroCard,
   .dashboardCard {
@@ -1506,6 +1553,21 @@ onBeforeUnmount(destroyCharts);
 
   .activitySegment {
     width: 100%;
+  }
+
+  .heroStats,
+  .pulseRow,
+  .summaryRow,
+  .weeklyBriefDeltaRow {
+    grid-template-columns: 1fr;
+  }
+
+  .chartFrame {
+    min-height: 200px;
+  }
+
+  .chartFrame.donut {
+    min-height: 220px;
   }
 }
 </style>

@@ -2533,6 +2533,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 6px;
   align-content: start;
+  min-width: 0;
 }
 
 .topHint {
@@ -2576,6 +2577,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   align-self: stretch;
   grid-auto-rows: 1fr;
+  min-width: 0;
 }
 
 .quickActionRow {
@@ -2703,6 +2705,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, white 94%, var(--surface));
   box-shadow: 0 14px 28px rgba(15, 70, 98, 0.08);
   text-align: left;
+  min-width: 0;
 }
 
 .statCard strong {
@@ -3086,6 +3089,7 @@ onBeforeUnmount(() => {
 .focusListPanel,
 .widePanel {
   grid-column: 1 / -1;
+  min-width: 0;
 }
 
 .focusListWrap {
@@ -3200,6 +3204,7 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
+  min-width: 0;
 }
 
 .focusFilterTile {
@@ -3453,6 +3458,61 @@ onBeforeUnmount(() => {
 
 }
 
+@media (max-width: 1080px) {
+  .topBar {
+    grid-template-columns: 1fr;
+  }
+
+  .topStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .focusFilterBar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsGrid > .panelCard:first-child,
+  .settingsGrid > .panelCard:nth-child(2) {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 820px) {
+  .topCopy h1 {
+    max-width: none;
+  }
+
+  .quickActionRow {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .quickActionRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quickActionButton {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .laneCount {
+    min-width: 0;
+    padding-inline: 12px;
+  }
+}
+
 @media (max-width: 640px) {
   .tasksShell {
     gap: 12px;
@@ -3572,6 +3632,10 @@ onBeforeUnmount(() => {
 
   .focusFilterBar::-webkit-scrollbar {
     display: none;
+  }
+
+  .focusFilterTile {
+    flex: 0 0 min(48vw, 180px);
   }
 
   .paletteGrid {
